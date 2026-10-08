@@ -1,0 +1,263 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* ---------- casillas, radios, interruptor ---------- */
+.ui-check {
+  align-items: flex-start;
+  cursor: pointer;
+  display: flex;
+  gap: var(--space-8);
+  min-height: var(--control-height);
+  padding: var(--space-4) 0;
+}
+.ui-check input {
+  opacity: 0;
+  position: absolute;
+}
+.ui-check__box {
+  align-items: center;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-1);
+  display: flex;
+  flex: none;
+  height: 1rem;
+  justify-content: center;
+  margin-top: calc((var(--control-height) - 1rem) / 2 - var(--space-4));
+  transition:
+    background var(--t-micro),
+    border-color var(--t-micro);
+  width: 1rem;
+}
+.ui-check--radio .ui-check__box {
+  border-radius: var(--r-pill);
+}
+.ui-check input:checked + .ui-check__box {
+  background: var(--interactive-fill);
+  border-color: var(--interactive-fill);
+}
+.ui-check input:focus-visible + .ui-check__box {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+.ui-check__mark {
+  color: var(--on-interactive-fill);
+  height: 0.75rem;
+  opacity: 0;
+  transition: opacity var(--t-micro);
+  width: 0.75rem;
+}
+.ui-check input:checked + .ui-check__box .ui-check__mark {
+  opacity: 1;
+}
+.ui-check--radio input:checked + .ui-check__box {
+  background: var(--surface-panel);
+}
+.ui-check--radio input:checked + .ui-check__box .ui-check__mark {
+  background: var(--interactive-fill);
+  border-radius: var(--r-pill);
+  height: 0.375rem;
+  opacity: 1;
+  width: 0.375rem;
+}
+.ui-check__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.ui-check__hint {
+  color: var(--text-muted);
+  font-size: var(--type-micro);
+}
+
+.ui-switch {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  gap: var(--space-8);
+  min-height: var(--control-height);
+}
+.ui-switch input {
+  opacity: 0;
+  position: absolute;
+}
+.ui-switch__track {
+  background: var(--border-default);
+  border-radius: var(--r-pill);
+  display: block;
+  flex: none;
+  height: 1rem;
+  position: relative;
+  transition: background var(--t-state);
+  width: 1.75rem;
+}
+.ui-switch__thumb {
+  background: var(--surface-panel);
+  border-radius: var(--r-pill);
+  display: block;
+  height: 0.75rem;
+  left: var(--space-2);
+  position: absolute;
+  top: var(--space-2);
+  transition: left var(--t-state);
+  width: 0.75rem;
+}
+.ui-switch input:checked + .ui-switch__track {
+  background: var(--interactive-fill);
+}
+.ui-switch input:checked + .ui-switch__track .ui-switch__thumb {
+  left: 0.875rem;
+}
+.ui-switch input:focus-visible + .ui-switch__track {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* ---------- control segmentado ---------- */
+.ui-segmented {
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-1);
+  display: inline-flex;
+  gap: 1px;
+  padding: 1px;
+}
+.ui-segmented__option {
+  flex: 1;
+  position: relative;
+}
+.ui-segmented__input {
+  opacity: 0;
+  position: absolute;
+}
+.ui-segmented__label {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  min-height: calc(var(--control-height) - 4px);
+  padding: 0 var(--space-12);
+  white-space: nowrap;
+}
+.ui-segmented__input:checked + .ui-segmented__label {
+  background: var(--surface-selected);
+  outline: 1px solid var(--border-focus);
+  outline-offset: -1px;
+}
+.ui-segmented__input:focus-visible + .ui-segmented__label {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+/* ---------- combobox ---------- */
+.ui-combo {
+  position: relative;
+}
+.ui-combo__list {
+  background: var(--surface-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-1);
+  box-shadow: var(--shadow-e2);
+  left: 0;
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  max-height: 16rem;
+  overflow: auto;
+  padding: 0;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: var(--z-popover);
+}
+.ui-combo__option {
+  cursor: pointer;
+  padding: var(--space-6) var(--space-12);
+}
+.ui-combo__option.is-active {
+  background: var(--surface-selected);
+}
+.ui-combo__empty {
+  color: var(--text-muted);
+  font-size: var(--type-dense);
+  padding: var(--space-8) var(--space-12);
+}
+
+/* ---------- tooltip ---------- */
+.ui-tooltip {
+  display: inline-block;
+  position: relative;
+}
+.ui-tooltip__anchor {
+  align-items: center;
+  color: var(--text-muted);
+  cursor: help;
+  display: inline-flex;
+}
+.ui-tooltip__tip {
+  background: var(--g-950);
+  border-radius: var(--r-1);
+  color: var(--paper);
+  font-size: var(--type-micro);
+  left: 50%;
+  line-height: var(--type-micro-lh);
+  max-width: 16rem;
+  opacity: 0;
+  padding: var(--space-4) var(--space-8);
+  pointer-events: none;
+  position: absolute;
+  transform: translateX(-50%) translateY(-2px);
+  transition:
+    opacity var(--t-micro),
+    transform var(--t-micro);
+  white-space: normal;
+  width: max-content;
+  z-index: var(--z-popover);
+}
+.ui-tooltip--top .ui-tooltip__tip {
+  bottom: calc(100% + var(--space-4));
+}
+.ui-tooltip--bottom .ui-tooltip__tip {
+  top: calc(100% + var(--space-4));
+}
+.ui-tooltip:hover .ui-tooltip__tip,
+.ui-tooltip:focus-within .ui-tooltip__tip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.ui-tooltip__key {
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: var(--r-1);
+  font-family: var(--font-mono);
+  margin-left: var(--space-6);
+  padding: 0 var(--space-4);
+}
+
+/* ---------- grupo de botones ---------- */
+.ui-button-group {
+  align-items: center;
+  display: flex;
+  gap: var(--space-8);
+}
+.ui-button__icon {
+  flex: none;
+}
+
+/* ---------- afijos de campo ---------- */
+.ui-input-affix {
+  align-items: stretch;
+  display: flex;
+}
+.ui-input-affix__part {
+  align-items: center;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
+  display: flex;
+  font-size: var(--type-dense);
+  padding: 0 var(--space-8);
+}
+.ui-input-affix .ui-field__input {
+  border-radius: 0 var(--r-1) var(--r-1) 0;
+}
+.ui-input-affix__part:first-child {
+  border-radius: var(--r-1) 0 0 var(--r-1);
+  border-right: 0;
+}

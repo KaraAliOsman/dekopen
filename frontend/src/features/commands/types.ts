@@ -1,4 +1,5 @@
 import type { ProductJson } from "../canvas/productEditing";
+import type { MemberGeometry } from "../canvas/members";
 import type { TranslationKey } from "../../i18n/es-CL";
 
 /** The validated op contract returned by POST /positions/<id>/design-assist/.
@@ -13,15 +14,36 @@ export type DesignOp = { op: string } & Record<string, unknown>;
 export interface DesignOpState {
   addedModules: string[];
   addedCouplings: string[];
+  /** IA2 — vanos (`added_b{n}`) y divisiones (`added_d{n}`) creadas por
+   * ops estructurales de la misma secuencia: el wire las nombra sintéticas
+   * y el diff del árbol tras cada op revela el id real que produjo. */
+  addedBays: string[];
+  addedDividers: string[];
   /** The product as the op sequence's author saw it. Numeric addresses and
    * `m{n}`/`c{n}` positional refs resolve against THIS list — the same
    * original-index contract the backend validator applies — never against
    * the live product an earlier structural op already mutated. */
   origin?: ProductJson;
+  /** IA2 — geometría de miembros del sistema (resolveMembers): split_bay y
+   * equalize_bays la necesitan para cortar donde el motor corta — sin ella
+   * el decode rechaza en vez de medir mal. */
+  members?: MemberGeometry;
 }
 
 /** Editor tools a command may arm. */
-export type EditorTool = "select" | "split_v" | "split_h";
+export type EditorTool = "select" | "split_v" | "split_h" | "opening" | "glazing" | "measure";
+
+/** A staged proposal drawn as a ghost over the canvas: the palette computed
+ * the mutation's result without committing it. `apply` runs the command
+ * through the real dispatch (history, postCommit, selection). */
+export interface CommandProposal {
+  product: ProductJson;
+  apply(): void;
+}
+
+/** Inspector sections a tool or panel may focus. */
+export type InspectorSection =
+  "measures" | "opening" | "glazing" | "handle" | "hardware" | "hardwareSelections" | "overview";
 
 /** String args collected by surfaces (palette fields, AI wire ops). */
 export type CommandArgs = Record<string, string>;
@@ -43,12 +65,33 @@ export interface CommandContext {
   selection: string | null;
   catalog: CommandCatalog;
   disabled: boolean;
+  /** IA2 — member geometry resuelta del sistema (resolveMembers(options));
+   * los comandos de división la exigen — el canvas siempre la tiene. */
+  members?: MemberGeometry;
   commit(next: ProductJson): void;
   select(id: string | null): void;
   setTool?(tool: EditorTool): void;
   /** Focus the design assistant's prompt (editor affordance — UI commands
    * like "Preguntar a DEKOPEN" and context-menu entries land here). */
   focusAssistant?(): void;
+  /** Re-fit the drawing to the viewport (F / "Ajustar a pantalla"). */
+  fitView?(): void;
+  /** Zoom on the selected element's extent. */
+  zoomSelection?(): void;
+  /** Open the shortcuts help surface (?). */
+  showShortcuts?(): void;
+  /** Scroll the inspector to one of its sections (armed tools use this to
+   * land the picked bay's editing surface). */
+  focusSection?(section: InspectorSection): void;
+  /** Open the bay opening-type selector over the current bay selection. */
+  openOpeningPicker?(): void;
+  /** Open the Acoplar rail menu (side pick for the adjacent-unit tool). */
+  openCoupleMenu?(): void;
+  /** Toggle the typology flyout on the tool rail (B). */
+  toggleLibrary?(): void;
+  /** Stage a proposal drawn as a ghost on the canvas until the operator
+   * confirms (Enter) or discards it (Esc); null clears it. */
+  previewProposal?(proposal: CommandProposal | null): void;
   undo?(): void;
   redo?(): void;
   canUndo?: boolean;
@@ -144,6 +187,10 @@ export interface ResolvedCommand {
   /** A short preview of what the command will change. Rendered under the list
    * while the command is selected. */
   describe?(args: CommandArgs): string;
+  /** Stage the apply-result as a canvas ghost instead of committing.
+   * Returns true when a proposal was staged; the caller then skips `run`
+   * (the proposal's own confirm path commits). */
+  preview?(args: CommandArgs): boolean;
   run(args: CommandArgs): void;
 }
 

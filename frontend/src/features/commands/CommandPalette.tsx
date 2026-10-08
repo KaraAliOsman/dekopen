@@ -43,8 +43,11 @@ const SEARCH_GROUP_LABEL: Record<string, TranslationKey> = {
   systems: "search.groupSystems",
   articles: "search.groupArticles",
   orders: "search.groupOrders",
+  remnants: "search.groupRemnants",
+  receipts: "search.groupReceipts",
   documents: "search.groupDocuments",
   inventory: "search.groupInventory",
+  quotations: "search.groupQuotations",
 };
 
 export function CommandPalette({
@@ -233,7 +236,11 @@ export function CommandPalette({
       setCursor(0);
       setInvalidParam(false);
     } else {
-      pending.command.run(args);
+      // A mutating command with complete args previews its result as a ghost
+      // on the canvas before committing — the operator confirms there.
+      if (!(pending.command.preview?.(args) ?? false)) {
+        pending.command.run(args);
+      }
       close();
     }
   }

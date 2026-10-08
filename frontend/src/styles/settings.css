@@ -1,0 +1,439 @@
+.settings-group {
+  margin-top: var(--space-16);
+}
+
+.settings-group__title {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin: 0 0 var(--space-12);
+  padding-bottom: var(--space-8);
+}
+
+.settings-grid {
+  display: grid;
+  gap: var(--space-12);
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.settings-card {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  padding: var(--space-12) var(--space-16);
+}
+
+.settings-card h2,
+.settings-card h3 {
+  font-size: var(--type-micro);
+  margin: 0 0 var(--space-8);
+}
+
+.settings-list {
+  display: grid;
+  gap: var(--space-8);
+  margin: 0;
+}
+
+.settings-plain {
+  list-style: none;
+  padding: 0;
+}
+
+.settings-row {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+.settings-row dt {
+  color: var(--theme-text-secondary);
+  margin: 0;
+}
+
+.settings-row dd {
+  margin: 0;
+  text-align: right;
+}
+
+.settings-role {
+  color: var(--theme-text-secondary);
+}
+
+.settings-mono {
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+}
+
+.settings-branding-preview {
+  align-items: center;
+  border: 1px dashed var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  display: flex;
+  justify-content: center;
+  margin: 0 0 var(--space-12);
+  min-height: 4rem;
+  padding: var(--space-8);
+}
+
+.settings-branding-logo {
+  max-height: 3.5rem;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* P25 — color de marca: muestra cuadrada + campo hex en la misma línea. */
+.settings-branding-color {
+  align-items: center;
+  display: flex;
+  gap: var(--space-8);
+}
+
+.settings-branding-color input[type="color"] {
+  block-size: 2rem;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  cursor: pointer;
+  inline-size: 2.5rem;
+  padding: var(--space-2);
+}
+
+.settings-branding-credit {
+  align-items: baseline;
+  display: flex;
+  gap: var(--space-8);
+  grid-column: 1 / -1;
+}
+
+.settings-branding-credit .settings-hint {
+  display: block;
+  margin: var(--space-2) 0 0;
+}
+
+.settings-docs {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  display: grid;
+  gap: var(--space-8) var(--space-12);
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--space-12) var(--space-12);
+}
+
+.settings-docs legend {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 0 var(--space-6);
+  text-transform: uppercase;
+}
+
+.settings-docs textarea {
+  min-block-size: 3.4rem;
+  resize: vertical;
+}
+
+.settings-mail-grid {
+  display: grid;
+  gap: var(--space-6) var(--space-16);
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  margin: var(--space-8) 0 0;
+}
+
+.settings-mail-grid dt {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+}
+
+.settings-mail-grid dd {
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
+/* Shared ledger/credential forms — these classes are used by settings,
+   projects and cobranza surfaces, so they must not live in feature CSS
+   that only loads on one route. */
+.payments-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+.payments-form label {
+  display: grid;
+  gap: var(--space-4);
+  font-size: var(--text-s);
+  color: var(--ink-muted);
+}
+.payments-form-wide {
+  grid-column: 1 / -1;
+}
+.payments-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--space-8);
+}
+.payments-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--space-8);
+  font-size: var(--text-s);
+}
+.payments-table-scroll {
+  overflow-x: auto;
+}
+.payments-table th,
+.payments-table td {
+  text-align: left;
+  padding: var(--space-6) var(--space-8);
+  border-bottom: 1px solid var(--border);
+}
+.payments-table .num {
+  text-align: right;
+  font-family: var(--font-mono);
+}
+.payments-voided td {
+  opacity: 0.55;
+}
+
+/* File pickers: keep the native input visually hidden and let the
+   translated button + filename text carry the interaction. */
+.file-input-hidden {
+  display: none;
+}
+.file-field {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+.file-field__name {
+  color: var(--theme-text-secondary);
+  font-size: var(--text-s);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-theme {
+  border: 1px solid var(--theme-border-strong);
+  border-radius: var(--r-1);
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.settings-theme-option {
+  background: transparent;
+  border: 0;
+  color: var(--theme-text-secondary);
+  padding: var(--space-6) var(--space-12);
+}
+
+.settings-theme-option[data-active="true"] {
+  background: var(--theme-accent);
+  color: var(--theme-surface-panel);
+}
+
+.settings-hint {
+  color: var(--theme-text-secondary);
+  margin: 0 0 var(--space-8);
+}
+
+.settings-links {
+  display: flex;
+  gap: var(--space-16);
+}
+
+.settings-links a {
+  color: var(--theme-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* D06 — radio/checkbox choice rows inside settings cards. */
+.settings-choice {
+  align-items: center;
+  display: flex !important;
+  gap: var(--space-8);
+}
+
+.payments-form fieldset {
+  border: 0;
+  display: grid;
+  gap: var(--space-8);
+  grid-column: 1 / -1;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+/* El ancho intrínseco de un <select> lo da su opción más larga
+ * («Nombre · SKU · clase»): sin tope desborda la tarjeta y el documento. */
+.payments-form select {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.payments-form fieldset legend {
+  font-size: var(--text-s);
+  font-weight: 600;
+  padding: 0;
+}
+
+/* §IA3 — Settings › Inteligencia artificial. */
+.ai-capabilities {
+  border-collapse: collapse;
+  font-size: var(--type-body);
+  margin: var(--space-8) 0;
+  width: 100%;
+}
+
+.ai-capabilities th {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: var(--space-4) var(--space-8);
+  text-align: start;
+  text-transform: uppercase;
+}
+
+.ai-capabilities td {
+  border-top: 1px solid var(--theme-border-subtle);
+  padding: var(--space-6) var(--space-8);
+}
+
+.ai-check-row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-12);
+  margin: var(--space-8) 0;
+}
+
+.ai-check-result[data-ok="true"] {
+  color: var(--ok-ink);
+  font-weight: 600;
+}
+
+.ai-check-result[data-ok="false"] {
+  color: var(--danger-ink);
+  font-weight: 600;
+}
+
+.ai-budget-exceeded {
+  color: var(--warn-ink);
+  font-weight: 600;
+}
+
+.settings-subtitle {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  margin: var(--space-8) 0 var(--space-4);
+  text-transform: uppercase;
+}
+
+/* P22 — ajustes por dominio: navegación lateral. */
+.settings-layout {
+  align-items: start;
+  display: grid;
+  gap: var(--space-16);
+  grid-template-columns: 12rem 1fr;
+  margin-top: var(--space-16);
+}
+
+.settings-nav {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  position: sticky;
+  top: var(--space-16);
+}
+
+.settings-nav__link {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  color: var(--theme-text-secondary);
+  display: block;
+  padding: var(--space-8) var(--space-12);
+  text-decoration: none;
+}
+
+.settings-nav__link:last-child {
+  border-bottom: 0;
+}
+
+.settings-nav__link:hover {
+  color: var(--theme-text-primary);
+}
+
+.settings-nav__link.is-active {
+  border-left: 3px solid var(--theme-accent);
+  color: var(--theme-text-primary);
+  font-weight: 600;
+  padding-left: calc(var(--space-12) - 3px);
+}
+
+.settings-nav__link.is-disabled {
+  color: var(--theme-text-secondary);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.settings-card--disabled {
+  opacity: 0.65;
+}
+
+.settings-content .settings-group {
+  margin-top: 0;
+}
+
+.settings-preview {
+  border-top: 1px solid var(--theme-border-subtle);
+  margin-top: var(--space-12);
+  padding-top: var(--space-8);
+}
+
+.settings-preview__frame {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  display: block;
+  height: 22rem;
+  width: 100%;
+}
+
+.settings-integration {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  padding: var(--space-6) 0;
+}
+
+.settings-integration:last-child {
+  border-bottom: 0;
+}
+
+.settings-members-actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-8);
+}
+
+@media (max-width: 760px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-nav {
+    display: flex;
+    flex-wrap: wrap;
+    position: static;
+  }
+
+  .settings-nav__link {
+    border-bottom: 0;
+  }
+}

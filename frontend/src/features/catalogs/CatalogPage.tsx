@@ -31,7 +31,15 @@ import "./catalogs.css";
 type Label = Parameters<typeof t>[0];
 // All suffixes below are supplied in the translation block.
 const ct = (key: string) => t(`catalog.${key}` as Label);
-const resources: Resource[] = ["systems", "articles", "glazing", "hardware-kits"];
+const resources: Resource[] = [
+  "systems",
+  "articles",
+  "glazing",
+  "hardware-kits",
+  "spacers",
+  "frame-uf",
+  "performance-tests",
+];
 
 const DETAIL_KEYS: Record<string, Label> = {
   "catalogs.errors.not_found": "catalog.errNotFound",
@@ -60,10 +68,17 @@ function itemName(resource: Resource, row: Row<Resource>, data: CatalogData): st
     const article = data.articles.find((item) => item.id === row.bead_article_id);
     return `${article?.name ?? ct("beadUnavailable")} · ${fmtMm(row.glass_thickness_mm)} ${ct("mm")}`;
   }
+  if (resource === "frame-uf" && "member_group" in row) {
+    return `${ct(`memberGroup.${row.member_group}`)} · Uf ${fmtMm(row.uf_w_m2k)}`;
+  }
+  if (resource === "performance-tests" && "report_ref" in row) {
+    return row.report_ref ?? ct("testUnnamed");
+  }
   return "name" in row ? row.name : ct("record");
 }
 
 function itemCode(row: Row<Resource>): string {
+  if ("member_group" in row) return row.member_group;
   return "sku" in row ? row.sku : "code" in row ? row.code : "";
 }
 
@@ -154,10 +169,21 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
       api.list("articles", controller.signal),
       api.list("glazing", controller.signal),
       api.list("hardware-kits", controller.signal),
+      api.list("spacers", controller.signal),
+      api.list("frame-uf", controller.signal),
+      api.list("performance-tests", controller.signal),
     ])
-      .then(([systems, articles, glazing, kits]) => {
+      .then(([systems, articles, glazing, kits, spacers, frameUf, tests]) => {
         if (controller.signal.aborted) return;
-        setData({ systems, articles, glazing, "hardware-kits": kits });
+        setData({
+          systems,
+          articles,
+          glazing,
+          "hardware-kits": kits,
+          spacers,
+          "frame-uf": frameUf,
+          "performance-tests": tests,
+        });
         setSelected((previous) =>
           previous && systems.some((system) => system.id === previous)
             ? previous
@@ -218,7 +244,11 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
     setWorkspaceKey((value) => value + 1);
   }
 
-  if (loading) return <p role="status">{ct("loading")}</p>;
+  // Solo la carga inicial blanquea la página: un refresh posterior (p.ej.
+  // tras publicar filas de una importación) mantiene los datos anteriores
+  // montados — si no, cada revalidación desmonta el panel de revisión
+  // abierto y destruye errores por fila y estados Publicado.
+  if (loading && !data) return <p role="status">{ct("loading")}</p>;
   if (error || !data) {
     return (
       <section className="catalog">
@@ -240,7 +270,7 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
       ? currentSystem
         ? [currentSystem]
         : []
-      : data[resource].filter((row) => row.system_id === selected);
+      : data[resource].filter((row) => !("system_id" in row) || row.system_id === selected);
   const editingRow = editor?.id
     ? data[editor.resource].find((row) => row.id === editor.id)
     : undefined;
@@ -312,7 +342,8 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
                   </strong>
                   <span title={system.code}>
                     {system.family ? `${system.family} · ` : ""}
-                    {shortCode(system.code)} · {ct(`option.${system.material}`)} · v{system.version}
+                    <code>{shortCode(system.code)}</code>
+                    {` · ${ct(`option.${system.material}`)} · v${system.version}`}
                   </span>
                   <small>
                     {system.is_global ? ct("global") : ct("own")}
@@ -785,7 +816,7 @@ function CatalogEditor({
                   ? "numeric"
                   : undefined
             }
-            pattern={
+            data-pattern={
               field.kind === "decimal"
                 ? `-?[0-9]+([.,][0-9]{1,${field.places ?? 2}})?`
                 : field.kind === "integer"
@@ -808,7 +839,7 @@ function CatalogEditor({
   }
 
   return (
-    <form className="catalog-editor" onSubmit={submit} aria-busy={busy} noValidate>
+    <form noValidate className="catalog-editor" onSubmit={submit} aria-busy={busy}>
       <UnsavedChangesGuard dirty={dirty} message={ct("discard")} />
       <header className="catalog-toolbar">
         <h3 ref={firstControl} tabIndex={-1}>
@@ -899,7 +930,7 @@ function CatalogEditor({
                       type="text"
                       required
                       inputMode="decimal"
-                      pattern="-?[0-9]+([.,][0-9]{1,2})?"
+                      data-pattern="-?[0-9]+([.,][0-9]{1,2})?"
                       value={sectionDraft.depth_mm}
                       onChange={(event) =>
                         changeSection((current) => ({
@@ -994,7 +1025,7 @@ function CatalogEditor({
                                 type="text"
                                 required
                                 inputMode="decimal"
-                                pattern="-?[0-9]+([.,][0-9]{1,2})?"
+                                data-pattern="-?[0-9]+([.,][0-9]{1,2})?"
                                 value={vertex[key]}
                                 onChange={(event) => {
                                   const value = event.target.value;
@@ -1080,7 +1111,7 @@ function CatalogEditor({
                               aria-label={`${ct("field.y_mm")} · ${ct("section.axis")} ${index + 1}`}
                               type="text"
                               inputMode="decimal"
-                              pattern="-?[0-9]+([.,][0-9]{1,2})?"
+                              data-pattern="-?[0-9]+([.,][0-9]{1,2})?"
                               value={axis.y_mm}
                               onChange={(event) =>
                                 changeSection((current) => ({
@@ -1159,10 +1190,12 @@ function CatalogEditor({
                           <input
                             aria-label={`${ct(`field.${key}`)} · ${ct("component")} ${index + 1}`}
                             type="text"
-                            required
-                            value={component[key]}
+                            required={key !== "qty" || component.qty_rule == null}
+                            value={component[key] ?? ""}
                             inputMode={key === "qty" ? "decimal" : undefined}
-                            pattern={key === "qty" ? "(?=.*[1-9])[0-9]+([.,][0-9]+)?" : ".*\\S.*"}
+                            data-pattern={
+                              key === "qty" ? "(?=.*[1-9])[0-9]+([.,][0-9]+)?" : ".*\\S.*"
+                            }
                             onChange={(event) => {
                               const value = event.target.value;
                               setDirty(true);
@@ -1247,7 +1280,7 @@ function CatalogEditor({
       <footer className="catalog-toolbar">
         <button
           type="submit"
-          className="catalog-primary"
+          className="ui-button ui-button--primary catalog-primary"
           disabled={busy || readOnly || noBeads || uncertainCreate || (row !== undefined && !dirty)}
         >
           {ct(busy ? "working" : "save")}

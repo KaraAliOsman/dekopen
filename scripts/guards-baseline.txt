@@ -1,0 +1,3 @@
+# Línea base del trinquete §10 — regenerar solo al mejorar.
+# Regla + conteo máximo permitido; subir el número es la falla.
+ui-motion>280 21

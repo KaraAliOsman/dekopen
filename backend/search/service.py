@@ -11,10 +11,16 @@ from __future__ import annotations
 from uuid import UUID
 
 from catalogs.service import visibility_sql
+from documents.repository import documentary_backend
 from pricing.repository import rows
 
 MAX_QUERY_LEN = 80
 GROUP_LIMIT = 6
+
+# Supplier-order folios live behind documentary RLS (`orders` exposes only
+# WORKSHOP_OT to `authenticated`); the member roles that can open /purchasing
+# are the ones the documentary policies also let read those rows.
+_PURCHASING_READERS = {"OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"}
 
 
 def _where(columns: tuple[str, ...]) -> str:
@@ -24,9 +30,18 @@ def _where(columns: tuple[str, ...]) -> str:
 
 
 # Groups an installer must never see: the client registry carries fiscal PII
-# (RUT) and the documents group mixes invoices into the result set. Projects
-# still surface (dispatch/installation context) minus the commercial subtitle.
-_INSTALLER_EXCLUDED_GROUPS = {"clients", "documents"}
+# (RUT), quotations leak the commercial margin surface, the documents
+# group mixes invoices into the result set, and inventory/remnant/receipt
+# rows are floor stock the field role has no surface for. Projects still
+# surface (dispatch/installation context) minus the commercial subtitle.
+_INSTALLER_EXCLUDED_GROUPS = {
+    "clients",
+    "documents",
+    "quotations",
+    "inventory",
+    "remnants",
+    "receipts",
+}
 
 
 def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
@@ -75,6 +90,29 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
                 "title": row["name"],
                 "subtitle": row.get("rut"),
                 "path": "/clients",
+            }
+        )
+
+    for row in org(
+        "SELECT p.id, p.code, p.name, p.client_name, p.current_revision"
+        " FROM public.projects p"
+        " WHERE p.org_id=%s AND (__WHERE__)"
+        " AND EXISTS ("
+        "     SELECT 1 FROM public.project_versions v"
+        "     WHERE v.project_id = p.id AND v.org_id = p.org_id"
+        " )"
+        f" ORDER BY p.updated_at DESC LIMIT {GROUP_LIMIT}",
+        "p.name",
+        "p.code",
+        "p.client_name",
+    ):
+        results.append(
+            {
+                "group": "quotations",
+                "id": str(row["id"]),
+                "title": f"{row['code']} · {row['current_revision']}",
+                "subtitle": f"{row['name']} · {row['client_name']}",
+                "path": f"/projects/{row['id']}",
             }
         )
 
@@ -154,14 +192,30 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
             }
         )
 
-    for row in org(
-        "SELECT id, order_code, order_type::text AS kind, status::text AS status"
-        " FROM public.orders"
-        " WHERE org_id=%s AND (__WHERE__)"
-        f" ORDER BY updated_at DESC LIMIT {GROUP_LIMIT}",
-        "order_code",
-        "supplier_name",
-    ):
+    # §8 — el folio es una dirección: teclear 'OC-000123' o 'OT-P-000009-REV-A-01'
+    # lleva directo a la orden. Las OC de proveedor quedan detrás de RLS
+    # documental, así que los roles con acceso a compras resuelven bajo
+    # `documentary_backend`; el resto ve sólo las OT de su scope de miembro.
+    if role in _PURCHASING_READERS:
+        with documentary_backend():
+            order_rows = org(
+                "SELECT id, order_code, order_type::text AS kind, status::text AS status"
+                " FROM public.orders"
+                " WHERE org_id=%s AND (__WHERE__)"
+                f" ORDER BY updated_at DESC LIMIT {GROUP_LIMIT}",
+                "order_code",
+                "supplier_name",
+            )
+    else:
+        order_rows = org(
+            "SELECT id, order_code, order_type::text AS kind, status::text AS status"
+            " FROM public.orders"
+            " WHERE org_id=%s AND (__WHERE__)"
+            f" ORDER BY updated_at DESC LIMIT {GROUP_LIMIT}",
+            "order_code",
+            "supplier_name",
+        )
+    for row in order_rows:
         results.append(
             {
                 "group": "orders",
@@ -171,6 +225,57 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
                 "path": "/production" if row["kind"] == "WORKSHOP_OT" else "/purchasing",
             }
         )
+
+    # §8 — el folio es una dirección: teclear 'RT-000045' en la paleta lleva
+    # directo al retazo, igual que escanear su QR; también lo encuentra su
+    # rack, material, la nota de etiqueta o el SKU del artículo origen
+    # (P03: «retazos por código o nombre»).
+    for row in org(
+        "SELECT id, remnant_code, kind::text, status::text, sheet_workshop_sku,"
+        " rack_location"
+        " FROM public.inventory_remnants"
+        " WHERE org_id=%s AND (__WHERE__)"
+        f" ORDER BY remnant_code LIMIT {GROUP_LIMIT}",
+        "remnant_code",
+        "sheet_workshop_sku",
+        "rack_location",
+        "material",
+        "notes",
+    ):
+        results.append(
+            {
+                "group": "remnants",
+                "id": str(row["id"]),
+                "title": row["remnant_code"],
+                "subtitle": f"{row['kind']} · {row['status']}"
+                + (f" · {row['sheet_workshop_sku']}" if row["sheet_workshop_sku"] else "")
+                + (f" · {row['rack_location']}" if row["rack_location"] else ""),
+                "path": "/inventory",
+            }
+        )
+
+    # El JOIN a `orders` sólo resuelve bajo el rol documental: en scope de
+    # miembro las OC de proveedor no existen y la fila de recepción se perdía.
+    if role in _PURCHASING_READERS:
+        with documentary_backend():
+            receipt_rows = org(
+                "SELECT r.id, r.receipt_code, o.order_code"
+                " FROM public.order_receipts r JOIN public.orders o ON o.id = r.order_id"
+                " WHERE r.org_id=%s AND o.org_id=%s AND (__WHERE__)"
+                f" ORDER BY r.receipt_code LIMIT {GROUP_LIMIT}",
+                "r.receipt_code",
+                org_params=2,
+            )
+        for row in receipt_rows:
+            results.append(
+                {
+                    "group": "receipts",
+                    "id": str(row["id"]),
+                    "title": row["receipt_code"],
+                    "subtitle": row["order_code"],
+                    "path": "/purchasing",
+                }
+            )
 
     for row in org(
         "SELECT i.id, i.invoice_code, i.project_id, pr.code AS project_code"
@@ -221,7 +326,7 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
                 "id": str(row["id"]),
                 "title": row["sku"],
                 "subtitle": row["name"],
-                "path": "/purchasing",
+                "path": "/inventory",
             }
         )
 

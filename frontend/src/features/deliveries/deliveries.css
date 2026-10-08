@@ -1,0 +1,60 @@
+.deliveries-table__wrap {
+  overflow-x: auto;
+}
+
+.deliveries-table {
+  border-collapse: collapse;
+  min-width: 56rem;
+  width: 100%;
+}
+
+.deliveries-table th {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: var(--space-8) var(--space-12);
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.deliveries-table td {
+  border-top: 1px solid var(--theme-border-subtle);
+  padding: var(--space-8) var(--space-12);
+  vertical-align: middle;
+}
+
+.deliveries-order {
+  color: var(--theme-text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.deliveries-order:hover {
+  text-decoration: underline;
+}
+
+.deliveries-project {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.deliveries-project .mono {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.deliveries-project__name {
+  color: var(--theme-text-secondary);
+  font-size: 0.82rem;
+}
+
+.deliveries-install-pending {
+  color: var(--warn-ink);
+  display: block;
+  font-size: 0.75rem;
+  margin-top: var(--space-4);
+}

@@ -7,28 +7,17 @@ import {
   projectPaymentLinkRecover,
   projectPaymentLinksList,
 } from "../../api/generated/dekopen";
-import type {
-  PaymentKindEnum,
-  PaymentLink,
-  PaymentLinkStatusEnum,
-} from "../../api/generated/models";
+import type { PaymentKindEnum, PaymentLink } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
-import { formatMoney } from "../money";
+import { StatusChip } from "../../ui/StatusChip";
+import { actionErrorDetail } from "../errors";
+import { formatMoney } from "../../format";
 
 const KIND_LABEL: Record<string, TranslationKey> = {
   ANTICIPO: "projects.paymentKindAnticipo",
   PARCIAL: "projects.paymentKindParcial",
   SALDO: "projects.paymentKindSaldo",
 };
-const LINK_STATUS_LABEL: Record<PaymentLinkStatusEnum, TranslationKey> = {
-  DISPATCHING: "projects.paymentLinkStatusDispatching",
-  PENDING: "projects.paymentLinkStatusPending",
-  PAID: "projects.paymentLinkStatusPaid",
-  FAILED: "projects.paymentLinkStatusFailed",
-  UNCERTAIN: "projects.paymentLinkStatusUncertain",
-  CANCELLED: "projects.paymentLinkStatusCancelled",
-};
-
 function formatClp(value: string): string {
   return formatMoney(value, "CLP");
 }
@@ -70,11 +59,11 @@ export function ProjectPaymentLinksPanel({
   const links = linksQuery.data ?? [];
   const setLinks = (updater: (previous: PaymentLink[]) => PaymentLink[]) =>
     queryClient.setQueryData(linksKey, updater(linksQuery.data ?? []));
-  // Integration status is write-scoped — readers (e.g. taller) only need the
-  // links list; fetching it would 403 for them.
+  // Integration status is owner-scoped (backend: _OWNER_ONLY) — estimators
+  // only need the links list; fetching it would 403 for them.
   const integrationQuery = useQuery({
     queryKey: ["projects", "payment-integration", orgId],
-    enabled: canWrite,
+    enabled: isOwner,
     queryFn: async ({ signal }) => {
       const response = await projectPaymentIntegrationStatus({
         signal,
@@ -141,8 +130,10 @@ export function ProjectPaymentLinksPanel({
       setAmount("");
       setPayerEmail("");
       setSubject("");
-    } catch {
-      setMessage(t("projects.paymentLinkCreateError"));
+    } catch (error) {
+      // El backend contesta en español («El cobro supera el saldo
+      // pendiente») — ese detalle es el mensaje, no un error crudo.
+      setMessage(actionErrorDetail(error, t("projects.paymentLinkCreateError")));
     } finally {
       setBusy(false);
     }
@@ -175,7 +166,11 @@ export function ProjectPaymentLinksPanel({
     }
   }
 
-  const configured = integration?.configured === true && integration.enabled === true;
+  // Con FLOW_WS_MOCK el proveedor simulado habilita el cobro sin fila de
+  // credenciales — el marcador «simulado» lo dice en voz alta.
+  const simulated = integration?.provider_mode === "mock";
+  const configured =
+    (integration?.configured === true && integration.enabled === true) || simulated;
 
   return (
     <section
@@ -199,7 +194,12 @@ export function ProjectPaymentLinksPanel({
         )}
       </div>
       {message && <p className="form-error">{message}</p>}
-      {integration !== null && !configured && (
+      {simulated && (
+        <p className="settings-hint" role="status">
+          {t("projects.paymentLinkSimulated")}
+        </p>
+      )}
+      {integration !== null && !configured && !simulated && (
         <p className="settings-hint">
           {isOwner
             ? t("projects.paymentLinkFlowRequired")
@@ -207,7 +207,7 @@ export function ProjectPaymentLinksPanel({
         </p>
       )}
       {showForm && (
-        <form className="payments-form" onSubmit={create}>
+        <form noValidate className="payments-form" onSubmit={create}>
           <label>
             {t("projects.paymentKind")}
             <select
@@ -224,7 +224,7 @@ export function ProjectPaymentLinksPanel({
             <input
               required
               inputMode="numeric"
-              pattern="[0-9]+"
+              data-pattern="[0-9]+"
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               placeholder="250000"
@@ -263,44 +263,57 @@ export function ProjectPaymentLinksPanel({
               <th className="num">{t("projects.paymentAmount")}</th>
               <th>{t("projects.paymentLinkEmail")}</th>
               <th>{t("projects.paymentLinkStatus")}</th>
+              <th>{t("projects.paymentLinkExpiry")}</th>
               <th>{t("projects.paymentLinkUrl")}</th>
               {canWrite && <th />}
             </tr>
           </thead>
           <tbody>
-            {links.map((link) => (
-              <tr key={link.id}>
-                <td>{formatDate(link.created_at)}</td>
-                <td>{t(KIND_LABEL[link.kind] ?? "projects.paymentKindParcial")}</td>
-                <td className="num">{formatClp(link.amount)}</td>
-                <td>{link.payer_email}</td>
-                <td>
-                  <span className={`production-chip link-${link.status.toLowerCase()}`}>
-                    {t(LINK_STATUS_LABEL[link.status])}
-                  </span>
-                </td>
-                <td>
-                  {link.url ? (
-                    <button type="button" onClick={() => copy(link)} disabled={busy}>
-                      {copiedId === link.id
-                        ? t("projects.paymentLinkCopied")
-                        : t("projects.paymentLinkCopy")}
-                    </button>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                {canWrite && (
+            {links.map((link) => {
+              const linkStatus = link.status;
+              return (
+                <tr key={link.id}>
+                  <td>{formatDate(link.created_at)}</td>
+                  <td>{t(KIND_LABEL[link.kind] ?? "projects.paymentKindParcial")}</td>
+                  <td className="num">{formatClp(link.amount)}</td>
+                  <td>{link.payer_email}</td>
                   <td>
-                    {link.status !== "PAID" && link.status !== "DISPATCHING" && (
-                      <button type="button" onClick={() => recover(link)} disabled={busy}>
-                        {t("projects.paymentLinkRecover")}
-                      </button>
+                    <StatusChip enumName="PaymentLinkStatusEnum" value={linkStatus} />
+                  </td>
+                  <td>
+                    {link.expired === true ? (
+                      <span className="production-chip is-warn">
+                        {t("projects.paymentLinkExpired")}
+                      </span>
+                    ) : link.expires_at ? (
+                      formatDate(link.expires_at)
+                    ) : (
+                      "—"
                     )}
                   </td>
-                )}
-              </tr>
-            ))}
+                  <td>
+                    {link.url ? (
+                      <button type="button" onClick={() => copy(link)} disabled={busy}>
+                        {copiedId === link.id
+                          ? t("projects.paymentLinkCopied")
+                          : t("projects.paymentLinkCopy")}
+                      </button>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  {canWrite && (
+                    <td>
+                      {link.status !== "PAID" && link.status !== "DISPATCHING" && (
+                        <button type="button" onClick={() => recover(link)} disabled={busy}>
+                          {t("projects.paymentLinkRecover")}
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { InventoryStockItemReservedByItem } from "./inventoryStockItemReservedByItem";
 
 export interface InventoryStockItem {
   item_id: string;
@@ -24,4 +25,5 @@ export interface InventoryStockItem {
   /** @nullable */
   racks?: string | null;
   spec_text?: string;
+  reserved_by?: InventoryStockItemReservedByItem[];
 }

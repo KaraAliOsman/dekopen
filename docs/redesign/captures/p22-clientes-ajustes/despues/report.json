@@ -1,0 +1,730 @@
+{
+  "summary": {
+    "generated_at": "2026-10-07T09:54:31.232Z",
+    "routes": 72,
+    "routes_with_findings": [],
+    "total_findings": 0
+  },
+  "results": [
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-general--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-general--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-general--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-general--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-general--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-general--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-empresa",
+      "url": "/settings/empresa",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-empresa--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/empresa"
+    },
+    {
+      "route": "settings-empresa",
+      "url": "/settings/empresa",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-empresa--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/empresa"
+    },
+    {
+      "route": "settings-empresa",
+      "url": "/settings/empresa",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-empresa--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/empresa"
+    },
+    {
+      "route": "settings-empresa",
+      "url": "/settings/empresa",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-empresa--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/empresa"
+    },
+    {
+      "route": "settings-empresa",
+      "url": "/settings/empresa",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-empresa--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/empresa"
+    },
+    {
+      "route": "settings-empresa",
+      "url": "/settings/empresa",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-empresa--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/empresa"
+    },
+    {
+      "route": "settings-usuarios",
+      "url": "/settings/usuarios",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-usuarios--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/usuarios"
+    },
+    {
+      "route": "settings-usuarios",
+      "url": "/settings/usuarios",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-usuarios--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/usuarios"
+    },
+    {
+      "route": "settings-usuarios",
+      "url": "/settings/usuarios",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-usuarios--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/usuarios"
+    },
+    {
+      "route": "settings-usuarios",
+      "url": "/settings/usuarios",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-usuarios--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/usuarios"
+    },
+    {
+      "route": "settings-usuarios",
+      "url": "/settings/usuarios",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-usuarios--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/usuarios"
+    },
+    {
+      "route": "settings-usuarios",
+      "url": "/settings/usuarios",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-usuarios--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/usuarios"
+    },
+    {
+      "route": "settings-comercial",
+      "url": "/settings/comercial",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-comercial--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/comercial"
+    },
+    {
+      "route": "settings-comercial",
+      "url": "/settings/comercial",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-comercial--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/comercial"
+    },
+    {
+      "route": "settings-comercial",
+      "url": "/settings/comercial",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-comercial--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/comercial"
+    },
+    {
+      "route": "settings-comercial",
+      "url": "/settings/comercial",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-comercial--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/comercial"
+    },
+    {
+      "route": "settings-comercial",
+      "url": "/settings/comercial",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-comercial--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/comercial"
+    },
+    {
+      "route": "settings-comercial",
+      "url": "/settings/comercial",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-comercial--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/comercial"
+    },
+    {
+      "route": "settings-documentos",
+      "url": "/settings/documentos",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-documentos--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/documentos"
+    },
+    {
+      "route": "settings-documentos",
+      "url": "/settings/documentos",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-documentos--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/documentos"
+    },
+    {
+      "route": "settings-documentos",
+      "url": "/settings/documentos",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-documentos--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/documentos"
+    },
+    {
+      "route": "settings-documentos",
+      "url": "/settings/documentos",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-documentos--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/documentos"
+    },
+    {
+      "route": "settings-documentos",
+      "url": "/settings/documentos",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-documentos--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/documentos"
+    },
+    {
+      "route": "settings-documentos",
+      "url": "/settings/documentos",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-documentos--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/documentos"
+    },
+    {
+      "route": "settings-numeracion",
+      "url": "/settings/numeracion",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-numeracion--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/numeracion"
+    },
+    {
+      "route": "settings-numeracion",
+      "url": "/settings/numeracion",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-numeracion--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/numeracion"
+    },
+    {
+      "route": "settings-numeracion",
+      "url": "/settings/numeracion",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-numeracion--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/numeracion"
+    },
+    {
+      "route": "settings-numeracion",
+      "url": "/settings/numeracion",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-numeracion--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/numeracion"
+    },
+    {
+      "route": "settings-numeracion",
+      "url": "/settings/numeracion",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-numeracion--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/numeracion"
+    },
+    {
+      "route": "settings-numeracion",
+      "url": "/settings/numeracion",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-numeracion--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/numeracion"
+    },
+    {
+      "route": "settings-produccion",
+      "url": "/settings/produccion",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-produccion--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/produccion"
+    },
+    {
+      "route": "settings-produccion",
+      "url": "/settings/produccion",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-produccion--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/produccion"
+    },
+    {
+      "route": "settings-produccion",
+      "url": "/settings/produccion",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-produccion--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/produccion"
+    },
+    {
+      "route": "settings-produccion",
+      "url": "/settings/produccion",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-produccion--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/produccion"
+    },
+    {
+      "route": "settings-produccion",
+      "url": "/settings/produccion",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-produccion--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/produccion"
+    },
+    {
+      "route": "settings-produccion",
+      "url": "/settings/produccion",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-produccion--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/produccion"
+    },
+    {
+      "route": "settings-integraciones",
+      "url": "/settings/integraciones",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-integraciones--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/integraciones"
+    },
+    {
+      "route": "settings-integraciones",
+      "url": "/settings/integraciones",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-integraciones--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/integraciones"
+    },
+    {
+      "route": "settings-integraciones",
+      "url": "/settings/integraciones",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-integraciones--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/integraciones"
+    },
+    {
+      "route": "settings-integraciones",
+      "url": "/settings/integraciones",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-integraciones--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/integraciones"
+    },
+    {
+      "route": "settings-integraciones",
+      "url": "/settings/integraciones",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-integraciones--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/integraciones"
+    },
+    {
+      "route": "settings-integraciones",
+      "url": "/settings/integraciones",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-integraciones--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/integraciones"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-billing--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/billing"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-billing--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/billing"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-billing--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/billing"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-billing--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/billing"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-billing--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/billing"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-billing--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/billing"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-wallet--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/wallet"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-wallet--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/wallet"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-wallet--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/wallet"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-wallet--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/wallet"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-wallet--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/wallet"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-wallet--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/wallet"
+    },
+    {
+      "route": "clients-list",
+      "url": "/clients",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/clients-list--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/clients/a6755452-5f22-56fc-b73b-af8626c49e0e"
+    },
+    {
+      "route": "clients-list",
+      "url": "/clients",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/clients-list--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/clients/a6755452-5f22-56fc-b73b-af8626c49e0e"
+    },
+    {
+      "route": "clients-list",
+      "url": "/clients",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/clients-list--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/clients/a6755452-5f22-56fc-b73b-af8626c49e0e"
+    },
+    {
+      "route": "clients-list",
+      "url": "/clients",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/clients-list--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/clients/a6755452-5f22-56fc-b73b-af8626c49e0e"
+    },
+    {
+      "route": "clients-list",
+      "url": "/clients",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/clients-list--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/clients/a6755452-5f22-56fc-b73b-af8626c49e0e"
+    },
+    {
+      "route": "clients-list",
+      "url": "/clients",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/clients-list--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/clients/a6755452-5f22-56fc-b73b-af8626c49e0e"
+    },
+    {
+      "route": "onboarding",
+      "url": "/onboarding",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/onboarding--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/onboarding"
+    },
+    {
+      "route": "onboarding",
+      "url": "/onboarding",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/onboarding--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/onboarding"
+    },
+    {
+      "route": "onboarding",
+      "url": "/onboarding",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/onboarding--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/onboarding"
+    },
+    {
+      "route": "onboarding",
+      "url": "/onboarding",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/onboarding--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/onboarding"
+    },
+    {
+      "route": "onboarding",
+      "url": "/onboarding",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/onboarding--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/onboarding"
+    },
+    {
+      "route": "onboarding",
+      "url": "/onboarding",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/onboarding--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/onboarding"
+    }
+  ]
+}

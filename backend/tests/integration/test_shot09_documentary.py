@@ -98,6 +98,16 @@ def _tenant(org: UUID, role: str) -> TenantContext:
     return TenantContext(active_organization=membership, memberships=(membership,))
 
 
+# P08 — claves comerciales mínimas que la compuerta de emisión exige cuando la
+# organización del fixture no declara plantilla en Ajustes.
+_EMISSION_DOC_TERMS = {
+    "plazo_entrega": "15 días hábiles desde la aprobación",
+    "instalacion": "Instalación incluida en terreno",
+    "exclusiones": "No incluye terminaciones de albañilería ni cortinas",
+    "garantia": "5 años en perfiles y 1 año en herrajes",
+}
+
+
 def _seed_project(
     org: UUID, owner: UUID, *, valid_annotations: bool = True, apply_pricing: bool = True
 ) -> tuple[UUID, UUID, UUID]:
@@ -112,7 +122,7 @@ def _seed_project(
         "id": "B1",
         "type": "BAY",
         "opening_type": "FIXED",
-        "glass_spec": "4-12-4 Float Incoloro",
+        "glass_spec": "4-16-4 Float Incoloro",
         "glass_thickness_mm": "24.00",
         "glass_article_sku": "VIDRIO-BASE",
     }
@@ -142,6 +152,7 @@ def _seed_project(
                 ("COMPRA-MARCO", "BAR"),
                 ("COMPRA-JQ-10", "BAR"),
                 ("COMPRA-ACERO-MARCO", "BAR"),
+                ("TORNILLO-4X16", "EA"),
                 ("VIDRIO-BASE", "M2"),
             ):
                 admin_write(
@@ -209,7 +220,11 @@ def _seed_project(
             project_id=project_id,
             data={
                 "payment_terms": "50% anticipo, 50% contra entrega",
-                "quotation_valid_until": date(2026, 10, 14),
+                "quotation_valid_until": date(2030, 12, 31),
+                # P08 — la compuerta de emisión exige las claves comerciales:
+                # la org del fixture no tiene plantilla, así que la cotización
+                # las declara todas.
+                "doc_terms": _EMISSION_DOC_TERMS,
                 "positions": [{
                     "position_id": position_id,
                     "calculation_hash": calculation_response({"system_id": str(system_id),

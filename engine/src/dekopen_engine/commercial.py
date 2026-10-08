@@ -110,13 +110,20 @@ def typology_price(area: Decimal, rate: Decimal, foil: bool,
                 + (selected_glass_cost-base_glass_cost)*area*D('1.40'))
 
 
-def discount_state(role: str, discount: Decimal, confirmed: bool) -> str:
+def discount_state(role: str, discount: Decimal, confirmed: bool,
+                   approval_threshold: Decimal = D('0.10')) -> str:
+    """Bandas de descuento por rol: bajo el umbral de la org aplica directo;
+    hasta el doble del umbral aplica el dueño (el estimador queda PENDING);
+    por encima exige confirmación explícita del dueño. El umbral era la
+    constante 10 % — ahora es `pricing_rules.discount_approval_threshold_pct`
+    y el default conserva el comportamiento original."""
     fraction(discount)
+    fraction(approval_threshold)
     if role not in ('OWNER', 'ESTIMATOR'):
         raise PricingError('pricing_permission_denied')
-    if discount <= D('0.10'):
+    if discount <= approval_threshold:
         return 'APPLIED'
-    if discount <= D('0.20'):
+    if discount <= approval_threshold * 2:
         return 'APPLIED' if role == 'OWNER' else 'PENDING'
     if role != 'OWNER' or not confirmed:
         raise PricingError('owner_confirmation_required')

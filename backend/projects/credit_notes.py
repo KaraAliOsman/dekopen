@@ -34,6 +34,14 @@ logger = logging.getLogger(__name__)
 SIGNED_URL_TTL_SECONDS = 600
 
 
+def _tributary_state(org_id) -> dict:
+    """Lazy import — projects.sii already pulls this module in, so a
+    top-level sii_envio import would close a cycle."""
+    from projects.sii_envio import integration_state
+
+    return integration_state(org_id=org_id)
+
+
 def _credit_note_public(row) -> dict:
     payload = (
         row["payload_json"]
@@ -183,6 +191,9 @@ def seal_credit_note(
         "organization": org_branding.branding_for_snapshot(org_id=UUID(org_id_s)),
         "issued_at": timezone.now().isoformat(),
         "reason": reason_text,
+        # Lazy: projects.sii imports this module — a top-level
+        # sii_envio import would close a cycle.
+        "tributary": _tributary_state(UUID(org_id_s)),
         "invoice": {
             "id": str(invoice["id"]),
             "invoice_code": invoice["invoice_code"],

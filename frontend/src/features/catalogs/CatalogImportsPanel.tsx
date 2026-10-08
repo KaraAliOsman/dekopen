@@ -3,12 +3,28 @@ import { Fragment, useCallback, useEffect, useRef, useState, type ChangeEvent } 
 import { ApiError } from "../../api/apiMutator";
 import {
   catalogImportConfirm,
+  catalogImportGet,
   catalogImportsCreate,
   catalogImportsList,
+  getCatalogImportTemplateUrl,
 } from "../../api/generated/dekopen";
-import type { CatalogImportResponse, CatalogItemRequest } from "../../api/generated/models";
-import { CatalogProfileRoleEnum } from "../../api/generated/models";
-import { t, type TranslationKey } from "../../i18n/es-CL";
+import { apiFetchBlob } from "../../api/apiMutator";
+import type {
+  CatalogImportEvent,
+  CatalogImportResponse,
+  CatalogItemRequest,
+  NewSystemRequest,
+} from "../../api/generated/models";
+import { CatalogItemRoleEnum } from "../../api/generated/models";
+import { domainLabel } from "../../i18n/domainLabels";
+import { t, tOptional, type TranslationKey } from "../../i18n/es-CL";
+import { StatusChip } from "../../ui/StatusChip";
+import {
+  IMPORT_CONFIDENCE_LABEL,
+  IMPORT_CONFIDENCE_TONE,
+  IMPORT_STATUS_LABEL,
+  IMPORT_STATUS_TONE,
+} from "./importStatus";
 
 const ct = (key: string) => t(`catalog.${key}` as TranslationKey);
 
@@ -19,8 +35,16 @@ type ExistingRef = {
   face_width_mm: string | null;
 };
 
+/** P16 — diff campo a campo contra el artículo existente (re-derivado en
+ * el servidor al leer el detalle: refleja el estado actual, no el de la
+ * extracción). */
+type DiffField = { field: string; current: string | null; proposed: string | null };
+type DiffEntry = { system_code: string; fields: DiffField[] };
+
 type Candidate = {
   key: string;
+  entity: string;
+  fields: Record<string, unknown>;
   sku: string;
   name: string;
   role: string;
@@ -32,24 +56,92 @@ type Candidate = {
   steel_weight_kg_m: string;
   confidence: string;
   warnings: string[];
+  row_errors: string[];
   source_text: string;
   source_ref: string;
   conflict: boolean;
   existing: ExistingRef[];
+  diff: DiffEntry[];
 };
 
-type EditableRow = Candidate & { include: boolean };
+type EditableRow = Candidate & { include: boolean; published?: boolean };
 
-const ROLE_CHOICES = Object.values(CatalogProfileRoleEnum);
+// El confirm acepta los 17 roles (CatalogItemRoleEnum); el enum "profile"
+// heredado solo tiene 9 y dejaba fuera SLIDING_SASH/INTERLOCK/RAIL…
+const ROLE_CHOICES = Object.values(CatalogItemRoleEnum);
 const PENDING_STATUSES = new Set(["UPLOADED", "EXTRACTING"]);
 
-const STATUS_LABEL: Record<string, TranslationKey> = {
-  UPLOADED: "projects.importsStatusUploaded",
-  EXTRACTING: "projects.importsStatusExtracting",
-  REVIEW_READY: "projects.importsStatusReviewReady",
-  CONFIRMED: "projects.importsStatusConfirmed",
-  FAILED: "projects.importsStatusFailed",
+/** Campos cuyo valor es un enum de dominio — se etiquetan, no se vuelcan
+ * en crudo ("CASEMENT", "TURN_LEFT", …) en la tabla de revisión. */
+const FIELD_VALUE_ENUM: Record<string, string> = {
+  material: "MaterialEnum",
+  system_family: "SystemFamilyEnum",
+  opening_type: "ImportOpeningTypeEnum",
+  rail_type: "RailTypeEnum",
+  role: "CatalogItemRoleEnum",
 };
+
+function fieldNameLabel(name: string): string {
+  return tOptional(`catalog.field.${name}`) ?? name;
+}
+
+function fieldValueLabel(name: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "boolean") return t(value ? "inspector.yes" : "inspector.no");
+  const enumName = FIELD_VALUE_ENUM[name];
+  if (enumName && typeof value === "string") {
+    return domainLabel(enumName, value).label;
+  }
+  if (name === "unit" && typeof value === "string") {
+    return tOptional(`purchasing.unitValue.${value.toUpperCase()}.other`) ?? value;
+  }
+  if (name === "item_type" && typeof value === "string") {
+    return tOptional(`catalog.entity.${value}`) ?? value;
+  }
+  if (name === "finish_class" && typeof value === "string") {
+    return (
+      tOptional(`catalog.option.finishClass.${value}`) ??
+      tOptional(`projects.color.${value}`) ??
+      value
+    );
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (item && typeof item === "object") {
+          const entry = item as Record<string, unknown>;
+          // Contenido de kit {sku, qty} → "SKU ×2"; nunca "[object Object]".
+          if ("sku" in entry) {
+            const qty = entry.qty !== undefined ? ` ×${String(entry.qty)}` : "";
+            return `${String(entry.sku)}${qty}`;
+          }
+          return Object.entries(entry)
+            .map(([k, v]) => `${fieldNameLabel(k)} ${String(v)}`)
+            .join(" ");
+        }
+        if (name === "finishes") {
+          return tOptional(`projects.color.${String(item)}`) ?? String(item);
+        }
+        return String(item);
+      })
+      .join(", ");
+  }
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+/** Resumen legible de los campos de un candidato no-PROFILE — nombres de
+ * campo traducidos y valores de enum etiquetados, jamás "clave: valor". */
+function candidateFieldSummary(fields: Record<string, unknown>): string {
+  return Object.entries(fields)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(([name, value]) => {
+      const rendered = fieldValueLabel(name, value);
+      return rendered ? `${fieldNameLabel(name)}: ${rendered}` : "";
+    })
+    .filter(Boolean)
+    .join(" · ");
+}
 
 // Import warnings and per-item errors travel as codes — the UI owes the
 // catalog manager workshop language, never raw enum identifiers.
@@ -70,6 +162,13 @@ const ITEM_ERROR_LABEL: Record<string, string> = {
   catalog_sku_conflict: "importsErrorSkuConflict",
   catalog_singleton_role_conflict: "importsErrorSingletonRole",
   catalog_insert_failed: "importsErrorInsertFailed",
+  catalog_bead_unknown: "importsErrorBeadUnknown",
+  catalog_price_list_required: "importsErrorPriceListRequired",
+  catalog_opening_type_unknown: "importsErrorOpeningType",
+  catalog_system_changed: "importsErrorSystemChanged",
+  catalog_entity_unknown: "importsErrorEntityUnknown",
+  catalog_row_invalid: "importsErrorRowInvalid",
+  catalog_field_required: "importsErrorFieldRequired",
 };
 
 function codeText(code: string): string {
@@ -82,15 +181,13 @@ function codeText(code: string): string {
         .map((role) => ct(`option.${role.trim()}`))
         .join(", "),
     );
-  return ct(WARNING_LABEL[code] ?? ITEM_ERROR_LABEL[code] ?? "importsErrorUnknown");
+  const label = WARNING_LABEL[code] ?? ITEM_ERROR_LABEL[code];
+  if (label) return ct(label as TranslationKey);
+  // Las advertencias del parser pueden llegar ya como frase en español
+  // ("La hoja «Sistemas» no tiene las columnas…") — se muestran tal cual;
+  // solo los códigos compactos sin mapeo caen al mensaje genérico.
+  return code.includes(" ") ? code : ct("importsErrorUnknown");
 }
-
-const CONFIDENCE_LABEL: Record<string, string> = {
-  VERIFIED_STRUCTURED: "importsConfidenceVerified",
-  HIGH_CANDIDATE: "importsConfidenceCandidate",
-  REVIEW_REQUIRED: "importsConfidenceReview",
-  LOW: "importsConfidenceLow",
-};
 
 /** 'Seguro' = structured or unambiguous evidence and no disagreement with the
  * live catalog. Pre-selection only — every suggestion still waits for the
@@ -98,7 +195,8 @@ const CONFIDENCE_LABEL: Record<string, string> = {
 function isSafe(candidate: Candidate): boolean {
   return (
     (candidate.confidence === "VERIFIED_STRUCTURED" || candidate.confidence === "HIGH_CANDIDATE") &&
-    !candidate.conflict
+    !candidate.conflict &&
+    candidate.row_errors.length === 0
   );
 }
 
@@ -112,6 +210,11 @@ function formatDate(value: string): string {
 function asCandidate(raw: Record<string, unknown>): Candidate {
   return {
     key: String(raw.key ?? ""),
+    entity: String(raw.entity ?? "PROFILE"),
+    fields:
+      raw.fields && typeof raw.fields === "object" && !Array.isArray(raw.fields)
+        ? (raw.fields as Record<string, unknown>)
+        : {},
     sku: String(raw.sku ?? ""),
     name: String(raw.name ?? ""),
     role: String(raw.role ?? "ADDITIONAL"),
@@ -123,10 +226,12 @@ function asCandidate(raw: Record<string, unknown>): Candidate {
     steel_weight_kg_m: String(raw.steel_weight_kg_m ?? ""),
     confidence: String(raw.confidence ?? "REVIEW_REQUIRED"),
     warnings: Array.isArray(raw.warnings) ? (raw.warnings as string[]) : [],
+    row_errors: Array.isArray(raw.row_errors) ? (raw.row_errors as string[]) : [],
     source_text: String(raw.source_text ?? ""),
     source_ref: String(raw.source_ref ?? ""),
     conflict: raw.conflict === true,
     existing: Array.isArray(raw.existing) ? (raw.existing as ExistingRef[]) : [],
+    diff: Array.isArray(raw.diff) ? (raw.diff as DiffEntry[]) : [],
   };
 }
 
@@ -145,6 +250,11 @@ export function CatalogImportsPanel({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [reviewId, setReviewId] = useState<string | null>(null);
+  /** P16 — detalle de la importación en revisión: el GET trae el diff
+   * contra el artículo existente, los eventos de auditoría y el sello del
+   * revisor; la fila de la lista no los carga. */
+  const [reviewDetail, setReviewDetail] = useState<CatalogImportResponse | null>(null);
+  const [reviewEvents, setReviewEvents] = useState<CatalogImportEvent[]>([]);
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [systemId, setSystemId] = useState("");
   const [reviewDirty, setReviewDirty] = useState(false);
@@ -185,18 +295,66 @@ export function CatalogImportsPanel({
     return () => window.clearTimeout(timer);
   }, [imports, load]);
 
+  function hydrateReview(entry: CatalogImportResponse): void {
+    setSystemId(entry.system_id ?? systems[0]?.id ?? "");
+    // Claves ya publicadas por un confirm parcial anterior — quedan
+    // marcadas Publicado y fuera de la selección; re-enviarlas (sobre todo
+    // la fila Sistema como new_system) provoca el 409 catalog_system_changed.
+    const done = new Set((entry.result ?? []).map((result) => String(result.key ?? "")));
+    setRows(
+      entry.candidates.map((raw) => {
+        const candidate = asCandidate(raw);
+        const published = done.has(candidate.key);
+        return { ...candidate, include: isSafe(candidate) && !published, published };
+      }),
+    );
+  }
+
   function startReview(entry: CatalogImportResponse): void {
     setReviewId(entry.id);
     setItemErrors([]);
     setMessage("");
     setReviewDirty(false);
-    setSystemId(entry.system_id ?? systems[0]?.id ?? "");
-    setRows(
-      entry.candidates.map((raw) => {
-        const candidate = asCandidate(raw);
-        return { ...candidate, include: isSafe(candidate) };
-      }),
-    );
+    setReviewDetail(entry);
+    setReviewEvents([]);
+    hydrateReview(entry);
+    void catalogImportGet(entry.id, requestOptions)
+      .then((response) => {
+        if (!mounted.current || response.status !== 200) return;
+        const detail = response.data as {
+          import: CatalogImportResponse;
+          events: CatalogImportEvent[];
+        };
+        setReviewDetail(detail.import);
+        setReviewEvents(detail.events ?? []);
+        // Los candidatos del detalle traen el diff contra el artículo
+        // existente; si el revisor ya empezó a editar, no le piso los
+        // cambios — solo se hidrata de nuevo mientras la revisión siga limpia.
+        setReviewDirty((dirty) => {
+          if (!dirty) hydrateReview(detail.import);
+          return dirty;
+        });
+      })
+      .catch(() => {
+        /* sin detalle se revisa con lo que trae la lista — sin diff ni auditoría */
+      });
+  }
+
+  async function downloadTemplate(): Promise<void> {
+    setBusy(true);
+    try {
+      const { blob, filename } = await apiFetchBlob(getCatalogImportTemplateUrl());
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename ?? "plantilla-catalogo-dekopen.xlsx";
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      if (mounted.current) setMessage(ct("importsTemplateError"));
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
   }
 
   async function upload(event: ChangeEvent<HTMLInputElement>): Promise<void> {
@@ -219,32 +377,68 @@ export function CatalogImportsPanel({
   function patchRow(key: string, patch: Partial<EditableRow>): void {
     setReviewDirty(true);
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+    // Editar la fila invalida el resultado anterior: el error por-ítem de la
+    // fila y el mensaje global de confirmación dejan de aplicar en cuanto el
+    // gestor corrige algo — nunca quedan obsoletos en pantalla.
+    setItemErrors((current) => current.filter((entry) => entry.key !== key));
+    setMessage("");
   }
 
   function closeReview(): void {
     setReviewId(null);
     setReviewDirty(false);
+    setItemErrors([]);
+    setReviewDetail(null);
+    setReviewEvents([]);
   }
 
   async function confirm(entry: CatalogImportResponse): Promise<void> {
-    const items: CatalogItemRequest[] = rows
-      .filter((row) => row.include)
-      .map((row) => ({
-        key: row.key,
-        sku: row.sku,
-        name: row.name,
-        role: row.role as CatalogItemRequest["role"],
-        face_width_mm: row.face_width_mm,
-        commercial_length_mm: row.commercial_length_mm || undefined,
-        welding_loss_mm: row.welding_loss_mm || undefined,
-        reinforcement_sku: row.reinforcement_sku || undefined,
-        weight_kg_m: row.weight_kg_m || undefined,
-        steel_weight_kg_m: row.steel_weight_kg_m || undefined,
-      }));
+    const included = rows.filter((row) => row.include);
+    // A Sistemas row declares the target itself — the backend creates the
+    // org-owned system in the same confirm transaction. A row already
+    // published by a previous partial confirm must NOT be re-sent as
+    // new_system (that re-declare is the catalog_system_changed 409).
+    const newSystemRow = included.find((row) => row.entity === "SYSTEM" && !row.published);
+    const items: CatalogItemRequest[] = included.map((row) => ({
+      key: row.key,
+      entity: row.entity as CatalogItemRequest["entity"],
+      fields: row.fields as CatalogItemRequest["fields"],
+      sku: row.sku,
+      name: row.name,
+      role: row.role as CatalogItemRequest["role"],
+      face_width_mm: row.face_width_mm || undefined,
+      commercial_length_mm: row.commercial_length_mm || undefined,
+      welding_loss_mm: row.welding_loss_mm || undefined,
+      reinforcement_sku: row.reinforcement_sku || undefined,
+      weight_kg_m: row.weight_kg_m || undefined,
+      steel_weight_kg_m: row.steel_weight_kg_m || undefined,
+    }));
     const invalid = items.some(
-      (item) => !item.sku.trim() || !item.face_width_mm.trim() || !item.role,
+      (item) =>
+        item.entity === "PROFILE" && (!item.sku?.trim() || !item.face_width_mm || !item.role),
     );
-    if (!items.length || !systemId || invalid) {
+    const newSystem = newSystemRow
+      ? {
+          code: String(newSystemRow.fields.code ?? ""),
+          name: String(newSystemRow.fields.name ?? ""),
+          depth_mm: String(newSystemRow.fields.depth_mm ?? ""),
+          material: String(newSystemRow.fields.material ?? "PVC"),
+          system_family: String(newSystemRow.fields.system_family ?? "CASEMENT"),
+          sliding_glazing_deduction_width_mm: String(
+            newSystemRow.fields.sliding_glazing_deduction_width_mm ?? "0",
+          ),
+          sliding_glazing_deduction_height_mm: String(
+            newSystemRow.fields.sliding_glazing_deduction_height_mm ?? "0",
+          ),
+          door_leaf_side_clearance_mm: String(
+            newSystemRow.fields.door_leaf_side_clearance_mm ?? "0",
+          ),
+          finishes: Array.isArray(newSystemRow.fields.finishes)
+            ? (newSystemRow.fields.finishes as string[])
+            : ["WHITE"],
+        }
+      : undefined;
+    if (!items.length || (!systemId && !newSystem) || invalid) {
       setMessage(ct("importsConfirmMissing"));
       return;
     }
@@ -254,18 +448,51 @@ export function CatalogImportsPanel({
     try {
       const response = await catalogImportConfirm(
         entry.id,
-        { system_id: systemId, items },
+        {
+          system_id: newSystem ? undefined : systemId,
+          new_system: newSystem as NewSystemRequest | undefined,
+          items,
+        },
         requestOptions,
       );
       if (response.status !== 200) throw new ApiError(response.status, response.data);
       if (mounted.current) {
+        const created = (response.data.created ?? []) as {
+          key: string;
+          entity?: string;
+          id?: string;
+        }[];
+        const createdSystem = created.find((c) => c.entity === "SYSTEM" && c.id);
+        if (createdSystem?.id) {
+          // The org system now exists even if sibling rows failed: retarget
+          // the select to it (it was created this session, the parent list
+          // refresh below makes it visible) and pin the row as published so
+          // the next retry confirms items against system_id, not new_system.
+          const newId = String(createdSystem.id);
+          setSystemId(newId);
+          setRows((current) =>
+            current.map((row) =>
+              row.key === createdSystem.key ? { ...row, published: true, include: false } : row,
+            ),
+          );
+        }
         const errors = response.data.errors as { key: string; code: string }[];
         setItemErrors(errors);
+        const confirmedImport = (response.data as { import?: CatalogImportResponse }).import;
+        if (confirmedImport) {
+          setReviewDetail(confirmedImport);
+          setImports((current) =>
+            current.map((item) => (item.id === confirmedImport.id ? confirmedImport : item)),
+          );
+        }
         if (errors.length) {
           // Partial outcome — the import stays retryable; keep the review
           // open so the manager can fix the failed rows and resubmit.
           setMessage(ct("importsConfirmError"));
           await load();
+          // Rows WERE published — the parent systems list must reflect the
+          // new system in the destination select without a page reload.
+          onConfirmed?.();
         } else {
           closeReview();
           setMessage(
@@ -285,7 +512,9 @@ export function CatalogImportsPanel({
   function includeOnlySafe(): void {
     setReviewDirty(true);
     setRows((current) =>
-      current.map((row) => (isSafe(row) ? { ...row, include: true } : { ...row, include: false })),
+      current.map((row) =>
+        row.published ? row : isSafe(row) ? { ...row, include: true } : { ...row, include: false },
+      ),
     );
   }
 
@@ -322,6 +551,9 @@ export function CatalogImportsPanel({
               className="imports-file-input"
               onChange={(event) => void upload(event)}
             />
+            <button type="button" disabled={busy} onClick={() => void downloadTemplate()}>
+              {ct("importsTemplate")}
+            </button>
             <button type="button" disabled={busy} onClick={() => fileInput.current?.click()}>
               {busy ? ct("importsUploading") : ct("importsUpload")}
             </button>
@@ -352,13 +584,22 @@ export function CatalogImportsPanel({
                 <tr key={entry.id}>
                   <td title={entry.file_name}>{entry.file_name}</td>
                   <td>
-                    <span
-                      className={`production-chip imports-status-${entry.status.toLowerCase()}`}
-                    >
-                      {t(STATUS_LABEL[entry.status] ?? "projects.importsStatusUploaded")}
-                    </span>
+                    <StatusChip
+                      label={t(
+                        IMPORT_STATUS_LABEL[entry.status] ?? "projects.importsStatusUploaded",
+                      )}
+                      tone={IMPORT_STATUS_TONE[entry.status] ?? "neutral"}
+                      value={null}
+                    />
                     {entry.status === "FAILED" && entry.error_code && (
                       <span className="imports-warning">{codeText(entry.error_code)}</span>
+                    )}
+                    {entry.reviewed_by_label && entry.reviewed_at && (
+                      <span className="imports-reviewed">
+                        {ct("importsReviewedStamp")
+                          .replace("{who}", entry.reviewed_by_label)
+                          .replace("{when}", formatDate(entry.reviewed_at))}
+                      </span>
                     )}
                   </td>
                   <td>{entry.candidates.length}</td>
@@ -391,6 +632,33 @@ export function CatalogImportsPanel({
       {reviewImport && (
         <div className="imports-review">
           <p className="imports-hint">{ct("importsReviewHint")}</p>
+          {(reviewDetail?.created_by_label || reviewEvents.length > 0) && (
+            <ol className="imports-audit" aria-label={ct("importsAudit")}>
+              {reviewDetail?.created_by_label && (
+                <li>
+                  {ct("importsAuditUploaded")
+                    .replace("{who}", reviewDetail.created_by_label)
+                    .replace("{when}", formatDate(reviewDetail.created_at))}
+                </li>
+              )}
+              {reviewEvents
+                .filter((event) => event.event !== "UPLOADED")
+                .map((event) => (
+                  <li key={event.id}>
+                    {ct(`importsAuditEvent.${event.event}` as TranslationKey)
+                      .replace("{who}", event.actor_label ?? ct("importsSystemActor"))
+                      .replace("{when}", formatDate(event.created_at))}
+                  </li>
+                ))}
+              {reviewDetail?.reviewed_by_label && reviewDetail.reviewed_at && (
+                <li className="imports-audit-reviewed">
+                  {ct("importsReviewedStamp")
+                    .replace("{who}", reviewDetail.reviewed_by_label)
+                    .replace("{when}", formatDate(reviewDetail.reviewed_at))}
+                </li>
+              )}
+            </ol>
+          )}
           {reviewImport.warnings.length > 0 && (
             <ul className="imports-warning">
               {reviewImport.warnings.map((warning) => (
@@ -435,21 +703,121 @@ export function CatalogImportsPanel({
               <tbody>
                 {rows.map((row) => {
                   const itemError = itemErrors.find((entry) => entry.key === row.key);
+                  if (row.entity !== "PROFILE") {
+                    const summary = candidateFieldSummary(row.fields);
+                    return (
+                      <Fragment key={row.key}>
+                        <tr
+                          className={
+                            itemError || row.row_errors.length ? "imports-row-error" : undefined
+                          }
+                        >
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={row.include}
+                              disabled={row.row_errors.length > 0 || row.published}
+                              onChange={(event) =>
+                                patchRow(row.key, { include: event.target.checked })
+                              }
+                            />
+                          </td>
+                          <td colSpan={3}>
+                            <StatusChip
+                              label={ct(`entity.${row.entity}`)}
+                              tone="neutral"
+                              value={null}
+                            />{" "}
+                            {row.published && (
+                              <StatusChip label={ct("importsPublished")} tone="ok" value={null} />
+                            )}{" "}
+                            {summary || ct("importsNoFields")}
+                          </td>
+                          <td colSpan={6}>
+                            <button
+                              type="button"
+                              className="imports-evidence-toggle"
+                              aria-expanded={evidenceKey === row.key}
+                              onClick={() =>
+                                setEvidenceKey(evidenceKey === row.key ? null : row.key)
+                              }
+                            >
+                              {ct("importsEvidence")}
+                            </button>
+                            <StatusChip
+                              label={t(
+                                IMPORT_CONFIDENCE_LABEL[row.confidence] ??
+                                  "catalog.importsConfidenceReview",
+                              )}
+                              tone={IMPORT_CONFIDENCE_TONE[row.confidence] ?? "neutral"}
+                              value={null}
+                            />
+                            {row.row_errors.map((error) => (
+                              <span key={error} className="imports-warning">
+                                {error}
+                              </span>
+                            ))}
+                            {row.warnings.length > 0 && (
+                              <span className="imports-warning">
+                                {row.warnings.map(codeText).join(" · ")}
+                              </span>
+                            )}
+                            {itemError && (
+                              <span className="imports-warning">{codeText(itemError.code)}</span>
+                            )}
+                          </td>
+                        </tr>
+                        {evidenceKey === row.key && (
+                          <tr className="imports-evidence-row">
+                            <td colSpan={10}>
+                              {row.source_ref && (
+                                <span className="imports-evidence-ref">{row.source_ref}</span>
+                              )}{" "}
+                              <code className="imports-evidence-text">
+                                {row.source_text || candidateFieldSummary(row.fields)}
+                              </code>{" "}
+                              {row.diff.map((entry) => (
+                                <span key={entry.system_code} className="imports-diff">
+                                  {ct("importsDiffTitle").replace("{system}", entry.system_code)}{" "}
+                                  {entry.fields.map((diff) => (
+                                    <span key={diff.field} className="imports-diff-field">
+                                      {fieldNameLabel(diff.field)}:{" "}
+                                      {fieldValueLabel(diff.field, diff.current) || "—"} →{" "}
+                                      {fieldValueLabel(diff.field, diff.proposed) || "—"}
+                                    </span>
+                                  ))}
+                                </span>
+                              ))}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  }
                   return (
                     <Fragment key={row.key}>
-                      <tr className={itemError ? "imports-row-error" : undefined}>
+                      <tr
+                        className={
+                          itemError || row.row_errors.length ? "imports-row-error" : undefined
+                        }
+                      >
                         <td>
                           <input
                             type="checkbox"
                             checked={row.include}
+                            disabled={row.row_errors.length > 0 || row.published}
                             onChange={(event) =>
                               patchRow(row.key, { include: event.target.checked })
                             }
                           />
+                          {row.published && (
+                            <StatusChip label={ct("importsPublished")} tone="ok" value={null} />
+                          )}
                         </td>
                         <td>
                           <input
                             value={row.sku}
+                            placeholder={ct("importsNoFields")}
                             maxLength={100}
                             size={12}
                             onChange={(event) => patchRow(row.key, { sku: event.target.value })}
@@ -458,6 +826,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.name}
+                            placeholder={ct("importsNoFields")}
                             maxLength={255}
                             size={20}
                             onChange={(event) => patchRow(row.key, { name: event.target.value })}
@@ -478,6 +847,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.face_width_mm}
+                            placeholder={ct("importsNoFields")}
                             inputMode="decimal"
                             size={6}
                             onChange={(event) =>
@@ -488,6 +858,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.commercial_length_mm}
+                            placeholder={ct("importsNoFields")}
                             inputMode="decimal"
                             size={7}
                             onChange={(event) =>
@@ -498,6 +869,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.welding_loss_mm}
+                            placeholder={ct("importsNoFields")}
                             inputMode="decimal"
                             size={6}
                             onChange={(event) =>
@@ -508,6 +880,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.reinforcement_sku}
+                            placeholder={ct("importsNoFields")}
                             maxLength={100}
                             size={10}
                             onChange={(event) =>
@@ -518,6 +891,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.weight_kg_m}
+                            placeholder={ct("importsNoFields")}
                             inputMode="decimal"
                             size={7}
                             onChange={(event) =>
@@ -528,6 +902,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.steel_weight_kg_m}
+                            placeholder={ct("importsNoFields")}
                             inputMode="decimal"
                             size={7}
                             onChange={(event) =>
@@ -544,16 +919,24 @@ export function CatalogImportsPanel({
                           >
                             {ct("importsEvidence")}
                           </button>
-                          <span
-                            className={`production-chip imports-confidence-${row.confidence.toLowerCase()}`}
-                          >
-                            {ct(CONFIDENCE_LABEL[row.confidence] ?? "importsConfidenceReview")}
-                          </span>
+                          <StatusChip
+                            label={t(
+                              IMPORT_CONFIDENCE_LABEL[row.confidence] ??
+                                "catalog.importsConfidenceReview",
+                            )}
+                            tone={IMPORT_CONFIDENCE_TONE[row.confidence] ?? "neutral"}
+                            value={null}
+                          />
                           {row.warnings.length > 0 && (
                             <span className="imports-warning">
                               {row.warnings.map(codeText).join(" · ")}
                             </span>
                           )}
+                          {row.row_errors.map((error) => (
+                            <span key={error} className="imports-warning">
+                              {error}
+                            </span>
+                          ))}
                           {itemError && (
                             <span className="imports-warning">{codeText(itemError.code)}</span>
                           )}
@@ -564,13 +947,25 @@ export function CatalogImportsPanel({
                           <td colSpan={11}>
                             {row.source_ref && (
                               <span className="imports-evidence-ref">{row.source_ref}</span>
-                            )}
-                            <code className="imports-evidence-text">{row.source_text}</code>
+                            )}{" "}
+                            <code className="imports-evidence-text">{row.source_text}</code>{" "}
                             {row.existing.map((match) => (
                               <span key={match.system_code} className="imports-existing">
                                 {ct("importsExisting").replace("{system}", match.system_code)}:{" "}
                                 {match.name} · {ct(`option.${match.role}`)}
                                 {match.face_width_mm ? ` · ${fmtMm(match.face_width_mm)} mm` : ""}
+                              </span>
+                            ))}{" "}
+                            {row.diff.map((entry) => (
+                              <span key={entry.system_code} className="imports-diff">
+                                {ct("importsDiffTitle").replace("{system}", entry.system_code)}{" "}
+                                {entry.fields.map((diff) => (
+                                  <span key={diff.field} className="imports-diff-field">
+                                    {fieldNameLabel(diff.field)}:{" "}
+                                    {fieldValueLabel(diff.field, diff.current) || "—"} →{" "}
+                                    {fieldValueLabel(diff.field, diff.proposed) || "—"}
+                                  </span>
+                                ))}
                               </span>
                             ))}
                           </td>
@@ -582,6 +977,10 @@ export function CatalogImportsPanel({
               </tbody>
             </table>
           </div>
+          {/* El error de confirmación se repite junto al botón: la tabla de
+              revisión puede ser larga y el mensaje superior queda fuera de
+              vista justo donde se decide. */}
+          {message && <p className="form-error">{message}</p>}
           <div className="projects-actions">
             <button type="button" disabled={busy} onClick={() => void confirm(reviewImport)}>
               {ct("importsConfirm")}

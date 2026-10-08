@@ -31,6 +31,10 @@ class AiInvokeResponseSerializer(serializers.Serializer):
     tokens_completion = serializers.IntegerField()
     latency_ms = serializers.IntegerField()
     credits_debited = serializers.IntegerField()
+    # §IA3 — present when the provider answered with native tool calls.
+    tool_calls = serializers.ListField(required=False)
+    assistant_message = serializers.DictField(required=False)
+    tools_fallback = serializers.BooleanField(required=False)
 
 
 class AiAskRequestSerializer(serializers.Serializer):
@@ -128,6 +132,9 @@ class AiAgentStepSerializer(serializers.Serializer):
     ops = serializers.ListField(child=serializers.DictField(), required=False)
     # §08-WC batch edits: validated ops grouped per position.
     items = serializers.ListField(child=serializers.DictField(), required=False)
+    # IA2 §4 — proyección estructural post-ops que la UI muestra antes de
+    # "Aplicar" (módulos con hojas/divisiones simuladas, uniones).
+    simulation = serializers.DictField(required=False)
 
 
 class AiAgentQuerySerializer(serializers.Serializer):
@@ -186,6 +193,8 @@ class AiAgentResultSerializer(serializers.Serializer):
     queries = AiAgentQuerySerializer(many=True)
     warnings = serializers.ListField(child=serializers.CharField())
     rejected = AiAgentRejectedSerializer(many=True)
+    # IA2 §3 — aclaración tipada {question, options[]} para chips en la UI.
+    clarify = serializers.DictField(required=False, allow_null=True)
 
 
 class AiJobMessageSerializer(serializers.Serializer):
@@ -218,6 +227,9 @@ class AiJobSerializer(serializers.Serializer):
     # Mid-run signal from the worker's job_runs row — the ai_jobs writes
     # commit only when the run finishes, so live progress rides this.
     live = serializers.DictField(required=False, allow_null=True)
+    # §IA3 — attributed spend for this job's operation key (all rounds):
+    # calls/tokens/credits/est_cost_usd. Null until the first row lands.
+    cost = serializers.DictField(required=False, allow_null=True)
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
     completed_at = serializers.DateTimeField(required=False, allow_null=True)
@@ -243,6 +255,15 @@ class AiJobOutcomeResponseSerializer(serializers.Serializer):
     recorded = serializers.BooleanField()
 
 
+class AiOpsContractSerializer(serializers.Serializer):
+    """IA2 — el documento de contrato del registro tipado de ops (el
+    JSON-schema por op se expone como subdocumento en cada entrada)."""
+
+    version = serializers.IntegerField()
+    scopes = serializers.ListField()
+    ops = serializers.ListField()
+
+
 class AiMetricsSerializer(serializers.Serializer):
     window_days = serializers.IntegerField()
     jobs = serializers.DictField()
@@ -259,3 +280,89 @@ class AiJobDetailSerializer(AiJobSerializer):
 
 class AiAgentResumeRequestSerializer(serializers.Serializer):
     pass
+
+# ---------------------------------------------------------------- §IA3 —
+
+
+class AiCapabilityStatusSerializer(serializers.Serializer):
+    """One capability's effective serving route — the ops-facing view the
+    owner verifies. `model` is the provider-side label, `public_name` the
+    white-label the audit rows carry."""
+
+    capability = serializers.CharField()
+    provider = serializers.CharField()
+    model = serializers.CharField()
+    public_name = serializers.CharField()
+    mode = serializers.ChoiceField(
+        choices=["live", "test", "unconfigured"]
+    )
+    credits_cost = serializers.IntegerField()
+    timeout_s = serializers.IntegerField(required=False, allow_null=True)
+    retry_max = serializers.IntegerField()
+    tools_enabled = serializers.BooleanField()
+    enabled = serializers.BooleanField()
+
+
+class AiProviderStatusSerializer(serializers.Serializer):
+    """Member-facing mode read — provider/model stay sealed behind the
+    owner-only settings endpoint."""
+
+    mode = serializers.ChoiceField(
+        choices=["live", "test", "partial", "unconfigured"]
+    )
+    mock = serializers.BooleanField()
+
+
+class AiBudgetSerializer(serializers.Serializer):
+    monthly_credit_budget = serializers.IntegerField(
+        required=False, allow_null=True
+    )
+    spent_this_month = serializers.IntegerField()
+    exceeded = serializers.BooleanField()
+
+
+class AiSettingsSerializer(serializers.Serializer):
+    mode = serializers.ChoiceField(
+        choices=["live", "test", "partial", "unconfigured"]
+    )
+    capabilities = AiCapabilityStatusSerializer(many=True)
+    budget = AiBudgetSerializer()
+    usage = serializers.DictField()
+
+
+class AiSettingsWriteSerializer(serializers.Serializer):
+    """The owner-set monthly ceiling, in wallet credits. null lifts the cap."""
+
+    monthly_credit_budget = serializers.IntegerField(
+        required=False, allow_null=True, min_value=0, max_value=10_000_000
+    )
+
+
+class AiProviderCheckSerializer(serializers.Serializer):
+    ok = serializers.BooleanField()
+    error_code = serializers.CharField(required=False, allow_null=True)
+    latency_ms = serializers.IntegerField()
+    model = serializers.CharField(required=False)
+
+
+class AiInvocationSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    kind = serializers.CharField()
+    capability = serializers.CharField(required=False, allow_null=True)
+    tool_name = serializers.CharField(required=False, allow_null=True)
+    operation_key = serializers.CharField(required=False, allow_null=True)
+    mode = serializers.CharField()
+    public_model = serializers.CharField(required=False, allow_null=True)
+    tokens_prompt = serializers.IntegerField()
+    tokens_completion = serializers.IntegerField()
+    latency_ms = serializers.IntegerField()
+    credits = serializers.IntegerField()
+    est_cost_usd = serializers.CharField(required=False, allow_null=True)
+    status = serializers.CharField()
+    error_code = serializers.CharField(required=False, allow_null=True)
+    created_at = serializers.CharField()
+    user_id = serializers.CharField(required=False, allow_null=True)
+
+
+class AiActivitySerializer(serializers.Serializer):
+    items = AiInvocationSerializer(many=True)

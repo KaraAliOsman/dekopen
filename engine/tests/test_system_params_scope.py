@@ -1,4 +1,4 @@
-"""Canonical SHOT-06 scope: 25 mapped, 20 consumed, 2 metadata, 3 reserved."""
+"""Canonical SHOT-06 scope: 40 mapped, 35 consumed, 2 metadata, 2 reserved."""
 
 import ast
 from collections.abc import Callable
@@ -8,11 +8,15 @@ import inspect
 import pytest
 
 from dekopen_engine import ParametricNode, SystemParams, calculate_geometry
-from dekopen_engine import geometry, hardware
+from dekopen_engine import geometry, hardware, openings, product
 from engine.tests.test_shot06_core import core_node
 
+# Sliding-geometry fields are consumed through the grouped `params.sliding`
+# view (D01): the consumer binds `sliding = params.sliding` and reads
+# `sliding.<field>` — the AST check below counts those reads too.
 CORE_CONSUMERS: dict[str, Callable[..., object]] = {
     "material": geometry.compute_geometry,
+    "system_family": geometry.assert_opening_allowed,
     "effective_profile_articles": geometry._article,
     "glazing_bead_rules": geometry.resolve_bead_rule,
     "rebate_depth_mm": geometry.rebate_depth,
@@ -23,49 +27,89 @@ CORE_CONSUMERS: dict[str, Callable[..., object]] = {
     "pulley_height_mm": geometry._append_sliding,
     "central_overlap_mm": geometry._append_sliding,
     "sliding_end_add_mm": geometry._append_sliding,
-    "door_threshold_mm": geometry._append_door,
-    "door_bottom_clearance_mm": geometry._append_door,
+    "door_threshold_mm": geometry._append_door_unit,
+    "door_bottom_clearance_mm": geometry._append_door_leaf,
     "rail_type": hardware.evaluate_hardware_candidates,
     "available_hardware_kits": hardware.evaluate_hardware_candidates,
     "sliding_glazing_deduction_width_mm": geometry._append_leaf,
     "sliding_glazing_deduction_height_mm": geometry._append_leaf,
-    "door_leaf_side_clearance_mm": geometry._append_door,
+    "door_leaf_side_clearance_mm": geometry._append_door_leaf,
     "available_panel_rules": geometry._append_leaf,
     "rail_count": geometry.rail_count,
+    "cut_rules": geometry._meeting_deduction,
+    "reinforcement_rules": geometry._append_profile,
+    # D03: leaf-level bounds resolve through the leaf's emitted key —
+    # the most specific declared row wins per leaf.
+    "typology_limits": geometry._typology_limit_for,
+    # D02 glass authorities: products, safety rules and type limits are
+    # consumed inside the per-piece glass evaluation pass.
+    "glass_products": geometry._evaluate_glass,
+    "glass_safety_rules": geometry._evaluate_glass,
+    "glass_type_limits": geometry._evaluate_glass,
+        "hardware_families": hardware.build_hardware_item,
+    "hardware_options": hardware.build_hardware_item,
+    "opening_capabilities": openings.admitted_capabilities,
+    # D06: catalog-provided accessory articles the position evaluator
+    # prices/cuts against (extras.py); read inside evaluate_product.
+    "extra_articles": product.evaluate_product,
+    # D08: declared authorities the advanced typologies consume — fold
+    # guide/leaf clearances inside the pack builder, the pivot jamb
+    # clearance inside the pivot builder.
+    "fold_guide_clearance_mm": geometry._append_folding,
+    "fold_leaf_clearance_mm": geometry._append_folding,
+    "pivot_clearance_mm": geometry._append_pivot,
+    # D08: the channel play a single-leaf guillotina subtracts from its
+    # finished height — consumed inside the vertical-slide builder.
+    "sliding_lateral_clearance_mm": geometry._append_vertical_slide,
 }
 METADATA = {"system_code", "depth_mm"}
-RESERVED = {"sliding_lateral_clearance_mm", "corner_bracket_loss_mm", "hook_depth_mm"}
+RESERVED = {"corner_bracket_loss_mm", "hook_depth_mm"}
 # Input-validity authority consumed by the API adapter (finish membership gates
 # `color`), not a formula input — `backend/engine_api/adapter.py` reads it.
-API_BOUNDARY = {"finishes"}
+# D05: the finish catalog + bicolor capability resolve into the
+# `ColorSelection` formula input at the same boundary
+# (`dekopen_engine.finishes.resolve_color_selection`).
+API_BOUNDARY = {"finishes", "color_options", "bicolor_allowed"}
+
+# Names that alias `params` inside a consumer's body (`x = params.<group>`).
+_GROUPED_BINDINGS = ("sliding",)
+
+
+def _param_reads(consumer: Callable[..., object]) -> set[str]:
+    tree = ast.parse(inspect.getsource(consumer))
+    bound = {"params"} | set(_GROUPED_BINDINGS)
+    return {
+        node.attr for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+        and node.value.id in bound and isinstance(node.ctx, ast.Load)
+    }
 
 
 def test_every_system_parameter_has_an_explicit_scope() -> None:
     assert (
-        len(CORE_CONSUMERS) == 20
+        len(CORE_CONSUMERS) == 35
         and len(METADATA) == 2
-        and len(RESERVED) == 3
-        and len(API_BOUNDARY) == 1
+        and len(RESERVED) == 2
+        and len(API_BOUNDARY) == 3
     )
     assert (
         set(CORE_CONSUMERS) | METADATA | RESERVED | API_BOUNDARY
         == set(SystemParams.model_fields)
     )
     for field, consumer in CORE_CONSUMERS.items():
-        reads = {
-            node.attr for node in ast.walk(ast.parse(inspect.getsource(consumer)))
-            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
-            and node.value.id == "params" and isinstance(node.ctx, ast.Load)
-        }
-        assert field in reads, f"{field} has lost its real consumer {consumer.__name__}"
+        assert field in _param_reads(consumer), (
+            f"{field} has lost its real consumer {consumer.__name__}"
+        )
 
 
 @pytest.mark.parametrize("field", sorted(RESERVED))
 @pytest.mark.parametrize("case", ["G3", "G5", "G6", "G7"])
 def test_reserved_parameters_do_not_change_core_results(
-    field: str, case: str, demo_60_params: SystemParams, g3_node: ParametricNode,
+    field: str, case: str, demo_60_params: SystemParams,
+    demo_corredera_60_params: SystemParams, g3_node: ParametricNode,
 ) -> None:
     node = g3_node if case == "G3" else core_node(case)
-    before = calculate_geometry(node, demo_60_params)
-    changed = demo_60_params.model_copy(update={field: Decimal("123.45")})
+    params = demo_corredera_60_params if case == "G5" else demo_60_params
+    before = calculate_geometry(node, params)
+    changed = params.model_copy(update={field: Decimal("123.45")})
     assert calculate_geometry(node, changed) == before

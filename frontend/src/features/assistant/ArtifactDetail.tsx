@@ -1,4 +1,5 @@
 import { t } from "../../i18n/es-CL";
+import { formatMoney } from "../../format";
 
 /** The artifact kinds the agent produces — payloads come from the workflow
  * contracts in backend/ai_gateway/agent.py, which the backend validates
@@ -29,11 +30,7 @@ function text(value: unknown, fallback = "—"): string {
 
 function money(value: unknown): string | null {
   const n = Number(value);
-  return Number.isFinite(n)
-    ? n.toLocaleString("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 })
-    : value != null
-      ? String(value)
-      : null;
+  return Number.isFinite(n) ? formatMoney(n, "CLP") : value != null ? String(value) : null;
 }
 
 function StatePill({ state }: { state: string }): JSX.Element {
@@ -222,12 +219,14 @@ function CatalogReviewView({ payload }: { payload: Dict }): JSX.Element {
 
 function GenericView({ payload }: { payload: Dict }): JSX.Element {
   const rows = Object.entries(payload);
-  if (!rows.length) return <p className="art-empty">{t("aiws.art.empty")}</p>;
+  if (!rows.length) return <p className="ui-empty-inline">{t("aiws.art.empty")}</p>;
   return (
     <dl className="art-kv">
       {rows.map(([key, value]) => (
         <div key={key} className="art-kv-row">
-          <dt>{key.replace(/_/g, " ")}</dt>
+          <dt>
+            <code>{key}</code>
+          </dt>
           <dd>
             {value === null || value === undefined
               ? "—"

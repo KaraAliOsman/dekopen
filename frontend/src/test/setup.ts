@@ -25,3 +25,7 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => false,
   }),
 });
+
+/* jsdom no implementa scrollIntoView — el checklist de emisión lo usa para
+ * llevar al primer campo pendiente. */
+Element.prototype.scrollIntoView = Element.prototype.scrollIntoView ?? (() => undefined);

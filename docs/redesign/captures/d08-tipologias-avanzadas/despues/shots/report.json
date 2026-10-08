@@ -1,0 +1,130 @@
+{
+  "summary": {
+    "generated_at": "2026-10-07T10:58:52.787Z",
+    "routes": 12,
+    "routes_with_findings": [],
+    "total_findings": 0
+  },
+  "results": [
+    {
+      "route": "project-position-new",
+      "url": "/projects/383fbda7-e9a8-4843-b2ef-47be74128aba/positions/new",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/383fbda7-e9a8-4843-b2ef-47be74128aba/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/383fbda7-e9a8-4843-b2ef-47be74128aba/positions/new",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/383fbda7-e9a8-4843-b2ef-47be74128aba/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/383fbda7-e9a8-4843-b2ef-47be74128aba/positions/new",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/383fbda7-e9a8-4843-b2ef-47be74128aba/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/383fbda7-e9a8-4843-b2ef-47be74128aba/positions/new",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/383fbda7-e9a8-4843-b2ef-47be74128aba/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/383fbda7-e9a8-4843-b2ef-47be74128aba/positions/new",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/383fbda7-e9a8-4843-b2ef-47be74128aba/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/383fbda7-e9a8-4843-b2ef-47be74128aba/positions/new",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/383fbda7-e9a8-4843-b2ef-47be74128aba/positions/new"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/4593ea3d-10e5-440f-9632-da83d3652d36/positions/0a263e20-e5d9-4ae0-919e-ec65274020b6/edit",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/4593ea3d-10e5-440f-9632-da83d3652d36/positions/0a263e20-e5d9-4ae0-919e-ec65274020b6/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/4593ea3d-10e5-440f-9632-da83d3652d36/positions/0a263e20-e5d9-4ae0-919e-ec65274020b6/edit",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/4593ea3d-10e5-440f-9632-da83d3652d36/positions/0a263e20-e5d9-4ae0-919e-ec65274020b6/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/4593ea3d-10e5-440f-9632-da83d3652d36/positions/0a263e20-e5d9-4ae0-919e-ec65274020b6/edit",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/4593ea3d-10e5-440f-9632-da83d3652d36/positions/0a263e20-e5d9-4ae0-919e-ec65274020b6/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/4593ea3d-10e5-440f-9632-da83d3652d36/positions/0a263e20-e5d9-4ae0-919e-ec65274020b6/edit",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/4593ea3d-10e5-440f-9632-da83d3652d36/positions/0a263e20-e5d9-4ae0-919e-ec65274020b6/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/4593ea3d-10e5-440f-9632-da83d3652d36/positions/0a263e20-e5d9-4ae0-919e-ec65274020b6/edit",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/4593ea3d-10e5-440f-9632-da83d3652d36/positions/0a263e20-e5d9-4ae0-919e-ec65274020b6/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/4593ea3d-10e5-440f-9632-da83d3652d36/positions/0a263e20-e5d9-4ae0-919e-ec65274020b6/edit",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/4593ea3d-10e5-440f-9632-da83d3652d36/positions/0a263e20-e5d9-4ae0-919e-ec65274020b6/edit"
+    }
+  ]
+}

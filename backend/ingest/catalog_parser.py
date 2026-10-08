@@ -21,6 +21,7 @@ actually saw, and candidates stay suggestions until a human confirms.
 
 from __future__ import annotations
 
+import json
 import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -28,26 +29,41 @@ from typing import Any
 ROLES = (
     "FRAME",
     "SASH",
+    "SLIDING_SASH",
+    "DOOR_SASH",
     "MULLION_V",
     "MULLION_H",
+    "INTERLOCK",
+    "RAIL",
     "INVERSOR",
     "GLAZING_BEAD",
     "COUPLER",
-    "THRESHOLD",
     "ADDITIONAL",
+    "THRESHOLD",
+    "FRAME_EXTENSION",
+    "SILL",
+    "COVER_TRIM",
+    "SKIRT",
 )
 
 _ROLE_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
+    # More specific sliding/door roles resolve before the generic leaf and
+    # rail keywords — "hoja corredera" is a SLIDING_SASH, not a SASH.
+    (("puerta", "door"), "DOOR_SASH"),
+    (("corredera", "corredizo", "sliding"), "SLIDING_SASH"),
+    (("encuentro", "interlock", "enganche"), "INTERLOCK"),
+    (("riel", "rail", "guia"), "RAIL"),
     (("marco", "frame", "kasa"), "FRAME"),
     (("hoja", "sash", "ventana"), "SASH"),
     (("montante", "mullion", "vertical"), "MULLION_V"),
-    (("travesa", "horizontal", "jamba", "riel", "guia", "rail"), "MULLION_H"),
+    (("travesa", "horizontal", "jamba"), "MULLION_H"),
     (("inversor", "adaptador", "inverter"), "INVERSOR"),
     (("contravidrio", "junta", "vidrio", "bead", "clip"), "GLAZING_BEAD"),
     (("acoplamiento", "bayo", "coupler", "union", "acople"), "COUPLER"),
     (("umbral", "threshold", "zocalo"), "THRESHOLD"),
     (("refuerzo", "steel", "acero", "reinforcement"), "ADDITIONAL"),
-    (("tapa", "tapacanal", "cover", "cap"), "ADDITIONAL"),
+    (("tapa", "tapacanal", "cover", "cap"), "COVER_TRIM"),
+    (("vierteaguas", "sill", "repisa"), "SILL"),
 )
 
 _SKU = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.\-_/]{0,29}$")
@@ -234,6 +250,105 @@ def parse_article_line(
     }
 
 
+_ENTITY_KEYS = {
+    "SYSTEM": "system",
+    "PROFILE": "profile",
+    "CUT_RULE": "cut rule",
+    "REINFORCEMENT_RULE": "reinforcement rule",
+    "TYPOLOGY_LIMIT": "typology limit",
+    "FINISH": "finish",
+    "GLAZING_RULE": "glazing rule",
+    "HARDWARE_KIT": "hardware kit",
+    "PRICE": "price",
+}
+
+
+def parse_ai_candidates(output: str) -> list[dict[str, Any]]:
+    """AI compile output → typed candidates. Two contracts:
+
+    - JSON array of ``{"entity", "fields": {...}}`` objects — the provider's
+      structured extraction for every catalog entity kind.
+    - Legacy plain text — falls back to the prose line parser (PROFILE only).
+
+    AI extraction can never reach VERIFIED_STRUCTURED: fields the model could
+    not ground stay None (UNKNOWN), and every candidate lands at
+    REVIEW_REQUIRED or below — the reviewer, not the model, is the authority.
+    """
+    stripped = output.strip()
+    if not stripped:
+        return []
+    try:
+        payload = json.loads(stripped)
+    except ValueError:
+        payload = None
+    if not isinstance(payload, list):
+        return parse_catalog_lines(stripped.splitlines())
+    candidates: list[dict[str, Any]] = []
+    for index, entry in enumerate(payload):
+        if not isinstance(entry, dict):
+            continue
+        entity = str(entry.get("entity") or "PROFILE").upper()
+        if entity not in _ENTITY_KEYS:
+            entity = "PROFILE"
+        fields = entry.get("fields")
+        if not isinstance(fields, dict):
+            fields = {}
+        confidence = str(entry.get("confidence") or "REVIEW_REQUIRED").upper()
+        if confidence == CONFIDENCE_VERIFIED_STRUCTURED:
+            # Never granted to AI output — clamp to review-required.
+            confidence = CONFIDENCE_REVIEW_REQUIRED
+        elif confidence not in (
+            CONFIDENCE_HIGH_CANDIDATE, CONFIDENCE_LOW, CONFIDENCE_REVIEW_REQUIRED
+        ):
+            confidence = CONFIDENCE_LOW
+        warnings = [str(w) for w in entry.get("warnings") or []]
+        if confidence == CONFIDENCE_LOW:
+            # Low confidence = fields the model could not ground — force
+            # UNKNOWN instead of letting an invented value ride through.
+            fields = {
+                key: (value if key in ("sku", "name", "role", "code") else None)
+                for key, value in fields.items()
+            }
+            warnings.append("catalog_low_confidence_unknown")
+        candidate: dict[str, Any] = {
+            "key": f"ai:{index}",
+            "entity": entity,
+            "confidence": confidence,
+            "warnings": warnings,
+            "row_errors": [],
+            "source_ref": entry.get("source_ref"),
+            "fields": fields,
+            "evidence": {
+                "parser_version": f"{PARSER_VERSION}+ai",
+                "source": {"ref": entry.get("source_ref"), "text": ""},
+                "fields": {
+                    name: {
+                        "normalized": None if value is None else str(value),
+                        "original": None if value is None else str(value),
+                        "source": "ai_compile",
+                    }
+                    for name, value in fields.items()
+                },
+            },
+        }
+        if entity == "PROFILE":
+            candidate.update(
+                {
+                    "sku": fields.get("sku"),
+                    "name": fields.get("name"),
+                    "role": fields.get("role") or "ADDITIONAL",
+                    "face_width_mm": fields.get("face_width_mm"),
+                    "commercial_length_mm": fields.get("commercial_length_mm"),
+                    "welding_loss_mm": fields.get("welding_loss_mm"),
+                    "reinforcement_sku": fields.get("reinforcement_sku"),
+                    "weight_kg_m": fields.get("weight_kg_m"),
+                    "steel_weight_kg_m": fields.get("steel_weight_kg_m"),
+                }
+            )
+        candidates.append(candidate)
+    return candidates
+
+
 def parse_catalog_lines(lines: list[Any]) -> list[dict[str, Any]]:
     """Entries may be plain lines or (line, source-ref) pairs — the ref rides
     onto the candidate so review shows where in the document it came from."""
@@ -245,5 +360,8 @@ def parse_catalog_lines(lines: list[Any]) -> list[dict[str, Any]]:
         if parsed is None or parsed["sku"] in seen:
             continue
         seen.add(parsed["sku"])
+        # Uniform candidate shape: prose lines are PROFILE entities.
+        parsed.setdefault("entity", "PROFILE")
+        parsed.setdefault("row_errors", [])
         candidates.append(parsed)
     return candidates

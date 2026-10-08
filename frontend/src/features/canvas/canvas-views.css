@@ -1,0 +1,1401 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* The 3D toggle stacks above the floating zoom cluster — both anchor
+   bottom-left; one anchor must not swallow the other's hit area. */
+.model3d-toggle {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  bottom: var(--space-48);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: var(--space-4) var(--space-8);
+  position: absolute;
+  left: var(--space-12);
+  z-index: var(--z-raise);
+}
+
+/* Status bar — compact persistent state */
+.assembly-field-error {
+  color: var(--danger-ink);
+  display: block;
+  font-size: var(--type-dense);
+  margin-top: var(--space-4);
+}
+
+.assembly-field.is-invalid input,
+.canvas-dim-input.is-invalid {
+  border-color: var(--theme-danger) !important;
+}
+
+.assembly-statusbar {
+  align-items: center;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: var(--space-16);
+  grid-area: status;
+  padding: var(--space-4) var(--space-12);
+  /* Above the canvas' floating islands (z2) — a scrolled viewport-status
+   * chip must never underlap/intercept the issues button (render P2-7). */
+  position: relative;
+  z-index: var(--z-raise-top);
+}
+
+.assembly-statusbar__dims {
+  color: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.assembly-statusbar__selection {
+  color: var(--theme-text-muted);
+  font-size: 0.75rem;
+}
+
+.assembly-statusbar__issues {
+  background: transparent;
+  border: none;
+  color: var(--warn-ink);
+  cursor: pointer;
+  font-size: 0.75rem;
+  margin-left: auto;
+  padding: 0;
+}
+
+/* Object tree — left rail, human names only */
+.assembly-tree {
+  grid-area: tree;
+  min-height: 0;
+}
+
+.object-tree {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.object-tree__title {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  color: var(--theme-text-muted);
+  font-size: var(--type-dense);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  margin: 0;
+  padding: var(--space-8) var(--space-12);
+  text-transform: uppercase;
+}
+
+.tree-root,
+.tree-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree-root {
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-4);
+}
+
+.tree-row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+  min-height: 1.5rem;
+}
+
+.tree-disclosure {
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  height: 0.9rem;
+  justify-content: center;
+  padding: 0;
+  width: 0.9rem;
+}
+
+.tree-disclosure--leaf {
+  display: inline-block;
+}
+
+.tree-label {
+  align-items: baseline;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 1;
+  font: inherit;
+  font-size: 0.8rem;
+  gap: var(--space-6);
+  min-width: 0;
+  padding: var(--space-2) var(--space-4);
+  text-align: left;
+}
+
+.tree-label:hover {
+  background: var(--theme-surface-hover);
+}
+
+/* Selection is a row band (with a leading accent bar), so "this row IS
+ * selected" can never be confused with a tinted disclosure that merely
+ * CONTAINS the selection on an ancestor row. */
+.tree-row.is-selected {
+  position: relative;
+  background: var(--theme-accent-soft);
+  border-radius: var(--radius-sm);
+}
+
+.tree-row.is-selected::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--theme-accent);
+}
+
+.tree-row.is-selected .tree-label {
+  color: var(--theme-accent-ink);
+}
+
+.tree-row.in-path .tree-disclosure {
+  color: var(--theme-accent);
+}
+
+.tree-label.is-static {
+  cursor: default;
+}
+
+.tree-label__text {
+  flex: none;
+  font-weight: 500;
+}
+
+.tree-row--member .tree-label__text,
+.tree-row--glazing .tree-label__text,
+.tree-row--handle .tree-label__text,
+.tree-row--panel .tree-label__text {
+  color: var(--theme-text-secondary);
+  font-weight: 400;
+}
+
+.tree-label__detail {
+  /* Secondary ink: muted measured 4.32:1 on the dark surface — under AA
+   * for this detail line. */
+  color: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: var(--type-micro);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-severity {
+  border-radius: 50%;
+  flex: none;
+  height: 6px;
+  margin-left: auto;
+  width: 6px;
+}
+
+.tree-severity--error {
+  background: var(--theme-danger);
+}
+
+.tree-severity--warning {
+  background: var(--theme-warning);
+}
+
+.assembly-canvas {
+  display: grid;
+  grid-area: canvas;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  padding: 0;
+}
+
+.canvas-viewport {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  display: block;
+  height: 100%;
+  min-height: 30rem;
+  overflow: hidden;
+  position: relative;
+  touch-action: none;
+}
+
+.canvas-viewport:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: -2px;
+}
+
+.canvas-viewport .canvas-sheet {
+  cursor: grab;
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.canvas-viewport.is-panning .canvas-sheet {
+  cursor: grabbing;
+}
+
+/* Floating zoom cluster — bottom-left island chrome */
+.viewport-island {
+  align-items: center;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  bottom: var(--space-12);
+  display: flex;
+  left: var(--space-12);
+  padding: var(--space-2);
+  position: absolute;
+  z-index: var(--z-raise);
+}
+
+.viewport-button {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: var(--type-dense);
+  height: 1.6rem;
+  justify-content: center;
+  min-width: 1.6rem;
+  padding: 0 var(--space-6);
+}
+
+.viewport-button:hover {
+  background: var(--theme-surface-hover);
+  color: var(--theme-text-primary);
+}
+
+.viewport-button--percent {
+  min-width: 3rem;
+}
+
+.viewport-menu {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  bottom: calc(100% + 6px);
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  left: 0;
+  min-width: 10.5rem;
+  padding: 3px;
+  position: absolute;
+}
+
+.viewport-menu__item {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-primary);
+  cursor: pointer;
+  font: inherit;
+  padding: var(--space-6) var(--space-8);
+  text-align: left;
+}
+
+.viewport-menu__item:hover:not(:disabled) {
+  background: var(--theme-accent-soft);
+}
+
+.viewport-menu__item:disabled {
+  color: var(--theme-text-muted);
+  cursor: default;
+}
+
+.viewport-status {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  bottom: var(--space-12);
+  /* Secondary ink, not muted: on the panel's dark surface muted measured
+   * 4.32:1 — under AA for this readout's size. */
+  color: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: var(--type-dense);
+  padding: var(--space-4) var(--space-8);
+  position: absolute;
+  right: var(--space-12);
+  z-index: var(--z-raise);
+}
+
+.product-front-svg {
+  display: block;
+  width: 100%;
+}
+
+.front-module {
+  cursor: pointer;
+}
+
+.member {
+  vector-effect: non-scaling-stroke;
+}
+
+.front-module .member-frame {
+  stroke-width: 4;
+}
+
+.front-module.is-selected .member-frame {
+  stroke: var(--theme-accent);
+  stroke-width: 6;
+}
+
+.front-module.has-error .member-frame {
+  stroke: var(--theme-danger);
+  stroke-width: 6;
+}
+
+.front-module.has-warning .member-frame {
+  stroke: var(--theme-warning);
+  stroke-width: 6;
+}
+
+.module-opening {
+  fill: none;
+}
+
+/* A contour module's inset path IS the lite — the transparent base class
+ * left Trapecio/Arco elevations as a bare member slab (review M2). */
+.module-opening--lite {
+  fill: var(--theme-glass-pane);
+}
+
+.member-sash {
+  stroke-width: 2;
+}
+
+.member-mullion,
+.member-coupler,
+.member-threshold {
+  stroke-width: 2.5;
+}
+
+.member-bead {
+  fill: none;
+  stroke: var(--member-pvc-edge);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.module-glass {
+  /* Opaque pane — a translucent tint showed the dark member slab beneath,
+   * so anthracite/foil lites rendered as solid slabs (rendering review M1). */
+  fill: var(--theme-glass-pane);
+  stroke: var(--theme-border-subtle);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.glass-sheen {
+  stroke: var(--member-pvc-highlight);
+  stroke-width: 7;
+  opacity: 0.75;
+}
+
+.bay-panel {
+  fill: var(--member-panel-fill);
+  stroke: var(--member-panel-edge);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.handle-lever line {
+  stroke: var(--theme-accent-ink);
+  vector-effect: non-scaling-stroke;
+}
+
+/* Declared handle datum that lands off the leaf: the flag ring warns —
+ * the lever still draws at its clamped display position. */
+.handle-lever .handle-datum-flag {
+  fill: none;
+  stroke: var(--theme-danger);
+  stroke-dasharray: 3 2;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.handle-lever.is-datum-invalid line {
+  stroke: var(--theme-danger);
+}
+
+/* Material-family interior detail: the soft chamber rebate of a PVC profile
+ * and the thermal-break strip inside an aluminium extrusion. Strokes come
+ * from each surface's own highlight/edge so they follow the member palette. */
+.member-inner {
+  fill: none;
+  stroke-width: 1.1;
+  opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+}
+
+.member-thermal-strip {
+  opacity: 0.5;
+}
+
+/* Insulated glazing: inner ring reads as the second lite + spacer. */
+.module-glass-ig {
+  fill: none;
+  stroke: var(--theme-text-muted);
+  stroke-width: 1.2;
+  opacity: 0.65;
+  vector-effect: non-scaling-stroke;
+}
+
+.door-hinge {
+  fill: var(--theme-border-subtle);
+  stroke: var(--theme-text-muted);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.module-bay {
+  pointer-events: none;
+}
+
+/* Leaf-bay selection: pointer events turn on only while a select handler is
+   wired (armed divide tool keeps the module's click contract intact). */
+.module-bay.bay-pickable {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.bay-select-ring {
+  fill: none;
+  pointer-events: none;
+  stroke: var(--theme-accent);
+  stroke-dasharray: 42 20;
+  stroke-width: 10;
+  vector-effect: non-scaling-stroke;
+}
+
+.dim-run {
+  pointer-events: none;
+}
+
+.dim-extension {
+  stroke: var(--theme-border-subtle);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.dim-line {
+  stroke: var(--theme-text-muted);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.dim-tick {
+  stroke: var(--theme-text-secondary);
+  stroke-width: 2.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.opening-glyph polyline,
+.opening-glyph line,
+.opening-glyph path {
+  /* La lámina conserva vidrio claro en ambos temas: la tinta del símbolo
+     es la del documento técnico (firma), no el texto del tema. */
+  stroke: var(--signature-ink);
+  stroke-width: 2.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.opening-glyph circle {
+  fill: var(--signature-ink);
+}
+
+.canvas-dim {
+  fill: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.canvas-dim-wrap {
+  cursor: pointer;
+}
+
+/* Padded hit pill — invisible at rest, surfaces on hover/focus so editable
+ * dims read as controls, not decoration. */
+.canvas-dim-hit {
+  fill: var(--theme-surface-panel);
+  opacity: 0;
+  stroke: var(--theme-border-subtle);
+  stroke-width: 1.5;
+  transition: opacity 0.12s ease;
+  vector-effect: non-scaling-stroke;
+}
+
+.canvas-dim-wrap:hover .canvas-dim-hit,
+.canvas-dim-wrap:focus-visible .canvas-dim-hit,
+.canvas-dim-wrap.is-active .canvas-dim-hit {
+  opacity: 0.92;
+}
+
+.canvas-dim-wrap:hover .canvas-dim,
+.canvas-dim:hover {
+  fill: var(--theme-accent);
+}
+
+.canvas-dim.is-active {
+  fill: var(--theme-accent-ink);
+  font-weight: 500;
+}
+
+.canvas-dim-input {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-accent);
+  color: var(--theme-text-primary);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+  padding: var(--space-2) var(--space-4);
+  text-align: center;
+  width: 100%;
+}
+
+.add-handle {
+  cursor: pointer;
+}
+
+.add-handle circle {
+  fill: var(--theme-surface-panel);
+  stroke: var(--theme-border-subtle);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.add-handle path {
+  stroke: var(--theme-accent);
+  stroke-width: 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.add-handle:hover circle,
+.add-handle:focus circle {
+  stroke: var(--theme-accent);
+}
+
+/* Detail-level segmented control — overview/design/technical over the
+   same selection. Tokens only; matches the tool-strip language. */
+.detail-levels {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  background: var(--theme-surface);
+}
+
+.detail-levels__btn {
+  flex: 1;
+  padding: var(--space-4) var(--space-8);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--theme-text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.detail-levels__btn:hover {
+  color: var(--theme-text);
+}
+
+.detail-levels__btn.is-active {
+  background: var(--theme-accent-soft);
+  color: var(--info-ink);
+  font-weight: 600;
+}
+
+.inspector-summary {
+  padding: var(--space-12);
+}
+
+.inspector-summary__title {
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-8);
+}
+
+.inspector-summary__list {
+  display: grid;
+  gap: var(--space-8);
+  margin: 0;
+}
+
+.inspector-summary__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.inspector-summary__row dt {
+  color: var(--theme-text-muted);
+  font-size: var(--text-sm);
+}
+
+.inspector-summary__row dd {
+  font-size: var(--text-sm);
+  margin: 0;
+  text-align: right;
+}
+
+.tech-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.tech-table {
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+  width: 100%;
+}
+
+.tech-table th {
+  color: var(--theme-text-muted);
+  font-weight: 500;
+  text-align: left;
+}
+
+.tech-table th,
+.tech-table td {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  padding: var(--space-4) var(--space-8) var(--space-4) 0;
+}
+
+.assembly-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  grid-area: side;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.assembly-inspector {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+}
+
+.assembly-inspector__header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.assembly-inspector__header h4 {
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.assembly-hint {
+  color: var(--theme-text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.inspector-section {
+  border-top: 1px solid var(--theme-border-subtle);
+  display: contents;
+}
+
+.inspector-section > summary {
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  font-size: var(--type-dense);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  list-style: none;
+  margin-top: var(--space-6);
+  padding: var(--space-4) 0;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.inspector-section > summary::before {
+  content: "▾";
+  display: inline-block;
+  margin-right: var(--space-6);
+  transition: transform 0.12s ease;
+}
+
+.inspector-section:not([open]) > summary::before {
+  transform: rotate(-90deg);
+}
+
+.inspector-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.inspector-section:not([open]) > summary {
+  margin-bottom: 0;
+}
+
+.inspector-section[open] > *:not(summary) {
+  animation: inspector-reveal 0.12s ease;
+}
+
+@keyframes inspector-reveal {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.opening-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.opening-choice {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  cursor: pointer;
+  padding: var(--space-2);
+}
+
+.opening-choice.is-active {
+  border-color: var(--theme-accent);
+  outline: 1px solid var(--theme-accent);
+}
+
+.opening-choice svg {
+  display: block;
+  width: 100%;
+}
+
+.opening-choice__frame {
+  fill: var(--theme-glass-tint);
+  stroke: var(--theme-text-secondary);
+  stroke-width: 4;
+}
+
+.opening-choice .opening-glyph polyline,
+.opening-choice .opening-glyph line,
+.opening-choice .opening-glyph path {
+  stroke: var(--signature-ink);
+  stroke-width: 3;
+}
+
+.inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+}
+
+.ghost-button {
+  background: transparent;
+  border: 1px solid var(--theme-border-subtle);
+  color: var(--theme-text-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: var(--space-4) var(--space-8);
+}
+
+.ghost-button:hover:not(:disabled) {
+  border-color: var(--theme-accent);
+}
+
+.ghost-button:disabled {
+  border-style: dashed;
+  color: var(--theme-text-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ghost-button.is-danger:hover:not(:disabled) {
+  border-color: var(--danger-ink);
+  color: var(--danger-ink);
+}
+
+.assembly-issues {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.issue-chip {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-left-width: 3px;
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: var(--space-6) var(--space-8);
+  text-align: left;
+  width: 100%;
+}
+
+.issue-chip--error {
+  border-left-color: var(--danger-ink);
+}
+
+.issue-chip--warning {
+  border-left-color: var(--warn-ink);
+}
+
+.plan-angle {
+  cursor: pointer;
+  fill: var(--theme-text-primary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-angle:hover {
+  fill: var(--theme-accent);
+}
+
+/* P06 — la etiqueta lee el candidato del arrastre en vivo: acento mientras
+ * el dedo decide dónde aterriza la junta. */
+.plan-angle.is-live {
+  fill: var(--theme-accent);
+  font-weight: 600;
+}
+
+/* P06 — pivote de la bisagra: el punto donde un arrastre gira la cola de la
+ * cadena. Grab afforance, anillo en reposo para no gritar sobre la planta. */
+.plan-joint-handle {
+  cursor: grab;
+  fill: var(--theme-surface-card);
+  stroke: var(--theme-text-secondary);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.plan-joint-handle:hover,
+.plan-joint-handle.is-dragging {
+  cursor: grabbing;
+  fill: var(--theme-accent);
+  stroke: var(--theme-accent);
+}
+
+.plan-coupling {
+  cursor: pointer;
+}
+
+.plan-coupling.is-selected {
+  stroke: var(--theme-accent);
+}
+
+.plan-coupling.has-issue {
+  stroke: var(--theme-danger);
+}
+
+.plan-issue-flag {
+  fill: var(--theme-danger);
+  font-weight: 600;
+}
+
+/* --- Direct manipulation: divider grips, seam grips, divide preview --- */
+
+.divider-grip {
+  /* Faint resting fill — the divider reads as a drag zone, not a dead strip;
+   * full accent arrives on hover/active. */
+  fill: var(--theme-text-muted);
+  fill-opacity: 0.07;
+  outline: none;
+  pointer-events: all;
+  touch-action: none;
+}
+
+.divider-grip.is-vertical {
+  cursor: ew-resize;
+}
+
+.divider-grip.is-horizontal {
+  cursor: ns-resize;
+}
+
+.divider-grip:hover,
+.divider-grip:active {
+  fill: var(--theme-accent);
+  fill-opacity: 0.18;
+  stroke: var(--theme-accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.seam-grip {
+  cursor: ew-resize;
+  fill: var(--theme-text-muted);
+  fill-opacity: 0.06;
+  pointer-events: all;
+  touch-action: none;
+}
+
+.seam-grip:hover {
+  fill: var(--theme-accent);
+  fill-opacity: 0.14;
+}
+
+.seam-grip-dot,
+.divider-grip-dots circle {
+  fill: var(--theme-text-muted);
+  opacity: 0.55;
+}
+
+.seam-grip:hover ~ .seam-grip-dot,
+.divider-grip:hover ~ .divider-grip-dots circle,
+.divider-grip.is-selected ~ .divider-grip-dots circle {
+  fill: var(--theme-accent);
+  opacity: 1;
+}
+
+.divide-preview-line {
+  pointer-events: none;
+  stroke: var(--theme-accent);
+  stroke-dasharray: 14 10;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.front-module.is-divide-target {
+  cursor: crosshair;
+}
+
+.seam-preview {
+  pointer-events: none;
+}
+
+.seam-preview-line {
+  stroke: var(--theme-accent);
+  stroke-dasharray: 16 12;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.seam-preview-label {
+  fill: var(--theme-accent-ink);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+}
+
+.assistant-panel__prompt {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid var(--theme-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--theme-surface);
+  color: var(--theme-text-primary);
+  font: inherit;
+  padding: var(--space-6) var(--space-8);
+  margin-bottom: var(--space-8);
+}
+
+.assistant-panel__preview {
+  border-top: 1px solid var(--theme-border-subtle);
+  margin-top: var(--space-8);
+  padding-top: var(--space-8);
+}
+
+.assistant-panel__notes {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-dense);
+  margin: 0 0 var(--space-6);
+}
+
+.assistant-panel__ops,
+.assistant-panel__rejected {
+  margin: 0 0 var(--space-8);
+  padding-left: var(--space-16);
+  font-size: var(--type-dense);
+}
+
+.assistant-panel__rejected {
+  color: var(--person-ink);
+}
+
+.assistant-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  margin: 0 0 var(--space-8);
+}
+
+.assistant-panel__chip {
+  border: 1px solid var(--theme-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--theme-surface-raised);
+  color: var(--theme-text-primary);
+  font-size: var(--type-dense);
+  padding: var(--space-4) var(--space-12);
+  cursor: pointer;
+}
+
+.assistant-panel__chip:hover:not(:disabled) {
+  background: var(--theme-surface-hover);
+}
+
+.assistant-panel__chip:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.assistant-panel__meta {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+  margin: var(--space-6) 0 0;
+}
+
+.alternatives-panel__result {
+  border-top: 1px solid var(--theme-border-subtle);
+  margin-top: var(--space-8);
+  padding-top: var(--space-8);
+}
+
+.alternatives-panel__cards {
+  display: grid;
+  gap: var(--space-8);
+  margin-bottom: var(--space-8);
+}
+
+.alternative-card {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-8);
+  background: var(--theme-surface);
+}
+
+.alternative-card__thumb {
+  display: block;
+  max-height: 140px;
+}
+
+.alternative-card__thumb svg,
+.alternative-card__thumb .alternative-card__render {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 96px;
+  border-radius: var(--radius-sm);
+  background: var(--model3d-backdrop);
+}
+
+.alternative-card__label {
+  font-weight: 600;
+  font-size: var(--type-dense);
+  margin: var(--space-6) 0 var(--space-2);
+}
+
+.alternative-card__rationale {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+  margin: 0 0 var(--space-4);
+}
+
+.alternative-card__metrics {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
+.alternative-card__warnings {
+  color: var(--person-ink);
+  font-size: var(--type-micro);
+  margin: var(--space-4) 0 0;
+}
+
+.alternative-card__use {
+  margin-top: var(--space-6);
+}
+
+.context-menu {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: var(--space-4);
+  position: fixed;
+  z-index: var(--z-menu);
+}
+
+.context-menu__item {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--type-body);
+  padding: var(--space-6) var(--space-8);
+  text-align: left;
+}
+
+.context-menu__item:hover {
+  background: var(--theme-surface-raised);
+  color: var(--theme-text-primary);
+}
+
+.context-menu__item--assistant {
+  border-top: 1px solid var(--theme-border-subtle);
+  border-radius: 0 0 var(--r-2) var(--r-2);
+  color: var(--theme-accent);
+  margin-top: var(--space-4);
+}
+
+.context-menu__item {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.context-menu__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-menu__hint {
+  background: transparent;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--theme-text-muted);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: var(--type-micro);
+  padding: 1px var(--space-4);
+  white-space: nowrap;
+}
+
+/* D04 herrajes: resolved class + why-this-kit + avanzado component table. */
+.assembly-kit-summary {
+  border: 1px solid var(--theme-border-subtle);
+  padding: var(--space-6) var(--space-8);
+}
+
+.assembly-kit-class {
+  color: var(--theme-text-secondary);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.assembly-kit-class > span {
+  color: var(--theme-text-muted);
+}
+
+.assembly-kit-class > small {
+  color: var(--theme-text-muted);
+}
+
+.assembly-kit-why {
+  margin-top: var(--space-2);
+}
+
+.assembly-kit-why > summary {
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  list-style: none;
+  user-select: none;
+}
+
+.assembly-kit-why > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: var(--space-4);
+}
+
+.assembly-kit-why[open] > summary::before {
+  content: "▾";
+}
+
+.assembly-kit-why > summary::-webkit-details-marker {
+  display: none;
+}
+
+.assembly-hardware-options {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+}
+
+.assembly-hardware-options > legend {
+  color: var(--theme-text-secondary);
+  font-size: 0.85rem;
+  padding: 0;
+}
+
+.assembly-check {
+  align-items: baseline;
+  color: var(--theme-text-secondary);
+  display: flex;
+  font-size: 0.85rem;
+  gap: var(--space-6);
+}
+
+.assembly-check input[type="checkbox"] {
+  width: auto;
+}
+
+.assembly-kit-advanced > summary {
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  list-style: none;
+  user-select: none;
+}
+
+.assembly-kit-advanced > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: var(--space-4);
+}
+
+.assembly-kit-advanced[open] > summary::before {
+  content: "▾";
+}
+
+.assembly-kit-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.assembly-kit-table {
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  width: 100%;
+}
+
+.assembly-kit-table th {
+  color: var(--theme-text-muted);
+  font-weight: 500;
+  text-align: left;
+}
+
+.assembly-kit-table td,
+.assembly-kit-table th {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  padding: var(--space-2) var(--space-4) var(--space-2) 0;
+}
+
+.assembly-kit-table td:first-child,
+.assembly-kit-table th:first-child {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  width: 2.5rem;
+}
+
+.assembly-kit-table td:last-child,
+.assembly-kit-table th:last-child {
+  color: var(--theme-text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.assembly-kit-table small {
+  color: var(--theme-text-muted);
+}
+
+/* ---------- D07 · Cota doble — vano + fabricación ---------- */
+
+.vano-overlay {
+  pointer-events: none;
+}
+
+.vano-outline {
+  fill: none;
+  stroke: var(--theme-text-muted);
+  stroke-width: 2;
+  stroke-dasharray: 26 14;
+  vector-effect: non-scaling-stroke;
+}
+
+.vano-dim {
+  fill: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 30px;
+  font-weight: 500;
+}
+
+.vano-dim--mount {
+  fill: var(--theme-text-muted);
+  font-size: 22px;
+  font-weight: 400;
+}
+
+.vano-gap {
+  fill: var(--theme-text-muted);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 22px;
+}
+
+/* P05 — vista declarada + bloque de simbología junto a los niveles de
+ * detalle: mismas primitivas de grupo que .detail-levels. */
+.view-levels {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  background: var(--theme-surface);
+  margin-top: var(--space-8);
+}
+
+.symbols-legend {
+  margin-top: var(--space-8);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  background: var(--theme-surface);
+  padding: var(--space-8) var(--space-12);
+  font-size: var(--text-sm);
+  color: var(--theme-text-secondary);
+}
+
+.symbols-legend > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+}
+
+.symbols-legend > p {
+  margin: var(--space-8) 0 0;
+  line-height: 1.5;
+}

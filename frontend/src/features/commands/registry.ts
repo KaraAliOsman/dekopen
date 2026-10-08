@@ -79,6 +79,28 @@ export function resolveCommands(ctx: CommandContext, specs: CommandSpec[]): Reso
         shortcuts,
         params: spec.params?.(ctx),
         describe: spec.describe,
+        preview:
+          spec.apply === undefined || ctx.previewProposal === undefined
+            ? undefined
+            : (args: CommandArgs) => {
+                try {
+                  const next = spec.apply!(ctx, args);
+                  // A refused/no-op apply has nothing to preview — run the
+                  // command through the normal path so its postCommit or
+                  // silent no-op behaves exactly like a direct dispatch.
+                  if (next === ctx.product) return false;
+                  ctx.previewProposal!({
+                    product: next,
+                    apply: () => runCommand(ctx, spec, args),
+                  });
+                  return true;
+                } catch {
+                  // apply may throw for edge args (out-of-range mm) — the
+                  // normal path surfaces that honestly; previewing must
+                  // never fail worse than committing would.
+                  return false;
+                }
+              },
         run: (args: CommandArgs) => runCommand(ctx, spec, args),
       };
     });
@@ -110,9 +132,18 @@ export function shortcutMatches(shortcut: string, event: KeyboardEvent): boolean
   const wantMod = parts.includes("mod");
   const wantShift = parts.includes("shift");
   const wantAlt = parts.includes("alt");
-  if (wantMod !== (event.ctrlKey || event.metaKey)) return false;
-  if (wantShift !== event.shiftKey) return false;
-  if (wantAlt !== event.altKey) return false;
+  // AltGr produces Ctrl+Alt on several layouts ("|" is AltGr+1 in es-CL) —
+  // those modifier bits belong to the character, not to a chord.
+  const altGr = event.getModifierState?.("AltGr") === true;
+  const modHeld = (event.ctrlKey || event.metaKey) && !altGr;
+  const altHeld = event.altKey && !altGr;
+  if (wantMod !== modHeld) return false;
+  if (wantAlt !== altHeld) return false;
+  // Punctuation keys can only be produced WITH Shift on many layouts
+  // ("?" is Shift+/, "|" is Shift+\) — for those, Shift belongs to the
+  // character. Letters/digits keep strict shift matching (Shift+A ≠ A).
+  const punct = key.length === 1 && !/[a-z0-9]/.test(key);
+  if (wantShift !== event.shiftKey && !punct) return false;
   const eventKey = event.key.toLowerCase();
   if (key === "del") return eventKey === "delete" || eventKey === "backspace";
   if (key === "esc") return eventKey === "escape";
@@ -199,6 +230,10 @@ export function applyDesignOpOn(
         panelSkus: [],
         mullionSkus: {},
       },
+      // IA2 — los comandos de división miden con la geometría de miembros
+      // del sistema: viaja por el estado de la secuencia (AssistantPanel la
+      // inyecta desde resolveMembers(options)).
+      ...(state?.members ? { members: state.members } : {}),
       disabled: false,
       commit: () => {},
       select: () => {},

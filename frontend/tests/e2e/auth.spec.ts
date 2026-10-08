@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import * as OTPAuth from "otpauth";
 
-import { formatMoney } from "../../src/features/money";
+import { formatMoney } from "../../src/format";
 import { t } from "../../src/i18n/es-CL";
 import { environment } from "./support/environment";
 import { requireMailpitHealthy, waitForMagicLink } from "./support/mailpit";
@@ -223,7 +223,7 @@ test("real Magic Link reaches Mailpit and authenticates Django /auth/me", async 
   await expect(navigation.getByRole("link", { name: "Administración", exact: true })).toHaveCount(
     0,
   );
-  for (const route of ["Proyectos", "Clientes", "Panel"]) {
+  for (const route of ["Proyectos", "Clientes", "Inicio"]) {
     await navigation.getByRole("link", { name: route, exact: true }).click();
     await expect(page.getByTestId("app-shell")).toBeVisible();
   }
@@ -291,10 +291,13 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   for (const [sku, unit] of [
     ["COMPRA-MARCO", "BAR"],
     ["COMPRA-JQ-24", "BAR"],
+    // D02: la tarjeta VIDRIO-BASE fija la composición 4·16·4 (24 mm) → junquillo JQ-10.
+    ["COMPRA-JQ-10", "BAR"],
     ["COMPRA-POSTE-V", "BAR"],
     ["COMPRA-ACERO-MARCO", "BAR"],
     ["COMPRA-ACERO-POSTE-V", "BAR"],
     ["VIDRIO-BASE", "M2"],
+    ["TORNILLO-4X16", "EA"],
   ]) {
     await api("admin/cost-items/", {
       values: { cost_list_id: listId, sku, unit, item_type: "PROFILE", unit_cost: "100" },
@@ -325,16 +328,51 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   const createdResponse = await creation;
   expect(createdResponse.status()).toBe(201);
   const draft = (await createdResponse.json()) as { id: string };
-  await page.getByRole("link", { name: "Añadir vano", exact: true }).click();
+  // P08: la compuerta de emisión exige cliente con RUT válido (módulo 11) y
+  // dirección de obra — se siembran por API antes del flujo de UI.
+  const draftGet = await request.get(`${djangoUrl}/api/v1/projects/${draft.id}/`, { headers });
+  expect(draftGet.status()).toBe(200);
+  const draftRow = (await draftGet.json()) as { updated_at: string };
+  const patchProject = await request.patch(`${djangoUrl}/api/v1/projects/${draft.id}/`, {
+    headers,
+    data: {
+      expected_updated_at: draftRow.updated_at,
+      client_rut: "76.543.210-3",
+      delivery_address: "Obra Av. Siempre Viva 742, Santiago",
+    },
+  });
+  expect(patchProject.status(), await patchProject.text()).toBe(200);
+  // La plantilla de condiciones comerciales de la organización precarga los
+  // términos de la cotización (editables por revisión, congelados al sellar).
+  const branding = await request.put(`${djangoUrl}/api/v1/organization/branding/`, {
+    headers,
+    data: {
+      doc_terms: {
+        plazo_entrega: "15 días hábiles desde la aprobación",
+        instalacion: "Instalación en obra incluida; andamios a cargo del cliente",
+        exclusiones: "No incluye terminaciones de albañilería ni sellos perimetrales",
+        garantia: "10 años perfiles, 5 años herrajes y vidrios",
+      },
+    },
+  });
+  expect(branding.status(), await branding.text()).toBe(200);
+  await page
+    .locator(".positions-toolbar")
+    .getByRole("link", { name: "Añadir vano", exact: true })
+    .click();
   await page.getByLabel("Ubicación del vano", { exact: true }).fill("Fijo comercial");
   await page.getByLabel("Cantidad", { exact: true }).fill("2");
+  // The series field lives in the strip's Serie chip popover (P04).
+  await page.getByRole("button", { name: "Serie de perfiles", exact: true }).click();
   await page.getByRole("combobox", { name: "Serie de perfiles", exact: true }).selectOption({
     label: "Sistema Demo 60mm PVC — referencia sintética · Catálogo de demostración",
   });
   // Canvas-first editor: the single module is already selected on the drawing;
   // glazing choices live in its contextual inspector, not a separate form.
   await page.getByRole("combobox", { name: "Espesor de vidrio", exact: true }).selectOption("4.00");
-  await page.getByRole("combobox", { name: "Vidrio", exact: true }).selectOption("VIDRIO-BASE");
+  // D02: el catálogo de vidrios ahora se elige por tarjeta (su nombre comercial
+  // es el aria-label), no por un combobox de SKUs.
+  await page.getByRole("button", { name: "Termopanel incoloro 4·16·4", exact: true }).click();
   await expect(page.getByRole("button", { name: "Guardar", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Guardar", exact: true }).click();
   await expect(page.getByText("Guardado", { exact: true })).toBeVisible();
@@ -362,17 +400,22 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
     page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }),
   ).toBeEnabled();
   await page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }).click();
-  await expect(page.getByText("Precios aplicados al proyecto.", { exact: true })).toBeVisible();
+  await expect(
+    page.locator(".operation-decision").locator(".ui-chip").getByText("Aplicada", { exact: true }),
+  ).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Recargar", exact: true }).click();
-  await expect(page.getByText("Precios aplicados al proyecto.", { exact: true })).toBeVisible();
-  await page.goto(`/projects/${draft.id}`);
   await expect(
     page
-      .locator("dd")
-      .filter({ hasText: formatMoney(quote.project_gross, "CLP") })
-      .first(),
+      .locator(".operation-history__item")
+      .locator(".ui-chip")
+      .getByText("Aplicada", { exact: true }),
   ).toBeVisible();
+  await page.goto(`/projects/${draft.id}`);
+  // The hub header shows the applied gross on every tab (P21).
+  await expect(page.locator(".project-head__total")).toHaveText(
+    formatMoney(quote.project_gross, "CLP"),
+  );
   const persisted = await request.get(`${djangoUrl}/api/v1/projects/${draft.id}/`, { headers });
   expect(persisted.status()).toBe(200);
   const project = await persisted.json();
@@ -396,25 +439,39 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   );
   // The quotation panel lives inside the facts rail's collapsed "Cotización"
   // section — expand it once; it stays open for the whole emission flow.
-  await page
-    .locator("details.project-facts__section")
-    .filter({ hasText: "Cotización" })
-    .locator("summary")
-    .click();
+  // La cotización vive en la pestaña «Cotización» del hub (P21): el panel se
+  // monta al visitarla y queda montado para todo el flujo de emisión.
+  await page.getByRole("tab", { name: "Cotización", exact: true }).click();
   await page.getByRole("button", { name: "Preparar emisión", exact: true }).click();
   await prepA;
   await page.getByLabel("Condiciones de pago", { exact: true }).fill("50% anticipo, 50% entrega");
-  await page.getByLabel("Cotización válida hasta", { exact: true }).fill("2026-10-19");
+  await page.getByLabel("Cotización válida hasta", { exact: true }).fill("2027-10-19");
+  // La plantilla de la organización precarga las condiciones comerciales —
+  // el checklist «Qué falta para emitir» queda completo sin rellenarlas.
   await expect(page.getByLabel("Criterio de fabricación", { exact: true })).not.toHaveValue("");
-  await expect(page.getByLabel("Criterio de manillas", { exact: true })).not.toHaveValue("");
-  await expect(page.getByLabel("Criterio de refuerzos", { exact: true })).not.toHaveValue("");
-  await page.getByLabel(/Confirmo la emisión: esta revisión/).check();
+  // DEMO_60 ships two handle authorities since D03 (V3 adds TILT,
+  // BOTTOM_HUNG and the double-door leaves): the freeze requires an
+  // explicit pick when several versions compete, so select the current one.
+  await page
+    .getByLabel("Criterio de manillas", { exact: true })
+    .selectOption({ label: "DEMO_60_HANDLES_V3 · v3" });
+  // DEMO_60 ships two reinforcement authorities since D01 (V2 adds the
+  // DOOR_SASH role): the freeze requires an explicit pick when several
+  // versions compete, so select the current one.
+  await page
+    .getByLabel("Criterio de refuerzos", { exact: true })
+    .selectOption({ label: "DEMO_60_REINFORCEMENT_CUT_V2 · v2" });
+  await page.getByRole("button", { name: "Emitir y enviar al cliente", exact: true }).click();
+  // P08: la confirmación previa a emitir muestra la consecuencia — el sello
+  // sólo se dispara desde el diálogo, acción canónica única.
+  const emitDialogA = page.getByRole("dialog");
+  await expect(emitDialogA).toContainText("Confirmar emisión");
   const freezeA = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === `/api/v1/documents/projects/${draft.id}/freeze/`,
   );
-  await page.getByRole("button", { name: "Emitir cotización", exact: true }).click();
+  await emitDialogA.getByRole("button", { name: "Emitir y enviar al cliente" }).click();
   const frozenA = await freezeA;
   expect(frozenA.status(), await frozenA.text()).toBe(201);
   await expect(page.getByText("Cotizado", { exact: true })).toBeVisible();
@@ -436,8 +493,10 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   expect((await successor).status()).toBe(201);
   await expect(page.getByText("Borrador", { exact: true })).toBeVisible();
   await expect(page.getByText("Revisión B", { exact: true })).toBeVisible();
-  // The desk grid is select-then-act: pick the vano row so the side pane
-  // offers Abrir diseño.
+  // The desk grid is select-then-act: back on the hub's Posiciones tab
+  // (the emission flow leaves us in Cotización), pick the vano row so the
+  // side pane offers Abrir diseño.
+  await page.getByRole("tab", { name: "Posiciones", exact: true }).click();
   await page
     .locator(".position-grid [role='option']")
     .filter({ hasText: "Fijo comercial" })
@@ -459,30 +518,32 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
     page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }),
   ).toBeEnabled();
   await page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }).click();
-  await expect(page.getByText("Precios aplicados al proyecto.", { exact: true })).toBeVisible();
+  await expect(
+    page.locator(".operation-decision").locator(".ui-chip").getByText("Aplicada", { exact: true }),
+  ).toBeVisible();
   await page.goto(`/projects/${draft.id}`);
   const prepB = page.waitForResponse(
     (response) =>
       response.request().method() === "GET" &&
       response.url().includes(`/api/v1/documents/projects/${draft.id}/inputs/`),
   );
-  await page
-    .locator("details.project-facts__section")
-    .filter({ hasText: "Cotización" })
-    .locator("summary")
-    .click();
+  // La cotización vive en la pestaña «Cotización» del hub (P21): el panel se
+  // monta al visitarla y queda montado para todo el flujo de emisión.
+  await page.getByRole("tab", { name: "Cotización", exact: true }).click();
   await page.getByRole("button", { name: "Preparar emisión", exact: true }).click();
   await prepB;
   await expect(page.getByLabel("Condiciones de pago", { exact: true })).toHaveValue(
     "50% anticipo, 50% entrega",
   );
-  await page.getByLabel(/Confirmo la emisión: esta revisión/).check();
+  await page.getByRole("button", { name: "Emitir y enviar al cliente", exact: true }).click();
+  const emitDialogB = page.getByRole("dialog");
+  await expect(emitDialogB).toContainText("Confirmar emisión");
   const freezeB = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === `/api/v1/documents/projects/${draft.id}/freeze/`,
   );
-  await page.getByRole("button", { name: "Emitir cotización", exact: true }).click();
+  await emitDialogB.getByRole("button", { name: "Emitir y enviar al cliente" }).click();
   const frozenB = await freezeB;
   expect(frozenB.status(), await frozenB.text()).toBe(201);
   await expect(page.getByText("Cotizado", { exact: true })).toBeVisible();
@@ -491,20 +552,15 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await expect(history.getByText("Revisión B", { exact: true })).toBeVisible();
 
   const revA = history.locator("li").filter({ has: page.getByText("Revisión A", { exact: true }) });
-  // Emitted evidence is generated by the durable job system, not a direct
-  // artifact POST: enqueue → poll → access → blob download.
-  const artifact = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/v1/jobs/",
-  );
+  // Emitting seals + mints the link, and share_quote renders the DOC-01 PDF
+  // inline (its acceptance QR names the document token): the artifact
+  // already exists, so opening the evidence is a direct access call.
   const access = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
       new URL(response.url()).pathname.endsWith("/access/"),
   );
   await revA.getByRole("button", { name: "Abrir cotización emitida", exact: true }).click();
-  expect((await artifact).status()).toBeLessThan(300);
   expect((await access).status()).toBe(200);
 
   const finalProject = await request.get(`${djangoUrl}/api/v1/projects/${draft.id}/`, { headers });
@@ -526,13 +582,19 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   );
   await page.getByRole("button", { name: "Guardar", exact: true }).click();
   const compositeProject = (await (await compositeCreation).json()) as { id: string };
-  await page.getByRole("link", { name: "Añadir vano", exact: true }).click();
+  await page
+    .locator(".positions-toolbar")
+    .getByRole("link", { name: "Añadir vano", exact: true })
+    .click();
   await page.getByLabel("Ubicación del vano", { exact: true }).fill("Fachada compuesta");
+  await page.getByRole("button", { name: "Serie de perfiles", exact: true }).click();
   await page.getByRole("combobox", { name: "Serie de perfiles", exact: true }).selectOption({
     label: "Sistema Demo 60mm PVC — referencia sintética · Catálogo de demostración",
   });
   await page.getByRole("combobox", { name: "Espesor de vidrio", exact: true }).selectOption("4.00");
-  await page.getByRole("combobox", { name: "Vidrio", exact: true }).selectOption("VIDRIO-BASE");
+  // D02: el catálogo de vidrios ahora se elige por tarjeta (su nombre comercial
+  // es el aria-label), no por un combobox de SKUs.
+  await page.getByRole("button", { name: "Termopanel incoloro 4·16·4", exact: true }).click();
   const dividedCalculation = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -578,7 +640,9 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await page.getByRole("button", { name: "Calcular y revisar", exact: true }).click();
   expect((await compositePreview).status()).toBe(200);
   await page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }).click();
-  await expect(page.getByText("Precios aplicados al proyecto.", { exact: true })).toBeVisible();
+  await expect(
+    page.locator(".operation-decision").locator(".ui-chip").getByText("Aplicada", { exact: true }),
+  ).toBeVisible();
 });
 
 test("OWNER must complete real TOTP enrollment and challenge after each Magic Link", async ({

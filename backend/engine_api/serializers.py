@@ -17,6 +17,10 @@ class EngineCalculateRequestSerializer(serializers.Serializer):
     nominal_width_mm = DecimalStringField(max_digits=10, decimal_places=2)
     nominal_height_mm = DecimalStringField(max_digits=10, decimal_places=2)
     color = serializers.CharField(max_length=50)
+    # D05: exterior-face finish; absent means same as `color` (pre-D05 contract).
+    color_exterior = serializers.CharField(
+        max_length=50, required=False, allow_null=True, default=None
+    )
     parametric_tree = serializers.JSONField()
 
 
@@ -32,6 +36,11 @@ class ProfileCutSerializer(serializers.Serializer):
     leaf_id = serializers.CharField(allow_null=True)
     sagitta_mm = serializers.DecimalField(
         max_digits=12, decimal_places=2, coerce_to_string=True, allow_null=True
+    )
+    # D06: EXTRA marks accessory cuts (vierteaguas, ensanche, tapajunta);
+    # absent on sealed pre-D06 payloads.
+    origin = serializers.ChoiceField(
+        choices=["PRODUCT", "EXTRA"], required=False, allow_null=True
     )
 
 
@@ -53,6 +62,31 @@ class PlanPointSerializer(serializers.Serializer):
     y_mm = serializers.CharField()
 
 
+class GlassSurchargeSelectionSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(
+        choices=["EDGE_POLISH", "DRILL", "PALILLAJE"]
+    )
+    edges = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=["top", "right", "bottom", "left"]
+        ),
+        allow_null=True,
+        required=False,
+    )
+    count = serializers.IntegerField(allow_null=True, required=False)
+    columns = serializers.IntegerField(allow_null=True, required=False)
+    rows = serializers.IntegerField(allow_null=True, required=False)
+
+
+class GlassSafetyFindingSerializer(serializers.Serializer):
+    rule_code = serializers.CharField()
+    severity = serializers.ChoiceField(choices=["WARNING", "MANDATORY"])
+    required_safety = serializers.CharField(allow_null=True)
+    message = serializers.CharField()
+    source_ref = serializers.CharField(allow_null=True)
+    review_pending = serializers.BooleanField()
+
+
 class GlassPieceSerializer(serializers.Serializer):
     bay_id = serializers.CharField()
     leaf_id = serializers.CharField(allow_null=True)
@@ -71,6 +105,18 @@ class GlassPieceSerializer(serializers.Serializer):
     exposed_edges = serializers.ListField(
         child=serializers.CharField(), allow_null=True
     )
+    # D02 structured layer stack, surcharges and rule findings. The
+    # composition object is the engine-produced dict verbatim.
+    composition = serializers.DictField(allow_null=True, required=False)
+    thickness_total_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    requires_exact_cut = serializers.BooleanField(required=False)
+    surcharge_selections = GlassSurchargeSelectionSerializer(
+        many=True, required=False
+    )
+    safety_findings = GlassSafetyFindingSerializer(many=True, required=False)
 
 
 class PanelPieceSerializer(serializers.Serializer):
@@ -86,6 +132,48 @@ class PanelPieceSerializer(serializers.Serializer):
     )
 
 
+class ComponentQtyRuleSerializer(serializers.Serializer):
+    """Declared quantity rule — D04: puntos de cierre = f(span)."""
+
+    kind = serializers.ChoiceField(choices=["PER_WIDTH", "PER_HEIGHT"])
+    per_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True
+    )
+    min_qty = serializers.IntegerField()
+    max_qty = serializers.IntegerField(allow_null=True)
+
+
+class ComponentCutRuleSerializer(serializers.Serializer):
+    """Declared cut rule — D04: transmisión = leaf span − X."""
+
+    axis = serializers.ChoiceField(choices=["WIDTH", "HEIGHT"])
+    minus_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True
+    )
+
+
+class MachiningDeclarationSerializer(serializers.Serializer):
+    """Declared machining operation — status is the engine's verdict:
+    EMITTED only when the catalog carried coordinates."""
+
+    kind = serializers.ChoiceField(
+        choices=["LOCK_PREP", "HINGE_PREP", "ESPAG_HOUSING", "DRAINAGE", "OTHER"]
+    )
+    side = serializers.CharField(allow_null=True, required=False)
+    u_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    y_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    note = serializers.CharField(allow_null=True, required=False)
+    status = serializers.ChoiceField(
+        choices=["EMITTED", "DECLARED_NOT_EMITTED"], allow_null=True, required=False
+    )
+
+
 class HardwareComponentSerializer(serializers.Serializer):
     sku = serializers.CharField()
     name = serializers.CharField()
@@ -95,6 +183,39 @@ class HardwareComponentSerializer(serializers.Serializer):
         choices=HARDWARE_COMPONENT_CATEGORIES,
         required=False,
         default="OTHER",
+    )
+    qty_rule = ComponentQtyRuleSerializer(
+        allow_null=True, required=False, help_text="Declared rule behind qty"
+    )
+    cut_rule = ComponentCutRuleSerializer(allow_null=True, required=False)
+    weight_kg = serializers.DecimalField(
+        max_digits=12, decimal_places=3, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    cost_clp = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    machining = MachiningDeclarationSerializer(many=True, required=False)
+    length_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+        help_text="Resolved cut length on the emitted BOM line",
+    )
+    option_sku = serializers.CharField(
+        allow_null=True, required=False,
+        help_text="Option that brought this component into the leaf BOM",
+    )
+
+
+class HardwareSelectionPriceSerializer(serializers.Serializer):
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    source = serializers.ChoiceField(
+        choices=["HANDLE_MODEL", "HANDLE_COLOR", "OPTION"]
+    )
+    price_delta_clp = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True, allow_null=True
     )
 
 
@@ -106,6 +227,35 @@ class HardwareItemSerializer(serializers.Serializer):
     bay_id = serializers.CharField()
     leaf_id = serializers.CharField(allow_null=True)
     contents = HardwareComponentSerializer(many=True)
+    class_label = serializers.CharField(allow_null=True, required=False)
+    handle_model_sku = serializers.CharField(allow_null=True, required=False)
+    handle_model_name = serializers.CharField(allow_null=True, required=False)
+    handle_color_sku = serializers.CharField(allow_null=True, required=False)
+    handle_color_name = serializers.CharField(allow_null=True, required=False)
+    option_skus = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
+    option_names = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
+    handle_height_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    cost_clp = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    weight_kg = serializers.DecimalField(
+        max_digits=12, decimal_places=3, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    price_delta_clp = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    price_deltas = HardwareSelectionPriceSerializer(many=True, required=False)
+    machining = MachiningDeclarationSerializer(many=True, required=False)
 
 
 class FittingPieceSerializer(serializers.Serializer):
@@ -116,6 +266,47 @@ class FittingPieceSerializer(serializers.Serializer):
     qty = serializers.IntegerField()
     bay_id = serializers.CharField(allow_null=True)
     leaf_id = serializers.CharField(allow_null=True)
+    # D06: EXTRA marks fittings a counted accessory emitted (mosquitero,
+    # aireador); absent on sealed pre-D06 payloads.
+    origin = serializers.ChoiceField(
+        choices=["PRODUCT", "EXTRA"], required=False, allow_null=True
+    )
+
+
+class ExtraLineSerializer(serializers.Serializer):
+    """D06: one engine-derived sellable subline — cantidad × precio = total."""
+
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.ChoiceField(
+        choices=[
+            "SILL", "FRAME_EXTENSION", "COVER_TRIM", "MOSQUITO_SCREEN",
+            "VENTILATOR",
+        ]
+    )
+    quantity = serializers.CharField()
+    unit = serializers.CharField()
+    unit_price = serializers.CharField(allow_null=True)
+    unit_price_currency = serializers.CharField()
+    total_price = serializers.CharField(allow_null=True)
+    unit_cost = serializers.CharField(allow_null=True)
+    unit_cost_currency = serializers.CharField(allow_null=True)
+    total_cost = serializers.CharField(allow_null=True)
+    detail = serializers.CharField(allow_null=True)
+
+
+class ExtraSuggestionSerializer(serializers.Serializer):
+    """D06: a catalogued companion the position qualifies for."""
+
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.ChoiceField(
+        choices=[
+            "SILL", "FRAME_EXTENSION", "COVER_TRIM", "MOSQUITO_SCREEN",
+            "VENTILATOR",
+        ]
+    )
+    reason = serializers.CharField()
 
 
 class LeafWeightSerializer(serializers.Serializer):
@@ -141,6 +332,29 @@ class LeafWeightSerializer(serializers.Serializer):
     )
 
 
+class ColorSurchargeApplicationSerializer(serializers.Serializer):
+    """D05 declared finish surcharge applied to the BOM: the rate is
+    catalog data; the basis is engine-derived (profile metres, m², unit,
+    or the materials-% rate itself)."""
+
+    option_code = serializers.CharField()
+    option_name = serializers.CharField()
+    kind = serializers.ChoiceField(
+        choices=["PER_PROFILE_METER", "PER_M2", "FIXED_PER_POSITION", "PCT_OF_MATERIALS"]
+    )
+    rate = serializers.DecimalField(
+        max_digits=12, decimal_places=4, coerce_to_string=True
+    )
+    currency = serializers.CharField(allow_null=True)
+    label = serializers.CharField(allow_null=True)
+    basis = serializers.DecimalField(
+        max_digits=12, decimal_places=4, coerce_to_string=True, allow_null=True
+    )
+    basis_unit = serializers.ChoiceField(
+        choices=["M", "M2", "POSITION", "MATERIALS_PCT"]
+    )
+
+
 class EngineResultPayloadSerializer(serializers.Serializer):
     profile_cuts = ProfileCutSerializer(many=True)
     reinforcements = ReinforcementSerializer(many=True)
@@ -149,6 +363,13 @@ class EngineResultPayloadSerializer(serializers.Serializer):
     fittings = FittingPieceSerializer(many=True)
     hardware_items = HardwareItemSerializer(many=True)
     leaf_weights = LeafWeightSerializer(many=True)
+    # D05 resolved finish pair + its declared surcharges (absent on
+    # legacy-field responses).
+    finish_key = serializers.CharField(allow_null=True, required=False)
+    finish_label = serializers.CharField(allow_null=True, required=False)
+    finish_class = serializers.CharField(allow_null=True, required=False)
+    color_surcharges = ColorSurchargeApplicationSerializer(many=True, required=False)
+    extra_lines = ExtraLineSerializer(many=True, required=False)
 
 
 class EngineCalculateResponseSerializer(EngineResultPayloadSerializer):
@@ -160,6 +381,9 @@ class EngineAssemblyCalculateSerializer(serializers.Serializer):
     nominal_width_mm = DecimalStringField(max_digits=10, decimal_places=2)
     nominal_height_mm = DecimalStringField(max_digits=10, decimal_places=2)
     color = serializers.CharField(max_length=50)
+    color_exterior = serializers.CharField(
+        max_length=50, required=False, allow_null=True, default=None
+    )
     product = serializers.JSONField()
 
 
@@ -194,6 +418,8 @@ class SlidingPanelFactsSerializer(serializers.Serializer):
     slot = serializers.CharField()
     kind = serializers.ChoiceField(choices=["MOVING", "FIXED"])
     track = serializers.IntegerField(allow_null=True)
+    travel = serializers.ChoiceField(choices=["LEFT", "RIGHT"], allow_null=True)
+    travel_inferred = serializers.BooleanField()
     leaf_id = serializers.CharField(allow_null=True)
 
 
@@ -201,6 +427,7 @@ class SlidingLayoutFactsSerializer(serializers.Serializer):
     bay_id = serializers.CharField()
     tracks = serializers.IntegerField()
     panels = SlidingPanelFactsSerializer(many=True)
+    primary_index = serializers.IntegerField(allow_null=True)
 
 
 class ModuleEvaluationSerializer(serializers.Serializer):
@@ -218,7 +445,19 @@ class EngineAssemblyCalculateResponseSerializer(serializers.Serializer):
     plan = PlanGeometrySerializer(allow_null=True)
     modules = ModuleEvaluationSerializer(many=True)
     bom = EngineResultPayloadSerializer(allow_null=True)
+    extra_suggestions = ExtraSuggestionSerializer(many=True, required=False)
     calculation_hash = serializers.RegexField(regex=r"^sha256:[0-9a-f]{64}$")
+
+
+class TypologyLimitSerializer(serializers.Serializer):
+    opening_type = serializers.CharField()
+    min_leaf_width_mm = serializers.CharField(allow_null=True, required=False)
+    max_leaf_width_mm = serializers.CharField(allow_null=True, required=False)
+    min_leaf_height_mm = serializers.CharField(allow_null=True, required=False)
+    max_leaf_height_mm = serializers.CharField(allow_null=True, required=False)
+    max_leaf_weight_kg = serializers.CharField(allow_null=True, required=False)
+    max_aspect_ratio = serializers.CharField(allow_null=True, required=False)
+    source = serializers.CharField()
 
 
 class ProfileSystemSummarySerializer(serializers.Serializer):
@@ -226,6 +465,9 @@ class ProfileSystemSummarySerializer(serializers.Serializer):
     code = serializers.CharField()
     name = serializers.CharField()
     is_demo = serializers.BooleanField()
+    system_family = serializers.CharField()
+    allowed_openings = serializers.ListField(child=serializers.CharField())
+    typology_limits = TypologyLimitSerializer(many=True, required=False)
     quote_ready = serializers.BooleanField()
     readiness_reasons = serializers.ListField(child=serializers.CharField())
 

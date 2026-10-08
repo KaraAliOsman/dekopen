@@ -1,3 +1,4 @@
+import { shortTechnicalId } from "../../format";
 import { t } from "../../i18n/es-CL";
 
 export function cutRoleLabel(role: string | null | undefined): string {
@@ -16,6 +17,15 @@ export function cutRoleLabel(role: string | null | undefined): string {
     "REINFORCEMENT",
   ]);
   return known.has(role) ? t(`production.role.${role}` as Parameters<typeof t>[0]) : role;
+}
+
+/** Semantic leaf slot: PRIMARY for a single-leaf bay, L1..LN for multi-leaf. */
+export function leafSlotLabel(slot: string | null | undefined): string {
+  if (slot === null || slot === undefined || slot === "") return "—";
+  if (slot === "PRIMARY") return t("production.leafSlot.primary");
+  const leaf = /^L(\d+)$/.exec(slot);
+  if (leaf) return `${t("production.leafSlot.leaf")} ${leaf[1]}`;
+  return slot;
 }
 
 const OP_KINDS: ReadonlySet<string> = new Set([
@@ -65,7 +75,9 @@ const STOCK_KINDS: ReadonlySet<string> = new Set([
   "BAR",
   "SHEET",
   "KIT",
+  "HARDWARE_KIT",
   "FITTING",
+  "PANEL",
   "OFFCUT",
   "REMNANT",
 ]);
@@ -75,6 +87,27 @@ export function stockKindLabel(kind: string | null | undefined): string {
   return STOCK_KINDS.has(kind)
     ? t(`production.stockKindValue.${kind}` as Parameters<typeof t>[0])
     : kind;
+}
+
+/** Ledger notes carry machine references (wo-reserve:KIND, wo-consume…) —
+ * render them as readable Spanish; the raw value stays in the cell title. */
+export function traceNoteLabel(note: string | null | undefined): string {
+  if (note === null || note === undefined || note === "") return "—";
+  const prefixed = /^wo-(reserve|recheck):(.+)$/.exec(note);
+  if (prefixed) {
+    const kind = prefixed[2]!;
+    const kindLabel = STOCK_KINDS.has(kind)
+      ? t(`production.stockKindValue.${kind}` as Parameters<typeof t>[0])
+      : kind;
+    const action =
+      prefixed[1] === "reserve"
+        ? t("production.traceNoteWoReserve")
+        : t("production.traceNoteWoRecheck");
+    return `${action} ${kindLabel}`;
+  }
+  if (note === "wo-consume") return t("production.traceNoteWoConsume");
+  if (note === "wo-replan-release") return t("production.traceNoteWoReplanRelease");
+  return note;
 }
 
 const CENTER_KINDS: ReadonlySet<string> = new Set([
@@ -119,10 +152,28 @@ const STATION_CODES: ReadonlySet<string> = new Set([
   "DISPATCH",
 ]);
 
+/** Los perfiles de proceso citan a menudo el CÓDIGO del centro de trabajo
+ * sembrado (CUT_SAW, ASSEMBLY_BENCH…) en lugar del código de estación —
+ * el lector ve el nombre de la estación canónica en ambos casos. */
+const STATION_ALIASES: Record<string, string> = {
+  CUT_SAW: "CUT",
+  MACHINING_CELL: "MACHINING",
+  CRIMPING_MACHINE: "CRIMP",
+  CLEANING_STATION: "CLEAN",
+  ASSEMBLY_BENCH: "ASSEMBLE",
+  SASH_ASSEMBLY_BENCH: "SASH_ASSEMBLE",
+  HARDWARE_BENCH: "HARDWARE",
+  GLAZING_BENCH: "GLAZE",
+  QC_STATION: "QC",
+  PACK_STATION: "PACK",
+  WELDER: "WELD",
+};
+
 export function stationCodeLabel(code: string | null | undefined): string {
   if (code === null || code === undefined || code === "") return "—";
-  return STATION_CODES.has(code)
-    ? t(`production.station.${code}` as Parameters<typeof t>[0])
+  const resolved = STATION_ALIASES[code] ?? code;
+  return STATION_CODES.has(resolved)
+    ? t(`production.station.${resolved}` as Parameters<typeof t>[0])
     : code;
 }
 
@@ -180,7 +231,7 @@ export function opBasisLabel(basis: string | null | undefined): string {
     return `Política herraje ${basis.split(":", 2)[1] ?? ""}`;
   }
   if (basis.startsWith("handle_policy:")) {
-    return `Herraje ${(basis.split(":", 2)[1] ?? "").slice(0, 8)}`;
+    return `Herraje ${shortTechnicalId(basis.split(":", 2)[1] ?? "")}`;
   }
   return basis;
 }

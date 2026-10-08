@@ -3,11 +3,28 @@
 from django.urls import path
 
 from projects.views import (
+    ClientDuplicatesView,
+    ClientMergeView,
+    ClientNotesView,
     ClientView,
     ClientsView,
     FlowPaymentConfirmView,
+    ProjectCollectionReminderSendView,
+    ProjectCollectionReminderView,
+    OrganizationAnalyticsSettingsView,
     OrganizationBrandingLogoView,
     OrganizationBrandingView,
+    OrganizationCommercialSettingsView,
+    OrganizationCompanySettingsView,
+    OrganizationDocumentPreviewView,
+    OrganizationDocumentsSettingsView,
+    OrganizationIntegrationsView,
+    OrganizationMemberView,
+    OrganizationMembersView,
+    OrganizationNumberingView,
+    OrganizationProductionSettingsView,
+    OrganizationSecurityView,
+    OrganizationSettingsView,
     ProjectCloneView,
     ProjectPaymentIntegrationView,
     ProjectPaymentLinkRecoverView,
@@ -25,14 +42,24 @@ from projects.views import (
     ProjectPositionsView,
     ProjectSuccessorView,
     ProjectResetPricingView,
+    ProjectThermalView,
     ProjectView,
     ProjectsView,
+    QuotationsView,
     PositionDesignAlternativesView,
     PositionDesignAssistView,
+    PositionMeasurementConfirmView,
+    PositionMeasurementResolveView,
+    PositionMoveView,
+    PositionThermalAlternativesView,
     PositionView,
     SiiCafsView,
     SiiCertificateView,
     ProjectInvoiceDteEnvioView,
+)
+from projects.extras_api import (
+    OrganizationExtrasConfigView,
+    ProjectServicesView,
 )
 from projects.options import DesignOptionsView
 
@@ -41,14 +68,63 @@ urlpatterns = [
     path("projects/flow/confirm/<uuid:link_id>/", FlowPaymentConfirmView.as_view()),
     path("organization/branding/", OrganizationBrandingView.as_view()),
     path("organization/branding/logo/", OrganizationBrandingLogoView.as_view()),
+    path("organization/extras-config/", OrganizationExtrasConfigView.as_view()),
+    path("organization/settings/", OrganizationSettingsView.as_view()),
+    path(
+        "organization/settings/company/",
+        OrganizationCompanySettingsView.as_view(),
+    ),
+    path(
+        "organization/settings/commercial/",
+        OrganizationCommercialSettingsView.as_view(),
+    ),
+    path(
+        "organization/settings/documents/",
+        OrganizationDocumentsSettingsView.as_view(),
+    ),
+    path(
+        "organization/settings/production/",
+        OrganizationProductionSettingsView.as_view(),
+    ),
+    path("organization/settings/security/", OrganizationSecurityView.as_view()),
+    path(
+        "organization/settings/analytics/",
+        OrganizationAnalyticsSettingsView.as_view(),
+    ),
+    path(
+        "organization/settings/numbering/",
+        OrganizationNumberingView.as_view(),
+    ),
+    path(
+        "organization/settings/integrations/",
+        OrganizationIntegrationsView.as_view(),
+    ),
+    path("organization/members/", OrganizationMembersView.as_view()),
+    path(
+        "organization/members/<uuid:membership_id>/",
+        OrganizationMemberView.as_view(),
+    ),
+    path(
+        "organization/document-preview/",
+        OrganizationDocumentPreviewView.as_view(),
+    ),
+    path(
+        "projects/<uuid:project_id>/services/",
+        ProjectServicesView.as_view(),
+    ),
     path("projects/payment-integration/", ProjectPaymentIntegrationView.as_view()),
     path("clients/", ClientsView.as_view()),
+    path("clients/duplicates/", ClientDuplicatesView.as_view()),
     path("clients/<uuid:client_id>/", ClientView.as_view()),
+    path("clients/<uuid:client_id>/notes/", ClientNotesView.as_view()),
+    path("clients/<uuid:client_id>/merge/", ClientMergeView.as_view()),
     path("projects/", ProjectsView.as_view()),
+    path("quotations/", QuotationsView.as_view()),
     path("projects/<uuid:project_id>/", ProjectView.as_view()),
     path("projects/<uuid:project_id>/clone/", ProjectCloneView.as_view()),
     path("projects/<uuid:project_id>/successor/", ProjectSuccessorView.as_view()),
     path("projects/<uuid:project_id>/reset-pricing/", ProjectResetPricingView.as_view()),
+    path("projects/<uuid:project_id>/thermal/", ProjectThermalView.as_view()),
     path("projects/<uuid:project_id>/positions/", ProjectPositionsView.as_view()),
     path("projects/<uuid:project_id>/payments/", ProjectPaymentsView.as_view()),
     path(
@@ -98,7 +174,28 @@ urlpatterns = [
         "projects/<uuid:project_id>/payment-links/<uuid:link_id>/recover/",
         ProjectPaymentLinkRecoverView.as_view(),
     ),
+    path(
+        "projects/<uuid:project_id>/collection-reminder/",
+        ProjectCollectionReminderView.as_view(),
+    ),
+    path(
+        "projects/<uuid:project_id>/collection-reminder/send/",
+        ProjectCollectionReminderSendView.as_view(),
+    ),
+    path(
+        "projects/<uuid:project_id>/positions/measurement-resolve/",
+        PositionMeasurementResolveView.as_view(),
+    ),
     path("positions/<uuid:position_id>/", PositionView.as_view()),
+    path("positions/<uuid:position_id>/move/", PositionMoveView.as_view()),
+    path(
+        "positions/<uuid:position_id>/thermal-alternatives/",
+        PositionThermalAlternativesView.as_view(),
+    ),
+    path(
+        "positions/<uuid:position_id>/measurement-confirm/",
+        PositionMeasurementConfirmView.as_view(),
+    ),
     path(
         "positions/<uuid:position_id>/design-assist/",
         PositionDesignAssistView.as_view(),

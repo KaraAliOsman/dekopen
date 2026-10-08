@@ -1,0 +1,281 @@
+/* ——— Responsive ———
+ * Tablet (<1024px): the rail becomes an overlay drawer toggled from the
+ * topbar so the workspace keeps full width. Mobile (<640px): dense chrome —
+ * review/approve/status flows stay usable; the CAD editor is not a phone
+ * surface by design. */
+.rail-toggle {
+  display: none;
+}
+
+.rail-scrim {
+  background: transparent;
+  border: none;
+  cursor: default;
+  display: none;
+  inset: 0;
+  padding: 0;
+  position: fixed;
+  z-index: var(--z-popover);
+}
+
+@media (max-width: 1024px) {
+  .rail-toggle {
+    align-items: center;
+    border: none;
+    border-radius: var(--radius-md);
+    display: inline-flex;
+    font-size: 1rem;
+    height: 44px;
+    justify-content: center;
+    padding: 0;
+    width: 44px;
+  }
+
+  /* Bajo 1024 el shell es una superficie táctil: cada control llega al
+   * mínimo de 44px (los roles de piso trabajan con guantes y en móvil). */
+  .topbar-button {
+    min-height: 44px;
+  }
+
+  .topbar-button--icon {
+    width: 44px;
+  }
+
+  .topbar-search {
+    min-height: 44px;
+  }
+
+  .rail-icon-button {
+    height: 44px;
+    width: 44px;
+  }
+
+  .skip-link {
+    align-items: center;
+    display: inline-flex;
+    min-height: 44px;
+  }
+
+  /* En drawer los enlaces del riel también son destinos táctiles. */
+  .rail-item {
+    min-height: 44px;
+  }
+
+  /* Las pestañas de sección también son destinos táctiles a este ancho. */
+  .ui-tab {
+    min-height: 44px;
+  }
+
+  .rail-scrim {
+    display: block;
+    visibility: hidden;
+  }
+
+  .app-shell.rail-open .rail-scrim {
+    background: var(--scrim-overlay);
+    visibility: visible;
+  }
+
+  .app-rail {
+    box-shadow: none;
+    left: 0;
+    position: fixed;
+    top: 0;
+    transform: translateX(-105%);
+    transition:
+      transform 0.18s ease,
+      visibility 0.18s ease;
+    visibility: hidden;
+    z-index: var(--z-drawer);
+  }
+
+  .app-shell.rail-open .app-rail {
+    box-shadow: var(--shadow-e3);
+    transform: translateX(0);
+    visibility: visible;
+  }
+}
+
+/* Studio compact rail: on the position editor the domain rail contracts to
+ * a 64px icon strip so the canvas owns the viewport. Labels are removed
+ * visually but the links keep aria-label + title, so no affordance is lost;
+ * the desktop drawer behavior below still applies under 1024px. */
+@media (min-width: 1025px) {
+  .app-shell[data-studio] .app-rail {
+    align-items: stretch;
+    padding-inline: 0;
+    width: 4rem;
+  }
+
+  .app-shell[data-studio] .app-rail__brand {
+    padding-inline: 0;
+    text-align: center;
+  }
+
+  /* Compact mark: el wordmark se colapsa a su glifo cuadrado. */
+  .app-shell[data-studio] .app-rail__brand .brand-wordmark {
+    font-size: 0 !important;
+    justify-content: center;
+  }
+
+  /* Scoped to .app-rail: the position editor renders its own tool rail with
+   * .rail-item elements that keep their labels at this width — the studio
+   * compaction must only touch the domain navigation rail. */
+  .app-shell[data-studio] .app-rail .org-switcher,
+  .app-shell[data-studio] .app-rail .rail-group__title,
+  .app-shell[data-studio] .app-rail .app-rail__identity,
+  .app-shell[data-studio] .app-rail .rail-item > span {
+    display: none;
+  }
+
+  .app-shell[data-studio] .app-rail .rail-item {
+    border-left-width: 2px;
+    border-radius: var(--radius-md);
+    justify-content: center;
+    margin-inline: auto;
+    padding-inline: 0;
+    width: 2.5rem;
+  }
+
+  .app-shell[data-studio] .app-rail .rail-item__icon {
+    height: 18px;
+    width: 18px;
+  }
+}
+
+/* Riel colapsado por preferencia del usuario: la misma franja de iconos que
+ * el estudio — las etiquetas viven en aria-label + title, ningún destino se
+ * pierde. El drawer (<1024px) siempre muestra etiquetas: es transitorio y
+ * la densidad no paga ahí. */
+@media (min-width: 1025px) {
+  .app-shell.rail-collapsed:not([data-studio]) .app-rail {
+    width: 4rem;
+  }
+
+  .app-shell.rail-collapsed:not([data-studio]) .app-rail__brand {
+    padding-inline: 0;
+    text-align: center;
+  }
+
+  .app-shell.rail-collapsed:not([data-studio]) .org-switcher,
+  .app-shell.rail-collapsed:not([data-studio]) .rail-group__title,
+  .app-shell.rail-collapsed:not([data-studio]) .app-rail__identity,
+  .app-shell.rail-collapsed:not([data-studio]) .rail-item > span {
+    display: none;
+  }
+
+  .app-shell.rail-collapsed:not([data-studio]) .rail-item {
+    border-left-width: 2px;
+    border-radius: var(--radius-md);
+    justify-content: center;
+    margin-inline: auto;
+    padding-inline: 0;
+    width: 2.5rem;
+  }
+
+  .app-shell.rail-collapsed:not([data-studio]) .rail-item__icon {
+    height: 18px;
+    width: 18px;
+  }
+
+  .app-shell.rail-collapsed:not([data-studio]) .app-rail__user {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .app-shell.rail-collapsed:not([data-studio]) .app-rail__user-actions {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-topbar {
+    gap: var(--space-8);
+  }
+
+  /* Phone: the header stack puts actions on their own line — no clipped
+     primary action, no page-level horizontal scroll. */
+  .ui-page-header__row {
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .ui-page-header__actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .topbar-search span,
+  .topbar-search kbd {
+    display: none;
+  }
+
+  /* 390 px: la topbar es una fila fija y debe caber entera — la búsqueda
+     pasa a sólo icono, el agente conserva sólo el orb (su rótulo queda en
+     el tooltip), el badge de modo de prueba se comprime a su punto de
+     color (la honestidad sigue visible, con el texto en el tooltip) y el
+     chip de job se cede al propio orb. El switcher de proyecto se omite:
+     el drawer ya ofrece la lista completa. */
+  .app-topbar__actions {
+    gap: var(--space-4);
+  }
+
+  .topbar-search {
+    justify-content: center;
+    padding: 0;
+    width: 44px;
+  }
+
+  .project-switcher {
+    display: none;
+  }
+
+  .topbar-ai {
+    font-size: 0;
+    gap: 0;
+    justify-content: center;
+    padding: 0;
+    width: 44px;
+  }
+
+  .topbar-ai-job {
+    display: none;
+  }
+
+  .app-topbar .ai-test-mode-badge {
+    color: transparent;
+    font-size: 0;
+    gap: 0;
+    padding: var(--space-6);
+  }
+
+  .app-topbar .ai-test-mode-badge::before {
+    color: var(--warn-ink);
+  }
+
+  .app-topbar .crumbs,
+  .app-topbar .crumbs__list {
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .app-topbar .crumbs__current,
+  .app-topbar .crumbs__link {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ui-toast-region {
+    max-width: calc(100vw - 2 * var(--space-16));
+  }
+
+  .workspace {
+    padding: var(--space-12) var(--space-8);
+  }
+
+  .onboarding {
+    padding: var(--space-16) var(--space-8);
+  }
+}

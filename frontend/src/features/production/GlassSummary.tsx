@@ -1,4 +1,5 @@
-import { fmtMm } from "../../format";
+import { formatDims } from "../../format";
+import { Area, Dims, EntityCode, Length, Weight } from "../../ui/format";
 import { t } from "../../i18n/es-CL";
 
 export type GlassPiece = {
@@ -65,6 +66,8 @@ function edgeLabel(edges: PolishingEntry["edges"] | undefined): string {
 
 type SizeRow = {
   dims: string;
+  widthMm: string | number | null | undefined;
+  heightMm: string | number | null | undefined;
   edges: string;
   count: number;
   areaScaled: bigint;
@@ -75,10 +78,12 @@ type SizeRow = {
 function sizeRows(group: Group): SizeRow[] {
   const perSize = new Map<string, SizeRow>();
   for (const item of group.pieces) {
-    const dims = `${fmtMm(item.piece.width_mm)}×${fmtMm(item.piece.height_mm)}`;
+    const dims = formatDims(item.piece.width_mm, item.piece.height_mm);
     const key = `${dims}|${item.edges}`;
     const entry = perSize.get(key) ?? {
       dims,
+      widthMm: item.piece.width_mm,
+      heightMm: item.piece.height_mm,
       edges: item.edges,
       count: 0,
       areaScaled: 0n,
@@ -238,20 +243,32 @@ export function GlassSummary({
               return rows.map((row, rowIndex) => (
                 <tr key={`${group.spec}-${group.sku}-${row.dims}-${row.edges}`}>
                   {rowIndex === 0 ? <td rowSpan={rows.length}>{group.spec}</td> : null}
-                  {rowIndex === 0 ? <td rowSpan={rows.length}>{group.sku}</td> : null}
-                  {rowIndex === 0 ? <td rowSpan={rows.length}>{group.thickness} mm</td> : null}
-                  <td>{row.dims} mm</td>
-                  <td>{row.count * quantity}</td>
                   {rowIndex === 0 ? (
                     <td rowSpan={rows.length}>
-                      {fmtScaled(group.areaScaled * BigInt(quantity), 4)} m²
+                      <EntityCode value={group.sku} />
                     </td>
                   ) : null}
                   {rowIndex === 0 ? (
                     <td rowSpan={rows.length}>
-                      {group.weightUnknown
-                        ? t("production.glassWeightUnknown")
-                        : `${fmtScaled(group.weightScaled * BigInt(quantity), 2)} kg`}
+                      <Length value={group.thickness === "—" ? null : group.thickness} />
+                    </td>
+                  ) : null}
+                  <td>
+                    <Dims width={row.widthMm} height={row.heightMm} />
+                  </td>
+                  <td>{row.count * quantity}</td>
+                  {rowIndex === 0 ? (
+                    <td rowSpan={rows.length}>
+                      <Area value={fmtScaled(group.areaScaled * BigInt(quantity), 4)} />
+                    </td>
+                  ) : null}
+                  {rowIndex === 0 ? (
+                    <td rowSpan={rows.length}>
+                      {group.weightUnknown ? (
+                        t("production.glassWeightUnknown")
+                      ) : (
+                        <Weight value={fmtScaled(group.weightScaled * BigInt(quantity), 4)} />
+                      )}
                     </td>
                   ) : null}
                   <td>{row.edges}</td>
@@ -261,11 +278,15 @@ export function GlassSummary({
             <tr className="production-glass-total">
               <td colSpan={4}>{t("production.glassTotals")}</td>
               <td>{totalQty * quantity}</td>
-              <td>{fmtScaled(totalArea * BigInt(quantity), 4)} m²</td>
               <td>
-                {totalUnknown
-                  ? t("production.glassWeightUnknown")
-                  : `${fmtScaled(totalWeight * BigInt(quantity), 2)} kg`}
+                <Area value={fmtScaled(totalArea * BigInt(quantity), 4)} />
+              </td>
+              <td>
+                {totalUnknown ? (
+                  t("production.glassWeightUnknown")
+                ) : (
+                  <Weight value={fmtScaled(totalWeight * BigInt(quantity), 4)} />
+                )}
               </td>
               <td />
             </tr>

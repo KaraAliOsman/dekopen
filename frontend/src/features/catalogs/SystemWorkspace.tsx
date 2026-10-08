@@ -1,38 +1,49 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { WorkCenterRequestKindEnum } from "../../api/generated/models";
 import type {
   ArticleResponse,
   EvidenceRow,
   BeadResponse,
+  FrameUfResponse,
   KitResponse,
+  PerformanceTestResponse,
   PurchaseMappingRow,
+  ReadinessTarget,
   ReinforcementRow,
+  SpacerResponse,
   SystemWorkspace,
+  TabEnum,
   WorkCenter,
   WorkCenterRequestRequest,
 } from "../../api/generated/models";
 import { t } from "../../i18n/es-CL";
-import { fmtMm } from "../../format";
+import { domainLabel } from "../../i18n/domainLabels";
+import { Icon } from "../../ui/icons";
+import { fmtMm, shortTechnicalId } from "../../format";
+import { EntityCode, Length } from "../../ui/format";
 import { centerKindLabel, opKindLabel, stationCodeLabel } from "../production/labels";
 import { SectionPreviewSvg } from "../canvas/SectionPreviewSvg";
 import type { Resource, Row, catalogApi } from "./catalogModel";
+import { StatusBadge } from "../../ui/StatusBadge";
+import { StatusChip } from "../../ui/StatusChip";
+import { Tabs } from "../../ui/Tabs";
+import { ArticleFichaDialog } from "./ArticleFicha";
+import {
+  CostsPanel,
+  GlassPanel,
+  HardwarePanel,
+  HistoryPanel,
+  ProvenanceBadge,
+  RulesPanel,
+  ThermalPanel,
+  catalogFieldLabel,
+  catalogFieldValue,
+  provenanceLabel,
+} from "./workspaceTabs";
 
 type Label = Parameters<typeof t>[0];
 const ct = (key: string) => t(`catalog.${key}` as Label);
 const wst = (key: string) => t(`catalog.ws.${key}` as Label);
-
-function provenanceLabel(value: string | null | undefined): string {
-  if (!value) return "—";
-  if (value === "LEGACY_UNVERIFIED") return t("catalog.provenanceLegacy");
-  const key = `catalog.provenance.${value}` as Label;
-  return [
-    "catalog.provenance.SEED_SYNTHETIC",
-    "catalog.provenance.MANUAL",
-    "catalog.provenance.IMPORT",
-  ].includes(key)
-    ? t(key)
-    : value;
-}
 
 function productKindLabel(kind: string): string {
   const key = `catalog.productKind.${kind}` as Label;
@@ -49,18 +60,19 @@ function joiningMethodLabel(method: string | null | undefined): string {
     : method;
 }
 
-/** Readiness blocker codes → the workspace section where they resolve. */
-const BLOCKER_SECTION: Record<string, string> = {
-  technical_catalog: "ws.articles",
-  inspection: "ws.system",
-  manufacturing: "ws.process",
-  fabrication: "ws.system",
-  catalog_review: "ws.articles",
-  purchase: "ws.purchase",
-  process_profile: "ws.process",
-  work_centers: "ws.process",
-  station_map: "ws.process",
-};
+/** P16 — workspace tabs. A readiness blocker jumps to the tab and exact
+ * row (`ws-row-<id>`) the backend resolved; 'sistema' scrolls to the
+ * identity header instead of switching tabs. */
+const WS_TABS: TabEnum[] = [
+  "perfiles",
+  "refuerzos",
+  "vidrios",
+  "termico",
+  "herrajes",
+  "reglas",
+  "costos",
+  "historial",
+];
 
 /** Entity references in blocker text carry raw UUIDs — a record id means
  * nothing read as prose. The system's own id renders as its name; any other
@@ -72,42 +84,24 @@ function levelOk(level: { ok?: boolean; state?: string; blockers: unknown[] }): 
   return level.ok === true;
 }
 
-function ProvenanceBadge({
-  row,
-}: {
-  row: {
-    data_provenance?: string;
-    review_pending?: boolean;
-    technical_reviewed_at?: string | null;
-  };
-}) {
-  // "Verificado" is reserved for an actual technical review — provenance
-  // alone (manual entry, an import, a demo seed) is not verification.
-  if (row.technical_reviewed_at)
-    return <span className="ws-badge ws-badge--ok">{wst("verified")}</span>;
-  if (row.data_provenance === "LEGACY_UNVERIFIED")
-    return <span className="ws-badge ws-badge--warn">{ct("provenanceLegacy")}</span>;
-  if (row.review_pending)
-    return <span className="ws-badge ws-badge--warn">{ct("reviewPending")}</span>;
-  return <span className="ws-badge">{provenanceLabel(row.data_provenance)}</span>;
-}
-
 function ArticleCard({
   article,
   purchased,
   beads,
   canEdit,
   onEdit,
+  onFicha,
 }: {
   article: ArticleResponse;
   purchased: boolean;
   beads: number;
   canEdit: boolean;
   onEdit: () => void;
+  onFicha: () => void;
 }) {
   const depth = article.section?.depth_mm;
   return (
-    <article className="ws-article-card">
+    <article className="ws-article-card" id={`ws-row-${article.id}`}>
       <div className="ws-article-section" aria-hidden="true">
         <SectionPreviewSvg
           section={article.section}
@@ -124,7 +118,7 @@ function ArticleCard({
       <div className="ws-article-body">
         <header>
           <strong>{article.name}</strong>
-          <code>{article.sku}</code>
+          <EntityCode value={article.sku} />
         </header>
         <dl>
           <div>
@@ -133,14 +127,14 @@ function ArticleCard({
           </div>
           <div>
             <dt>{wst("face")}</dt>
-            <dd>{fmtMm(article.face_width_mm)} mm</dd>
+            <dd>
+              <Length value={article.face_width_mm} />
+            </dd>
           </div>
           <div>
             <dt>{wst("commercialLength")}</dt>
             <dd>
-              {article.commercial_length_mm
-                ? `${fmtMm(article.commercial_length_mm)} mm`
-                : wst("unknown")}
+              <Length value={article.commercial_length_mm} />
             </dd>
           </div>
           <div>
@@ -151,9 +145,9 @@ function ArticleCard({
             <dt>{wst("purchaseState")}</dt>
             <dd>
               {purchased ? (
-                <span className="ws-badge ws-badge--ok">{wst("mapped")}</span>
+                <StatusChip label={wst("mapped")} tone="ok" value={null} />
               ) : (
-                <span className="ws-badge ws-badge--warn">{wst("unmapped")}</span>
+                <StatusChip label={wst("unmapped")} tone="warn" value={null} />
               )}
             </dd>
           </div>
@@ -164,6 +158,13 @@ function ArticleCard({
         </dl>
         <footer>
           <ProvenanceBadge row={article} />
+          <button
+            type="button"
+            className="ui-button ui-button--ghost ui-button--small"
+            onClick={onFicha}
+          >
+            {wst("ficha")}
+          </button>
           {canEdit && (
             <button type="button" className="ui-button ui-button--small" onClick={onEdit}>
               {ct(article.read_only === false ? "edit" : "view")}
@@ -185,16 +186,16 @@ function ReadinessLadder({
   onJump,
 }: {
   system: Row<"systems">;
-  onJump: (anchor: string) => void;
+  onJump: (target: ReadinessTarget) => void;
 }) {
   const readiness = system.readiness;
-  if (!readiness) return <p className="ws-empty">{ct("readinessUnknown")}</p>;
+  if (!readiness) return <p className="ui-empty-inline">{ct("readinessUnknown")}</p>;
   const levels = readiness.levels ?? [];
   /** Blocker text arrives with the raw system UUID embedded — it means
    * this very record, so name it instead of showing a hex fragment. */
   const labelFor = (text: string) =>
     text.replace(UUID_RE, (id) =>
-      id.toLowerCase() === String(system.id).toLowerCase() ? system.name : id.slice(0, 8),
+      id.toLowerCase() === String(system.id).toLowerCase() ? system.name : shortTechnicalId(id),
     );
   // Levels carry cumulative blocker lists — attribute each blocker to the
   // first level that reports it so nothing repeats down the ladder.
@@ -242,12 +243,35 @@ function ReadinessLadder({
                 <button
                   type="button"
                   className="ws-blocker-target"
-                  onClick={() => onJump(BLOCKER_SECTION[blocker.code] ?? "ws.system")}
+                  onClick={() =>
+                    onJump(
+                      blocker.targets?.[0] ?? {
+                        kind: "system",
+                        id: null,
+                        label: system.name,
+                        tab: "sistema",
+                      },
+                    )
+                  }
                   title={wst("jumpToSection")}
                 >
                   {ct(`readiness.${blocker.code}`)}
                   <span className="ws-blocker-affected"> — {labelFor(blocker.affected)}</span>
                 </button>
+                {(blocker.targets ?? []).length > 1 && (
+                  <span className="ws-blocker-links">
+                    {(blocker.targets ?? []).slice(0, 4).map((target) => (
+                      <button
+                        key={`${target.kind}-${target.id ?? target.label}`}
+                        type="button"
+                        className="link-button"
+                        onClick={() => onJump(target)}
+                      >
+                        {target.label}
+                      </button>
+                    ))}
+                  </span>
+                )}
               </div>
               <p className="ws-blocker-detail">
                 <strong>{wst("missingAuthority")}:</strong> {labelFor(blocker.missing_authority)}
@@ -290,7 +314,21 @@ export function SystemWorkspaceView({
 }: WorkspaceProps): JSX.Element {
   const [workspace, setWorkspace] = useState<SystemWorkspace | null>(null);
   const [centers, setCenters] = useState<WorkCenter[] | null>(null);
+  const [activeTab, setActiveTab] = useState<TabEnum>("perfiles");
+  const [fichaId, setFichaId] = useState<string | null>(null);
+  /** Row a deep link asked to reveal — scrolled into view once its tab
+   * paints. */
+  const focusRow = useRef<string | null>(null);
+
+  /** Stations store the work-center CODE (catalog JSON); show its name. */
+  const centerName = (code: string): string =>
+    centers?.find((center) => center.code === code)?.name ?? code;
   const [evidenceRows, setEvidenceRows] = useState<EvidenceRow[] | null>(null);
+  const [thermal, setThermal] = useState<{
+    spacers: SpacerResponse[];
+    frameUfs: FrameUfResponse[];
+    tests: PerformanceTestResponse[];
+  } | null>(null);
   const [error, setError] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
 
@@ -325,6 +363,17 @@ export function SystemWorkspaceView({
       })
       .catch(() => {
         if (alive) setEvidenceRows([]);
+      });
+    void Promise.all([
+      api.list("spacers", controller.signal),
+      api.list("frame-uf", controller.signal, systemId),
+      api.list("performance-tests", controller.signal, systemId),
+    ])
+      .then(([spacers, frameUfs, tests]) => {
+        if (alive) setThermal({ spacers, frameUfs, tests });
+      })
+      .catch(() => {
+        if (alive) setThermal({ spacers: [], frameUfs: [], tests: [] });
       });
     return () => {
       alive = false;
@@ -408,12 +457,21 @@ export function SystemWorkspaceView({
     beadsByArticle.set(bead.bead_article_id, (beadsByArticle.get(bead.bead_article_id) ?? 0) + 1);
   }
 
-  const jump = (anchor: string) => {
-    const target =
-      anchor === "ws.articles" || anchor === "ws.purchase" || anchor === "ws.process"
-        ? anchor
-        : "ws.system";
-    document.getElementById(target)?.scrollIntoView({ block: "start" });
+  /** Deep link from a readiness blocker: switch to the target tab, then
+   * scroll to the exact row once it is painted (or to the tab head when
+   * the blocker names no single row). 'sistema' targets land on the
+   * identity header. */
+  const jump = (target: ReadinessTarget) => {
+    if (target.tab === "sistema" || !WS_TABS.includes(target.tab)) {
+      document.getElementById("ws.system")?.scrollIntoView({ block: "start" });
+      return;
+    }
+    focusRow.current = target.id ?? null;
+    setActiveTab(target.tab);
+    window.setTimeout(() => {
+      const anchor = focusRow.current ? `ws-row-${focusRow.current}` : `ws-tab-${target.tab}`;
+      document.getElementById(anchor)?.scrollIntoView({ block: "center" });
+    }, 0);
   };
 
   // §06-C relationship map — nodes are the authority groups; clicking one
@@ -482,8 +540,8 @@ export function SystemWorkspaceView({
     const kit = kits.find((k) => k.id === row.row_id);
     if (kit) return kit.name;
     const reinforcement = reinforcements.find((r) => r.id === row.row_id);
-    if (reinforcement) return reinforcement.id.slice(0, 8);
-    return `${row.authority_table} · ${row.row_id.slice(0, 8)}`;
+    if (reinforcement) return shortTechnicalId(reinforcement.id);
+    return `${row.authority_table} · ${shortTechnicalId(row.row_id)}`;
   };
   const reviewEvidence = (row: EvidenceRow, state: "REVIEWED" | "REJECTED") => {
     void api.reviewEvidence(row.id, state).then((updated) => {
@@ -506,6 +564,9 @@ export function SystemWorkspaceView({
           <div className="ws-identity-meta">
             {system.manufacturer && <span className="ws-chip">{system.manufacturer}</span>}
             {system.family && <span className="ws-chip">{system.family}</span>}
+            <span className="ws-chip">
+              {domainLabel("SystemFamilyEnum", system.system_family).label}
+            </span>
             <span className="ws-chip">{ct(`option.${system.material}`)}</span>
             {(system.applications ?? []).map((app) => (
               <span key={app} className="ws-chip ws-chip--app">
@@ -513,12 +574,18 @@ export function SystemWorkspaceView({
               </span>
             ))}
             <ProvenanceBadge row={system} />
-            <span className="ws-badge">{system.is_active ? ct("active") : ct("inactive")}</span>
+            <StatusChip
+              label={system.is_active ? ct("active") : ct("inactive")}
+              tone={system.is_active ? "ok" : "neutral"}
+              value={null}
+            />
           </div>
           <dl className="ws-identity-facts">
             <div>
               <dt>{ct("field.depth_mm")}</dt>
-              <dd>{fmtMm(system.depth_mm)} mm</dd>
+              <dd>
+                <Length value={system.depth_mm} />
+              </dd>
             </div>
             <div>
               <dt>{ct("field.chamber_count")}</dt>
@@ -607,253 +674,323 @@ export function SystemWorkspaceView({
         )}
       </section>
 
-      <section className="ws-section" id="ws.articles">
-        <header className="ws-section-head">
-          <h3>
-            {wst("articles")} <span className="ws-count">{articles.length}</span>
-          </h3>
-          <button
-            type="button"
-            className="ui-button ui-button--ghost ui-button--small"
-            onClick={() => onShowRecords("articles")}
-          >
-            {wst("allRecords")}
-          </button>
-          {canEdit && (
-            <button
-              type="button"
-              className="ui-button ui-button--small"
-              onClick={() => onEdit("articles")}
-            >
-              {ct("create")}
-            </button>
-          )}
-        </header>
-        {!articles.length ? (
-          <p className="ws-empty">{wst("noArticles")}</p>
-        ) : (
-          <div className="ws-article-grid">
-            {articles.map((article) => (
-              <ArticleCard
-                key={article.id}
-                article={article}
-                purchased={purchased.has(article.id)}
-                beads={beadsByArticle.get(article.id) ?? 0}
-                canEdit={canEdit}
-                onEdit={() => onEdit("articles", article.id)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+      <nav className="ws-tabs">
+        <Tabs
+          items={WS_TABS.map((tab) => ({ id: tab, label: wst(`tab.${tab}`) }))}
+          label={wst("tabsLabel")}
+          value={activeTab}
+          onChange={(id) => setActiveTab(id as TabEnum)}
+        />
+      </nav>
 
-      <section className="ws-section">
-        <header className="ws-section-head">
-          <h3>
-            {wst("glazing")} <span className="ws-count">{beads.length}</span>
-          </h3>
-          <button
-            type="button"
-            className="ui-button ui-button--ghost ui-button--small"
-            onClick={() => onShowRecords("glazing")}
-          >
-            {wst("allRecords")}
-          </button>
-          {canEdit && (
+      {activeTab === "perfiles" && (
+        <section className="ws-section" id="ws-tab-perfiles">
+          <header className="ws-section-head">
+            <h3>
+              {wst("articles")} <span className="ws-count">{articles.length}</span>
+            </h3>
             <button
               type="button"
-              className="ui-button ui-button--small"
-              onClick={() => onEdit("glazing")}
+              className="ui-button ui-button--ghost ui-button--small"
+              onClick={() => onShowRecords("articles")}
             >
-              {ct("create")}
+              {wst("allRecords")}
             </button>
-          )}
-        </header>
-        {!beads.length ? (
-          <p className="ws-empty">{wst("noBeadsRows")}</p>
-        ) : (
-          <div className="catalog-table-scroll">
-            <table className="ws-table">
-              <thead>
-                <tr>
-                  <th scope="col">{wst("bead")}</th>
-                  <th scope="col">{ct("field.glass_thickness_mm")}</th>
-                  <th scope="col">{ct("field.bead_width_mm")}</th>
-                  <th scope="col">{ct("field.gasket_interior_mm")}</th>
-                  <th scope="col">{ct("field.gasket_exterior_mm")}</th>
-                  <th scope="col">{ct("field.cut_add_mm")}</th>
-                  <th scope="col">{ct("actions")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {beads.map((bead: BeadResponse) => {
-                  const article = articles.find((a) => a.id === bead.bead_article_id);
-                  return (
-                    <tr key={bead.id}>
-                      <th scope="row">{article?.name ?? bead.bead_article_id}</th>
-                      <td>{fmtMm(bead.glass_thickness_mm)} mm</td>
-                      <td>{fmtMm(bead.bead_width_mm)} mm</td>
-                      <td>{fmtMm(bead.gasket_interior_mm)} mm</td>
-                      <td>{fmtMm(bead.gasket_exterior_mm)} mm</td>
-                      <td>{fmtMm(bead.cut_add_mm)} mm</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="ui-button ui-button--small"
-                          onClick={() => onEdit("glazing", bead.id)}
-                        >
-                          {ct(canEdit && !bead.read_only ? "edit" : "view")}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section className="ws-section">
-        <header className="ws-section-head">
-          <h3>
-            {wst("hardware")} <span className="ws-count">{kits.length}</span>
-          </h3>
-          <button
-            type="button"
-            className="ui-button ui-button--ghost ui-button--small"
-            onClick={() => onShowRecords("hardware-kits")}
-          >
-            {wst("allRecords")}
-          </button>
-          {canEdit && (
-            <button
-              type="button"
-              className="ui-button ui-button--small"
-              onClick={() => onEdit("hardware-kits")}
-            >
-              {ct("create")}
-            </button>
-          )}
-        </header>
-        {!kits.length ? (
-          <p className="ws-empty">{wst("noKits")}</p>
-        ) : (
-          <div className="ws-kit-row">
-            {kits.map((kit: KitResponse) => (
+            {canEdit && (
               <button
-                key={kit.id}
                 type="button"
-                className="ws-kit-card"
-                onClick={() => onEdit("hardware-kits", kit.id)}
+                className="ui-button ui-button--small"
+                onClick={() => onEdit("articles")}
               >
-                <strong>{kit.name}</strong>
-                <span>{kit.sku}</span>
-                <small>
-                  {ct(`option.${kit.opening_type}`)} · {ct(`option.${kit.rail_type}`)}
-                </small>
-                <ProvenanceBadge row={kit} />
+                {ct("create")}
               </button>
-            ))}
-          </div>
-        )}
-      </section>
+            )}
+          </header>
+          {!articles.length ? (
+            <p className="ui-empty-inline">{wst("noArticles")}</p>
+          ) : (
+            <div className="ws-article-grid">
+              {articles.map((article) => (
+                <ArticleCard
+                  key={article.id}
+                  article={article}
+                  purchased={purchased.has(article.id)}
+                  beads={beadsByArticle.get(article.id) ?? 0}
+                  canEdit={canEdit}
+                  onEdit={() => onEdit("articles", article.id)}
+                  onFicha={() => setFichaId(article.id)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
-      <section className="ws-section">
-        <header className="ws-section-head">
-          <h3>
-            {wst("reinforcements")} <span className="ws-count">{reinforcements.length}</span>
-          </h3>
-        </header>
-        {!reinforcements.length ? (
-          <p className="ws-empty">{wst("noReinforcements")}</p>
-        ) : (
-          <div className="catalog-table-scroll">
-            <table className="ws-table">
-              <thead>
-                <tr>
-                  <th scope="col">{wst("parent")}</th>
-                  <th scope="col">{ct("field.sku")}</th>
-                  <th scope="col">{wst("name")}</th>
-                  <th scope="col">{wst("thickness")}</th>
-                  <th scope="col">{wst("inertia")}</th>
-                  <th scope="col">{wst("stockLength")}</th>
-                  <th scope="col">{wst("supplier")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reinforcements.map((row: ReinforcementRow) => {
-                  const parent = articles.find((a) => a.id === row.parent_profile_article_id);
-                  return (
-                    <tr key={row.id}>
-                      <th scope="row">{parent?.name ?? row.parent_profile_article_id}</th>
-                      <td>
-                        <code>{row.sku}</code>
-                        {row.is_default && <span className="ws-badge">{wst("default")}</span>}
-                      </td>
-                      <td>{row.name}</td>
-                      <td>{row.thickness_mm ? `${fmtMm(row.thickness_mm)} mm` : wst("unknown")}</td>
-                      <td>{row.ix_cm4 ? `${row.ix_cm4} cm⁴` : wst("unknown")}</td>
-                      <td>{fmtMm(row.stock_length_mm)} mm</td>
-                      <td>{row.supplier_name ?? row.manufacturer_name ?? wst("unknown")}</td>
+      {activeTab === "vidrios" && (
+        <>
+          <section className="ws-section" id="ws-tab-vidrios">
+            <header className="ws-section-head">
+              <h3>
+                {wst("glazing")} <span className="ws-count">{beads.length}</span>
+              </h3>
+              <button
+                type="button"
+                className="ui-button ui-button--ghost ui-button--small"
+                onClick={() => onShowRecords("glazing")}
+              >
+                {wst("allRecords")}
+              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  className="ui-button ui-button--small"
+                  onClick={() => onEdit("glazing")}
+                >
+                  {ct("create")}
+                </button>
+              )}
+            </header>
+            {!beads.length ? (
+              <p className="ui-empty-inline">{wst("noBeadsRows")}</p>
+            ) : (
+              <div className="catalog-table-scroll">
+                <table className="ws-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">{wst("bead")}</th>
+                      <th scope="col">{ct("field.glass_thickness_mm")}</th>
+                      <th scope="col">{ct("field.bead_width_mm")}</th>
+                      <th scope="col">{ct("field.gasket_interior_mm")}</th>
+                      <th scope="col">{ct("field.gasket_exterior_mm")}</th>
+                      <th scope="col">{ct("field.cut_add_mm")}</th>
+                      <th scope="col">{ct("actions")}</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+                  </thead>
+                  <tbody>
+                    {beads.map((bead: BeadResponse) => {
+                      const article = articles.find((a) => a.id === bead.bead_article_id);
+                      return (
+                        <tr key={bead.id}>
+                          <th scope="row">{article?.name ?? bead.bead_article_id}</th>
+                          <td>
+                            <Length value={bead.glass_thickness_mm} />
+                          </td>
+                          <td>
+                            <Length value={bead.bead_width_mm} />
+                          </td>
+                          <td>
+                            <Length value={bead.gasket_interior_mm} />
+                          </td>
+                          <td>
+                            <Length value={bead.gasket_exterior_mm} />
+                          </td>
+                          <td>
+                            <Length value={bead.cut_add_mm} />
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="ui-button ui-button--small"
+                              onClick={() => onEdit("glazing", bead.id)}
+                            >
+                              {ct(canEdit && !bead.read_only ? "edit" : "view")}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+          <GlassPanel glass={workspace.glass} />
+        </>
+      )}
 
-      <section className="ws-section" id="ws.purchase">
-        <header className="ws-section-head">
-          <h3>
-            {wst("purchase")} <span className="ws-count">{purchase_mappings.length}</span>
-          </h3>
-        </header>
-        {!purchase_mappings.length ? (
-          <p className="ws-empty">{wst("noPurchase")}</p>
-        ) : (
-          <div className="catalog-table-scroll">
-            <table className="ws-table">
-              <thead>
-                <tr>
-                  <th scope="col">{wst("article")}</th>
-                  <th scope="col">{wst("commercialSku")}</th>
-                  <th scope="col">{wst("manufacturer")}</th>
-                  <th scope="col">{wst("supplier")}</th>
-                  <th scope="col">{wst("unit")}</th>
-                  <th scope="col">{ct("state")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {purchase_mappings.map((map: PurchaseMappingRow) => {
-                  const article = articles.find((a) => a.id === map.profile_article_id);
-                  return (
-                    <tr key={map.id}>
-                      <th scope="row">{article?.name ?? map.profile_article_id}</th>
-                      <td>
-                        <code>{map.commercial_sku}</code>
-                      </td>
-                      <td>{map.manufacturer_name}</td>
-                      <td>{map.supplier_name ?? wst("unknown")}</td>
-                      <td>{map.purchase_unit}</td>
-                      <td>{ct(map.is_active ? "active" : "inactive")}</td>
+      {activeTab === "termico" && (
+        <section className="ws-section" id="ws-tab-termico">
+          <header className="ws-section-head">
+            <h3>{wst("thermalTitle")}</h3>
+            <small className="ws-section-note">{wst("thermalNote")}</small>
+          </header>
+          {!thermal ? (
+            <p className="ui-empty-inline">{ct("loading")}</p>
+          ) : (
+            <ThermalPanel
+              spacers={thermal.spacers}
+              frameUfs={thermal.frameUfs}
+              tests={thermal.tests}
+              canEdit={canEdit}
+              onEdit={onEdit}
+            />
+          )}
+        </section>
+      )}
+
+      {activeTab === "herrajes" && (
+        <>
+          <section className="ws-section" id="ws-tab-herrajes">
+            <header className="ws-section-head">
+              <h3>
+                {wst("hardware")} <span className="ws-count">{kits.length}</span>
+              </h3>
+              <button
+                type="button"
+                className="ui-button ui-button--ghost ui-button--small"
+                onClick={() => onShowRecords("hardware-kits")}
+              >
+                {wst("allRecords")}
+              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  className="ui-button ui-button--small"
+                  onClick={() => onEdit("hardware-kits")}
+                >
+                  {ct("create")}
+                </button>
+              )}
+            </header>
+            {!kits.length ? (
+              <p className="ui-empty-inline">{wst("noKits")}</p>
+            ) : (
+              <div className="ws-kit-row">
+                {kits.map((kit: KitResponse) => (
+                  <button
+                    key={kit.id}
+                    type="button"
+                    className="ws-kit-card"
+                    id={`ws-row-${kit.id}`}
+                    onClick={() => onEdit("hardware-kits", kit.id)}
+                  >
+                    <strong>{kit.name}</strong>
+                    <span>{kit.sku}</span>
+                    <small>
+                      {ct(`option.${kit.opening_type}`)} · {ct(`option.${kit.rail_type}`)}
+                    </small>
+                    <ProvenanceBadge row={kit} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+          <HardwarePanel
+            hardware={workspace.hardware}
+            kits={kits}
+            limits={workspace.rules.typology_limits}
+          />
+        </>
+      )}
+
+      {activeTab === "refuerzos" && (
+        <section className="ws-section" id="ws-tab-refuerzos">
+          <header className="ws-section-head">
+            <h3>
+              {wst("reinforcements")} <span className="ws-count">{reinforcements.length}</span>
+            </h3>
+          </header>
+          {!reinforcements.length ? (
+            <p className="ui-empty-inline">{wst("noReinforcements")}</p>
+          ) : (
+            <div className="catalog-table-scroll">
+              <table className="ws-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{wst("parent")}</th>
+                    <th scope="col">{ct("field.sku")}</th>
+                    <th scope="col">{wst("name")}</th>
+                    <th scope="col">{wst("thickness")}</th>
+                    <th scope="col">{wst("inertia")}</th>
+                    <th scope="col">{wst("stockLength")}</th>
+                    <th scope="col">{wst("supplier")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reinforcements.map((row: ReinforcementRow) => {
+                    const parent = articles.find((a) => a.id === row.parent_profile_article_id);
+                    return (
+                      <tr key={row.id} id={`ws-row-${row.id}`}>
+                        <th scope="row">{parent?.name ?? row.parent_profile_article_id}</th>
+                        <td>
+                          <EntityCode value={row.sku} />
+                          {row.is_default && (
+                            <StatusChip label={wst("default")} tone="neutral" value={null} />
+                          )}
+                        </td>
+                        <td>{row.name}</td>
+                        <td>
+                          <Length value={row.thickness_mm} />
+                        </td>
+                        <td>{row.ix_cm4 ? `${row.ix_cm4} cm⁴` : wst("unknown")}</td>
+                        <td>
+                          <Length value={row.stock_length_mm} />
+                        </td>
+                        <td>{row.supplier_name ?? row.manufacturer_name ?? wst("unknown")}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {activeTab === "costos" && (
+        <>
+          <section className="ws-section" id="ws-tab-costos">
+            <header className="ws-section-head">
+              <h3>
+                {wst("purchase")} <span className="ws-count">{purchase_mappings.length}</span>
+              </h3>
+            </header>
+            {!purchase_mappings.length ? (
+              <p className="ui-empty-inline">{wst("noPurchase")}</p>
+            ) : (
+              <div className="catalog-table-scroll">
+                <table className="ws-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">{wst("article")}</th>
+                      <th scope="col">{wst("commercialSku")}</th>
+                      <th scope="col">{wst("manufacturer")}</th>
+                      <th scope="col">{wst("supplier")}</th>
+                      <th scope="col">{wst("unit")}</th>
+                      <th scope="col">{ct("state")}</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+                  </thead>
+                  <tbody>
+                    {purchase_mappings.map((map: PurchaseMappingRow) => {
+                      const article = articles.find((a) => a.id === map.profile_article_id);
+                      return (
+                        <tr key={map.id} id={`ws-row-${map.id}`}>
+                          <th scope="row">{article?.name ?? map.profile_article_id}</th>
+                          <td>
+                            <EntityCode value={map.commercial_sku} />
+                          </td>
+                          <td>{map.manufacturer_name}</td>
+                          <td>{map.supplier_name ?? wst("unknown")}</td>
+                          <td>{map.purchase_unit}</td>
+                          <td>{ct(map.is_active ? "active" : "inactive")}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+          <CostsPanel costs={workspace.costs} />
+        </>
+      )}
 
       <section className="ws-section" id="ws.process">
         <header className="ws-section-head">
           <h3>{wst("process")}</h3>
         </header>
         {!process_profile ? (
-          <p className="ws-empty">
+          <p className="ui-empty-inline">
             {wst("noProcessBound")}{" "}
             {canEdit && (
               <button
@@ -869,7 +1006,7 @@ export function SystemWorkspaceView({
           <div className="ws-process">
             <header>
               <strong>
-                {process_profile.label} <code>{process_profile.code}</code> v
+                {process_profile.label} <EntityCode value={process_profile.code} /> v
                 {process_profile.version}
               </strong>
               <div className="ws-identity-meta">
@@ -900,7 +1037,7 @@ export function SystemWorkspaceView({
                     <li key={index}>
                       <strong>{stationCodeLabel(station.code ?? station.station ?? "?")}</strong>
                       {station.when && <small> · {station.when}</small>}
-                      {station.work_center && <small> · {station.work_center}</small>}
+                      {station.work_center && <small> · {centerName(station.work_center)}</small>}
                     </li>
                   ))}
                 </ul>
@@ -927,7 +1064,7 @@ export function SystemWorkspaceView({
                     ["packaging", process_profile.packaging],
                   ].map(([key, enabled]) => (
                     <li key={String(key)} className={enabled ? "" : "ws-off"}>
-                      {wst(String(key))}: {enabled ? "✓" : "—"}
+                      {wst(String(key))}: {enabled ? <Icon name="check" size={11} /> : "—"}
                     </li>
                   ))}
                 </ul>
@@ -939,7 +1076,7 @@ export function SystemWorkspaceView({
           <div className="ws-centers">
             <h4>{wst("centers")}</h4>
             {centers.length === 0 && (
-              <p className="ws-empty">
+              <p className="ui-empty-inline">
                 {wst("noCenters")}
                 {canEdit && (
                   <>
@@ -962,12 +1099,12 @@ export function SystemWorkspaceView({
                   <strong>{center.name}</strong>
                   <small>
                     {" "}
-                    · <code>{center.code}</code> · {centerKindLabel(center.kind)}
+                    · <EntityCode value={center.code} /> · {centerKindLabel(center.kind)}
                   </small>
                   {!center.active && (
                     <>
                       {" "}
-                      <span className="ws-chip ws-chip--off">{wst("centerInactive")}</span>
+                      <StatusBadge tone="neutral" label={wst("centerInactive")} />
                       {canEdit && (
                         <>
                           {" "}
@@ -988,6 +1125,7 @@ export function SystemWorkspaceView({
             {canEdit &&
               (centerForm ? (
                 <form
+                  noValidate
                   className="ws-center-form"
                   onSubmit={(event) => {
                     event.preventDefault();
@@ -1056,91 +1194,102 @@ export function SystemWorkspaceView({
         ) : null}
       </section>
 
-      <section className="ws-section" id="ws.sources">
-        <header className="ws-section-head">
-          <h3>{wst("sources")}</h3>
-        </header>
-        <p className="ws-hint">{wst("sourcesHint")}</p>
-        {evidenceRows === null ? (
-          <p className="ws-empty">{ct("loading")}</p>
-        ) : !evidenceRows.length ? (
-          <p className="ws-empty">{wst("noSources")}</p>
-        ) : (
-          <table className="ui-table ws-evidence">
-            <thead>
-              <tr>
-                <th>{wst("evidenceTarget")}</th>
-                <th>{wst("evidenceField")}</th>
-                <th>{wst("evidenceValue")}</th>
-                <th>{wst("evidenceSource")}</th>
-                <th>{wst("evidenceScope")}</th>
-                <th>{wst("evidenceStateCol")}</th>
-                {canEdit && <th />}
-              </tr>
-            </thead>
-            <tbody>
-              {evidenceRows.map((row) => (
-                <tr key={row.id}>
-                  <td>{targetName(row)}</td>
-                  <td>
-                    <code>{row.field_name}</code>
-                  </td>
-                  <td>
-                    {row.value_text ?? "—"}
-                    {row.unit ? ` ${row.unit}` : ""}
-                  </td>
-                  <td>
-                    {row.source_url ? (
-                      <a href={row.source_url} target="_blank" rel="noreferrer">
-                        {row.source_document}
-                      </a>
-                    ) : (
-                      row.source_document
-                    )}
-                    {row.source_page ? ` · ${wst("evidencePage")} ${row.source_page}` : ""}
-                    {row.applicability ? (
-                      <small className="ws-evidence-applies">
-                        {" "}
-                        {wst("evidenceOn")} {row.applicability}
-                      </small>
-                    ) : null}
-                  </td>
-                  <td>{row.scope}</td>
-                  <td>
-                    <span
-                      className={`ws-badge ${row.review_state === "REVIEWED" ? "ws-badge--ok" : row.review_state === "REJECTED" ? "ws-badge--warn" : ""}`}
-                    >
-                      {wst(`evidenceState.${row.review_state}`)}
-                    </span>
-                  </td>
-                  {canEdit && (
-                    <td>
-                      {row.review_state === "PENDING" && (
-                        <span className="ws-evidence-actions">
-                          <button
-                            type="button"
-                            className="ui-button ui-button--small"
-                            onClick={() => reviewEvidence(row, "REVIEWED")}
-                          >
-                            {wst("evidenceReview")}
-                          </button>
-                          <button
-                            type="button"
-                            className="ui-button ui-button--ghost ui-button--small"
-                            onClick={() => reviewEvidence(row, "REJECTED")}
-                          >
-                            {wst("evidenceReject")}
-                          </button>
-                        </span>
+      {activeTab === "reglas" && (
+        <>
+          <RulesPanel rules={workspace.rules} />
+          <section className="ws-section" id="ws-tab-reglas">
+            <header className="ws-section-head">
+              <h3>{wst("sources")}</h3>
+            </header>
+            <p className="ws-hint">{wst("sourcesHint")}</p>
+            {evidenceRows === null ? (
+              <p className="ui-empty-inline">{ct("loading")}</p>
+            ) : !evidenceRows.length ? (
+              <p className="ui-empty-inline">{wst("noSources")}</p>
+            ) : (
+              <table className="ui-table ws-evidence">
+                <thead>
+                  <tr>
+                    <th>{wst("evidenceTarget")}</th>
+                    <th>{wst("evidenceField")}</th>
+                    <th>{wst("evidenceValue")}</th>
+                    <th>{wst("evidenceSource")}</th>
+                    <th>{wst("evidenceScope")}</th>
+                    <th>{wst("evidenceStateCol")}</th>
+                    {canEdit && <th />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {evidenceRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>{targetName(row)}</td>
+                      <td>{catalogFieldLabel(row.field_name)}</td>
+                      <td>
+                        {catalogFieldValue(row.field_name, row.value_text)}
+                        {row.unit ? ` ${row.unit}` : ""}
+                      </td>
+                      <td>
+                        {row.source_url ? (
+                          <a href={row.source_url} target="_blank" rel="noreferrer">
+                            {row.source_document}
+                          </a>
+                        ) : (
+                          row.source_document
+                        )}
+                        {row.source_page ? ` · ${wst("evidencePage")} ${row.source_page}` : ""}
+                        {row.applicability ? (
+                          <small className="ws-evidence-applies">
+                            {" "}
+                            {`${wst("evidenceOn")} ${row.applicability}`}
+                          </small>
+                        ) : null}
+                      </td>
+                      <td>{wst(`evidenceScope.${row.scope}`)}</td>
+                      <td>
+                        <StatusChip
+                          label={wst(`evidenceState.${row.review_state}`)}
+                          tone={
+                            row.review_state === "REVIEWED"
+                              ? "ok"
+                              : row.review_state === "REJECTED"
+                                ? "danger"
+                                : "neutral"
+                          }
+                          value={null}
+                        />
+                      </td>
+                      {canEdit && (
+                        <td>
+                          {row.review_state === "PENDING" && (
+                            <span className="ws-evidence-actions">
+                              <button
+                                type="button"
+                                className="ui-button ui-button--small"
+                                onClick={() => reviewEvidence(row, "REVIEWED")}
+                              >
+                                {wst("evidenceReview")}
+                              </button>
+                              <button
+                                type="button"
+                                className="ui-button ui-button--ghost ui-button--small"
+                                onClick={() => reviewEvidence(row, "REJECTED")}
+                              >
+                                {wst("evidenceReject")}
+                              </button>
+                            </span>
+                          )}
+                        </td>
                       )}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </>
+      )}
+
+      {activeTab === "historial" && <HistoryPanel history={workspace.history} />}
 
       {canEdit && (
         <p className="ws-delete">
@@ -1152,6 +1301,9 @@ export function SystemWorkspaceView({
             {ct("delete")}
           </button>
         </p>
+      )}
+      {fichaId && (
+        <ArticleFichaDialog api={api} articleId={fichaId} onClose={() => setFichaId(null)} />
       )}
     </div>
   );

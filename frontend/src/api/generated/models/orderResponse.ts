@@ -5,7 +5,9 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { OrderResponseDocumentJob } from "./orderResponseDocumentJob";
 import type { OrderResponseLinesPreviewItem } from "./orderResponseLinesPreviewItem";
+import type { OrderResponseMail } from "./orderResponseMail";
 import type { OrderStatusEnum } from "./orderStatusEnum";
 import type { OrderTypeEnum } from "./orderTypeEnum";
 
@@ -39,5 +41,12 @@ export interface OrderResponse {
   damaged_qty?: string | null;
   /** @nullable */
   receipt_count?: string | null;
+  /** @nullable */
+  total_amount?: string | null;
+  unpriced_lines?: number;
   lines_preview?: OrderResponseLinesPreviewItem[];
+  /** @nullable */
+  mail?: OrderResponseMail;
+  /** @nullable */
+  document_job?: OrderResponseDocumentJob;
 }

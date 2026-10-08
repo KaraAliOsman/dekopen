@@ -21,6 +21,20 @@ KIT_OPENING_TYPES = sorted(
         for opening in SUPPORTED_OPENING_TYPES
         if opening is not BayOpeningType.FIXED
     }
+    # D03 kit families that only exist on the Opening axis: banderola,
+    # abatimiento de bisagras abajo y la falleba de la hoja pasiva.
+    | {"TILT", "BOTTOM_HUNG", "FALLEBA"}
+    # D08: familias de herraje de las tipologías avanzadas — elevable,
+    # osciloparalela, paquete plegable, pivote, guillotina y la hoja
+    # corredera de puerta.
+    | {
+        "LIFT_SLIDE",
+        "PARALLEL_SLIDE",
+        "FOLD",
+        "PIVOT",
+        "VERTICAL_SLIDE",
+        "DOOR_SLIDING",
+    }
 )
 
 
@@ -289,13 +303,35 @@ class BeadWriteSerializer(StrictSerializer):
 
 
 class CatalogHardwareComponentSerializer(StrictSerializer):
+    """D04 declared-component document: qty is optional — a component may
+    declare a qty_rule instead; the DB validator enforces the contract."""
+
     sku = serializers.CharField()
     name = serializers.CharField()
-    qty = QuantityField()
+    qty = QuantityField(allow_null=True, required=False)
     unit = serializers.CharField()
     category = serializers.ChoiceField(
         choices=list(HARDWARE_COMPONENT_CATEGORIES), default="OTHER"
     )
+    qty_rule = serializers.DictField(allow_null=True, required=False)
+    cut_rule = serializers.DictField(allow_null=True, required=False)
+    weight_kg = decimal_field(
+        8, 3, allow_null=True, required=False, min_value=Decimal("0.001")
+    )
+    cost_clp = decimal_field(
+        12, 2, allow_null=True, required=False, min_value=Decimal("0.00")
+    )
+    machining = serializers.ListField(
+        child=serializers.DictField(), allow_null=True, required=False
+    )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        declared = set(instance) if isinstance(instance, dict) else set()
+        for key in ("qty", "qty_rule", "cut_rule", "weight_kg", "cost_clp", "machining"):
+            if key not in declared:
+                data.pop(key, None)
+        return data
 
 
 class KitWriteSerializer(StrictSerializer):
@@ -331,12 +367,137 @@ class KitWriteSerializer(StrictSerializer):
     is_active = serializers.BooleanField()
 
 
+_EXTRA_KINDS = ("SILL", "FRAME_EXTENSION", "COVER_TRIM",
+                "MOSQUITO_SCREEN", "VENTILATOR")
+_EXTRA_CUT_KINDS = ("SILL", "FRAME_EXTENSION", "COVER_TRIM")
+_EXTRA_UNITS = ("M", "EA")
+_EXTRA_FAMILIES = ("CASEMENT", "SLIDING", "LIFT_SLIDE", "DOOR", "FACADE_FIXED")
+_EXTRA_UNIT_KINDS = ("WINDOW", "DOOR")
+_SERVICE_KINDS = ("INSTALLATION", "SEALING", "REMOVAL", "SCAFFOLDING", "FREIGHT")
+_SERVICE_QTY_RULES = ("PER_POSITION_UNIT", "PER_M2", "PER_LINEAR_METER", "FIXED")
+
+
+class ExtraArticleWriteSerializer(StrictSerializer):
+    """D06 catalogued position accessory — the article declares price/cost,
+    its cut profile for saw kinds and the applicability predicates the
+    suggestion engine scopes with."""
+
+    system_id = serializers.UUIDField()
+    sku = serializers.CharField(max_length=100)
+    name = serializers.CharField(max_length=255)
+    kind = serializers.ChoiceField(choices=_EXTRA_KINDS)
+    pricing_unit = serializers.ChoiceField(choices=_EXTRA_UNITS)
+    unit_price = decimal_field(
+        14, 2, min_value=Decimal("0.00"), required=False, allow_null=True
+    )
+    unit_price_currency = serializers.CharField(
+        max_length=3, required=False, allow_null=True, allow_blank=True
+    )
+    unit_cost = decimal_field(
+        14, 2, min_value=Decimal("0.00"), required=False, allow_null=True
+    )
+    unit_cost_currency = serializers.CharField(
+        max_length=3, required=False, allow_null=True, allow_blank=True
+    )
+    cut_profile_sku = serializers.CharField(
+        max_length=100, required=False, allow_null=True, allow_blank=True
+    )
+    cut_material = serializers.ChoiceField(
+        choices=["PVC", "ALUMINIUM"], required=False, allow_null=True
+    )
+    vuelo_default_mm = decimal_field(
+        10, 2, min_value=Decimal("0.00"), required=False, allow_null=True
+    )
+    families = serializers.ListField(
+        child=serializers.ChoiceField(choices=_EXTRA_FAMILIES),
+        required=False,
+    )
+    unit_kinds = serializers.ListField(
+        child=serializers.ChoiceField(choices=_EXTRA_UNIT_KINDS),
+        required=False,
+    )
+    suggestion_reason = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
+    is_active = serializers.BooleanField(required=False, default=True)
+
+    def validate(self, values):
+        kind = values.get("kind")
+        unit = values.get("pricing_unit")
+        if kind in _EXTRA_CUT_KINDS and unit != "M":
+            raise serializers.ValidationError(
+                {"pricing_unit": "los extras con corte se venden por metro"}
+            )
+        if kind in ("MOSQUITO_SCREEN", "VENTILATOR") and unit != "EA":
+            raise serializers.ValidationError(
+                {"pricing_unit": "los extras contados se venden por unidad"}
+            )
+        has_profile = bool(values.get("cut_profile_sku"))
+        has_material = bool(values.get("cut_material"))
+        if kind in _EXTRA_CUT_KINDS:
+            if not has_profile or not has_material:
+                raise serializers.ValidationError(
+                    {"cut_profile_sku": "los extras con corte declaran su perfil y material"}
+                )
+        elif has_profile or has_material:
+            raise serializers.ValidationError(
+                {"cut_profile_sku": "solo los extras con corte declaran perfil"}
+            )
+        if values.get("vuelo_default_mm") is not None and kind != "SILL":
+            raise serializers.ValidationError(
+                {"vuelo_default_mm": "solo el vierteaguas declara vuelos"}
+            )
+        return values
+
+
+class ServiceArticleWriteSerializer(StrictSerializer):
+    """D06 catalogued project service — org data (no system parent): the
+    article declares the qty rule; the engine measures it off the quoted
+    positions."""
+
+    code = serializers.CharField(max_length=100)
+    name = serializers.CharField(max_length=255)
+    kind = serializers.ChoiceField(choices=_SERVICE_KINDS)
+    qty_rule = serializers.ChoiceField(choices=_SERVICE_QTY_RULES)
+    unit_price = decimal_field(
+        14, 2, min_value=Decimal("0.00"), required=False, allow_null=True
+    )
+    unit_price_currency = serializers.CharField(
+        max_length=3, required=False, allow_null=True, allow_blank=True
+    )
+    unit_cost = decimal_field(
+        14, 2, min_value=Decimal("0.00"), required=False, allow_null=True
+    )
+    unit_cost_currency = serializers.CharField(
+        max_length=3, required=False, allow_null=True, allow_blank=True
+    )
+    is_active = serializers.BooleanField(required=False, default=True)
+
+
+class ReadinessTargetSerializer(serializers.Serializer):
+    """Deep-link target for a blocker: which tab opens and which row inside
+    it caused the BLOCK (or the section anchor when it is system-level)."""
+
+    kind = serializers.ChoiceField(
+        choices=["article", "kit", "bead", "infill", "system", "section"]
+    )
+    id = serializers.UUIDField(allow_null=True, required=False)
+    label = serializers.CharField()
+    tab = serializers.ChoiceField(
+        choices=[
+            "sistema", "perfiles", "refuerzos", "vidrios", "herrajes",
+            "reglas", "costos", "historial", "termico",
+        ]
+    )
+
+
 class ReadinessBlockerSerializer(serializers.Serializer):
     code = serializers.CharField()
     missing_authority = serializers.CharField()
     affected = serializers.CharField()
     why = serializers.CharField()
     action = serializers.CharField()
+    targets = ReadinessTargetSerializer(many=True, required=False)
 
 
 class ReadinessLevelSerializer(serializers.Serializer):
@@ -368,6 +529,12 @@ class ProvenanceFieldsMixin(serializers.Serializer):
 
 
 class SystemResponseSerializer(ProvenanceFieldsMixin, SystemWriteSerializer):
+    # Familia tipológica — se declara al crear el sistema (importación/seed);
+    # mutarla cambiaría las aperturas permitidas, así que es solo-lectura aquí.
+    system_family = serializers.ChoiceField(
+        choices=["CASEMENT", "SLIDING", "LIFT_SLIDE", "DOOR", "FACADE_FIXED"],
+        read_only=True,
+    )
     readiness = CatalogReadinessSerializer(read_only=True)
     revision = serializers.CharField(read_only=True)
     read_only = serializers.BooleanField()
@@ -383,6 +550,9 @@ class ArticleResponseSerializer(ProvenanceFieldsMixin, ArticleWriteSerializer):
     section_revision = serializers.IntegerField(read_only=True)
     section_revised_at = serializers.DateTimeField(read_only=True, allow_null=True)
     section_revised_by = serializers.UUIDField(read_only=True, allow_null=True)
+    # P16 ficha only — resolved actor emails, not stored columns.
+    reviewed_by_label = serializers.CharField(required=False, allow_null=True)
+    section_revised_by_label = serializers.CharField(required=False, allow_null=True)
 
 
 class BeadResponseSerializer(ProvenanceFieldsMixin, BeadWriteSerializer):
@@ -392,6 +562,104 @@ class BeadResponseSerializer(ProvenanceFieldsMixin, BeadWriteSerializer):
 
 
 class KitResponseSerializer(ProvenanceFieldsMixin, KitWriteSerializer):
+    revision = serializers.CharField(read_only=True)
+    read_only = serializers.BooleanField()
+    id = serializers.UUIDField()
+
+
+class ExtraArticleResponseSerializer(ProvenanceFieldsMixin, ExtraArticleWriteSerializer):
+    revision = serializers.CharField(read_only=True)
+    read_only = serializers.BooleanField()
+    id = serializers.UUIDField()
+
+
+class ServiceArticleResponseSerializer(ProvenanceFieldsMixin, ServiceArticleWriteSerializer):
+    revision = serializers.CharField(read_only=True)
+    read_only = serializers.BooleanField()
+    id = serializers.UUIDField()
+
+
+# ─── P18 — autoridades térmicas (OGUC 4.1.10) ──────────────────────────────
+# Cada valor es DECLARADO con fuente: el motor nunca fabrica un Uf/Ψg/clase.
+
+SPACER_CODES = ("ALUMINIUM", "WARM_EDGE")
+FRAME_MEMBER_GROUPS = ("ALL", "FRAME", "SASH", "MULLION", "COUPLER", "THRESHOLD")
+
+
+class SpacerWriteSerializer(StrictSerializer):
+    """Ψg declarado por tipo de separador (el SpacerKind del motor)."""
+
+    code = serializers.ChoiceField(choices=SPACER_CODES)
+    name = serializers.CharField(max_length=255)
+    psi_w_m_k = decimal_field(
+        6, 4, min_value=Decimal("0.0001"), max_value=Decimal("0.9999")
+    )
+    is_active = serializers.BooleanField()
+
+
+class FrameUfWriteSerializer(StrictSerializer):
+    """Uf declarado por el fabricante para el sistema, por grupo de miembro."""
+
+    system_id = serializers.UUIDField()
+    member_group = serializers.ChoiceField(choices=FRAME_MEMBER_GROUPS)
+    uf_w_m2k = decimal_field(
+        6, 3, min_value=Decimal("0.001"), max_value=Decimal("12.000")
+    )
+    # Referencia legible a la ficha técnica/informe del que sale el valor.
+    source_ref = serializers.CharField(
+        max_length=255, allow_blank=True, required=False
+    )
+    is_active = serializers.BooleanField()
+
+
+class PerformanceTestWriteSerializer(StrictSerializer):
+    """Informe de ensayo del sistema: clases + laboratorio + alcance."""
+
+    system_id = serializers.UUIDField()
+    # NULL = aplica a toda la serie; una familia declarada la restringe.
+    typology_scope = serializers.CharField(
+        max_length=40, allow_null=True, required=False
+    )
+    air_class = serializers.IntegerField(
+        min_value=1, max_value=5, allow_null=True, required=False
+    )
+    water_class = serializers.CharField(
+        max_length=10, allow_null=True, required=False
+    )
+    wind_class = serializers.CharField(
+        max_length=10, allow_null=True, required=False
+    )
+    report_ref = serializers.CharField(
+        max_length=255, allow_null=True, required=False
+    )
+    laboratory = serializers.CharField(
+        max_length=255, allow_null=True, required=False
+    )
+    tested_on = serializers.DateField(allow_null=True, required=False)
+    tested_width_mm = decimal_field(
+        10, 2, allow_null=True, required=False, min_value=Decimal("0.01")
+    )
+    tested_height_mm = decimal_field(
+        10, 2, allow_null=True, required=False, min_value=Decimal("0.01")
+    )
+    is_active = serializers.BooleanField()
+
+
+class SpacerResponseSerializer(ProvenanceFieldsMixin, SpacerWriteSerializer):
+    revision = serializers.CharField(read_only=True)
+    read_only = serializers.BooleanField()
+    id = serializers.UUIDField()
+
+
+class FrameUfResponseSerializer(ProvenanceFieldsMixin, FrameUfWriteSerializer):
+    revision = serializers.CharField(read_only=True)
+    read_only = serializers.BooleanField()
+    id = serializers.UUIDField()
+
+
+class PerformanceTestResponseSerializer(
+    ProvenanceFieldsMixin, PerformanceTestWriteSerializer
+):
     revision = serializers.CharField(read_only=True)
     read_only = serializers.BooleanField()
     id = serializers.UUIDField()
@@ -411,6 +679,26 @@ class BeadListSerializer(serializers.Serializer):
 
 class KitListSerializer(serializers.Serializer):
     items = KitResponseSerializer(many=True)
+
+
+class ExtraArticleListSerializer(serializers.Serializer):
+    items = ExtraArticleResponseSerializer(many=True)
+
+
+class ServiceArticleListSerializer(serializers.Serializer):
+    items = ServiceArticleResponseSerializer(many=True)
+
+
+class SpacerListSerializer(serializers.Serializer):
+    items = SpacerResponseSerializer(many=True)
+
+
+class FrameUfListSerializer(serializers.Serializer):
+    items = FrameUfResponseSerializer(many=True)
+
+
+class PerformanceTestListSerializer(serializers.Serializer):
+    items = PerformanceTestResponseSerializer(many=True)
 
 
 class CatalogFilterSerializer(StrictSerializer):
@@ -477,17 +765,331 @@ class ProcessProfileRowSerializer(serializers.Serializer):
     provenance = serializers.DictField()
 
 
+class SectionCheckSerializer(serializers.Serializer):
+    """One geometry validation on an article's declared section."""
+
+    code = serializers.CharField()
+    ok = serializers.BooleanField()
+    value = serializers.CharField(allow_null=True)
+    limit = serializers.CharField(allow_null=True)
+
+
+class _ProvenanceStampSerializer(serializers.Serializer):
+    """Read-only provenance triple for tabular authority rows."""
+
+    data_provenance = serializers.CharField()
+    technical_reviewed_at = serializers.CharField(allow_null=True)
+    technical_reviewed_by = serializers.UUIDField(allow_null=True)
+    review_pending = serializers.BooleanField()
+
+
+class GlassProductRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    system_id = serializers.UUIDField(allow_null=True)
+    sku = serializers.CharField()
+    commercial_name = serializers.CharField()
+    notation = serializers.CharField()
+    composition = serializers.DictField(allow_null=True)
+    total_thickness_mm = serializers.CharField(allow_null=True)
+    safety_class = serializers.CharField(allow_null=True)
+    ug_w_m2k = serializers.CharField(allow_null=True)
+    g_value = serializers.CharField(allow_null=True)
+    light_transmission_pct = serializers.CharField(allow_null=True)
+    weight_kg_m2 = serializers.CharField(allow_null=True)
+    min_billable_area_m2 = serializers.CharField(allow_null=True)
+    price_tier = serializers.IntegerField(allow_null=True)
+    supplier_name = serializers.CharField(allow_null=True)
+    supplier_sku = serializers.CharField(allow_null=True)
+    is_active = serializers.BooleanField()
+    created_at = serializers.CharField()
+
+
+class GlassPurchaseMappingRowSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    system_id = serializers.UUIDField()
+    technical_sku = serializers.CharField()
+    purchasing_sku = serializers.CharField()
+    manufacturer_name = serializers.CharField()
+    purchase_unit = serializers.CharField()
+    version = serializers.IntegerField()
+    provenance = serializers.DictField()
+    created_at = serializers.CharField()
+
+
+class GlassSurchargeRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    product_id = serializers.UUIDField()
+    kind = serializers.CharField()
+    unit = serializers.CharField()
+    unit_cost = serializers.CharField()
+    currency = serializers.CharField()
+    label = serializers.CharField(allow_null=True)
+    is_active = serializers.BooleanField()
+    created_at = serializers.CharField()
+
+
+class GlassSafetyRuleRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    code = serializers.CharField()
+    title = serializers.CharField()
+    message = serializers.CharField(allow_null=True)
+    applies_openings = serializers.ListField(allow_null=True)
+    sill_below_mm = serializers.CharField(allow_null=True)
+    min_area_m2 = serializers.CharField(allow_null=True)
+    requires_door = serializers.BooleanField(allow_null=True)
+    requires_adjacent_door = serializers.BooleanField(allow_null=True)
+    required_safety = serializers.CharField()
+    severity = serializers.CharField()
+    source_ref = serializers.CharField(allow_null=True)
+    is_active = serializers.BooleanField()
+    created_at = serializers.CharField()
+
+
+class GlassTypeLimitRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    code = serializers.CharField()
+    lamina_kind = serializers.CharField()
+    thickness_min_mm = serializers.CharField(allow_null=True)
+    thickness_max_mm = serializers.CharField(allow_null=True)
+    min_side_mm = serializers.CharField(allow_null=True)
+    max_side_mm = serializers.CharField(allow_null=True)
+    min_area_m2 = serializers.CharField(allow_null=True)
+    max_area_m2 = serializers.CharField(allow_null=True)
+    max_aspect_ratio = serializers.CharField(allow_null=True)
+    requires_exact_cut = serializers.BooleanField()
+    severity = serializers.CharField()
+    source_ref = serializers.CharField(allow_null=True)
+    is_active = serializers.BooleanField()
+    created_at = serializers.CharField()
+
+
+class GlassTabSerializer(serializers.Serializer):
+    products = GlassProductRowSerializer(many=True)
+    purchase_mappings = GlassPurchaseMappingRowSerializer(many=True)
+    surcharges = GlassSurchargeRowSerializer(many=True)
+    safety_rules = GlassSafetyRuleRowSerializer(many=True)
+    type_limits = GlassTypeLimitRowSerializer(many=True)
+
+
+class HardwareFamilyRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    system_id = serializers.UUIDField()
+    opening_type = serializers.CharField()
+    handle_height_rule = serializers.CharField(allow_null=True)
+    handle_height_min_mm = serializers.CharField(allow_null=True)
+    handle_height_max_mm = serializers.CharField(allow_null=True)
+    handle_height_default_mm = serializers.CharField(allow_null=True)
+    created_at = serializers.CharField()
+
+
+class HandleModelRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    system_id = serializers.UUIDField()
+    opening_type = serializers.CharField()
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+    price_delta_clp = serializers.CharField(allow_null=True)
+    created_at = serializers.CharField()
+
+
+class HandleColorRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    system_id = serializers.UUIDField()
+    opening_type = serializers.CharField()
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    price_delta_clp = serializers.CharField(allow_null=True)
+    created_at = serializers.CharField()
+
+
+class HardwareOptionRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    system_id = serializers.UUIDField()
+    opening_type = serializers.CharField()
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+    price_delta_clp = serializers.CharField(allow_null=True)
+    is_active = serializers.BooleanField()
+    created_at = serializers.CharField()
+
+
+class HardwarePurchaseMappingRowSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    hardware_kit_id = serializers.UUIDField()
+    purchasing_sku = serializers.CharField()
+    manufacturer_name = serializers.CharField()
+    purchase_unit = serializers.CharField()
+    version = serializers.IntegerField()
+    provenance = serializers.DictField()
+    created_at = serializers.CharField()
+
+
+class HardwareTabSerializer(serializers.Serializer):
+    families = HardwareFamilyRowSerializer(many=True)
+    handle_models = HandleModelRowSerializer(many=True)
+    handle_colors = HandleColorRowSerializer(many=True)
+    options = HardwareOptionRowSerializer(many=True)
+    purchase_mappings = HardwarePurchaseMappingRowSerializer(many=True)
+
+
+class CutRuleRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    system_id = serializers.UUIDField()
+    role = serializers.CharField()
+    cut_angle_deg = serializers.CharField()
+    welded_ends = serializers.IntegerField(allow_null=True)
+    interlock_deduction_mm = serializers.CharField()
+    rounding_mm = serializers.CharField()
+    created_at = serializers.CharField()
+
+
+class ReinforcementRuleRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    system_id = serializers.UUIDField()
+    role = serializers.CharField()
+    finish_class = serializers.CharField()
+    min_length_mm = serializers.CharField()
+    mandatory = serializers.BooleanField()
+    cut_deduction_mm = serializers.CharField()
+    screws_per_m = serializers.CharField(allow_null=True)
+    created_at = serializers.CharField()
+
+
+class TypologyLimitRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    system_id = serializers.UUIDField()
+    opening_type = serializers.CharField()
+    min_leaf_width_mm = serializers.CharField(allow_null=True)
+    max_leaf_width_mm = serializers.CharField(allow_null=True)
+    min_leaf_height_mm = serializers.CharField(allow_null=True)
+    max_leaf_height_mm = serializers.CharField(allow_null=True)
+    max_leaf_weight_kg = serializers.CharField(allow_null=True)
+    max_aspect_ratio = serializers.CharField(allow_null=True)
+    created_at = serializers.CharField()
+
+
+class OpeningCapabilityRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    system_id = serializers.UUIDField()
+    movement = serializers.CharField()
+    directions = serializers.ListField()
+    leaf_roles = serializers.ListField()
+    unit_kinds = serializers.ListField()
+    fixed_in_sash = serializers.BooleanField()
+    hardware_group = serializers.CharField(allow_null=True)
+    created_at = serializers.CharField()
+
+
+class MountingRuleRowSerializer(_ProvenanceStampSerializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    system_id = serializers.UUIDField()
+    code = serializers.CharField()
+    version = serializers.IntegerField()
+    label = serializers.CharField()
+    authority = serializers.DictField()
+    created_at = serializers.CharField()
+
+
+class InspectorConfigRowSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    system_id = serializers.UUIDField()
+    rule_id = serializers.CharField()
+    params = serializers.DictField()
+    is_active = serializers.BooleanField()
+    created_at = serializers.CharField()
+    updated_at = serializers.CharField()
+
+
+class RulesTabSerializer(serializers.Serializer):
+    cut_rules = CutRuleRowSerializer(many=True)
+    reinforcement_rules = ReinforcementRuleRowSerializer(many=True)
+    typology_limits = TypologyLimitRowSerializer(many=True)
+    opening_capabilities = OpeningCapabilityRowSerializer(many=True)
+    mounting_rules = MountingRuleRowSerializer(many=True)
+    inspector_configs = InspectorConfigRowSerializer(many=True)
+
+
+class CostCoverageRowSerializer(serializers.Serializer):
+    """P07 coverage line — which purchase SKUs this system can demand and
+    how many active cost items price each."""
+
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+    required_unit = serializers.CharField()
+    active_cost_items = serializers.IntegerField()
+
+
+class ImportEventRowSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField()
+    import_id = serializers.UUIDField()
+    event = serializers.CharField()
+    actor_id = serializers.UUIDField(allow_null=True)
+    actor_label = serializers.CharField(allow_null=True)
+    detail = serializers.DictField()
+    created_at = serializers.CharField()
+
+
+class ImportHistoryRowSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField()
+    file_name = serializers.CharField()
+    kind = serializers.CharField()
+    status = serializers.CharField()
+    error_code = serializers.CharField(allow_null=True)
+    audit_id = serializers.UUIDField(allow_null=True)
+    created_by = serializers.UUIDField()
+    created_by_label = serializers.CharField(allow_null=True)
+    reviewed_by = serializers.UUIDField(allow_null=True)
+    reviewed_by_label = serializers.CharField(allow_null=True)
+    reviewed_at = serializers.CharField(allow_null=True)
+    created_at = serializers.CharField()
+    updated_at = serializers.CharField()
+
+
+class HistoryTabSerializer(serializers.Serializer):
+    imports = ImportHistoryRowSerializer(many=True)
+    events = ImportEventRowSerializer(many=True)
+
+
 class SystemWorkspaceSerializer(serializers.Serializer):
     """The §06 system home: identity + readiness + the entities bound to
-    this system across every catalog domain, in one fetch."""
+    this system across every catalog domain, in one fetch. P16 turns the
+    sections into the tabs the system page shows (perfiles, refuerzos,
+    vidrios, herrajes, reglas, costos, historial)."""
 
     system = SystemResponseSerializer()
     articles = ArticleResponseSerializer(many=True)
+    article_checks = serializers.DictField(child=SectionCheckSerializer(many=True))
     beads = BeadResponseSerializer(many=True)
     kits = KitResponseSerializer(many=True)
     reinforcements = ReinforcementRowSerializer(many=True)
     purchase_mappings = PurchaseMappingRowSerializer(many=True)
     process_profile = ProcessProfileRowSerializer(allow_null=True)
+    glass = GlassTabSerializer()
+    hardware = HardwareTabSerializer()
+    rules = RulesTabSerializer()
+    costs = CostCoverageRowSerializer(many=True)
+    history = HistoryTabSerializer()
 
 
 class ProcessProfileOptionSerializer(serializers.Serializer):
@@ -549,7 +1151,21 @@ class EvidenceRowSerializer(serializers.Serializer):
     review_state = serializers.CharField()
     reviewed_by = serializers.UUIDField(allow_null=True)
     reviewed_at = serializers.CharField(allow_null=True)
+    # P16 ficha — resolved actor emails for the provenance badge.
+    declared_by_label = serializers.CharField(required=False, allow_null=True)
+    reviewed_by_label = serializers.CharField(required=False, allow_null=True)
 
 
 class EvidenceListSerializer(serializers.Serializer):
     items = EvidenceRowSerializer(many=True)
+
+
+class ArticleFichaSerializer(serializers.Serializer):
+    """P16 article ficha: the row + real-geometry checks + provenance
+    evidence + purchase identities + bound reinforcements."""
+
+    article = ArticleResponseSerializer()
+    section_checks = SectionCheckSerializer(many=True)
+    evidence = EvidenceRowSerializer(many=True)
+    purchase_mappings = PurchaseMappingRowSerializer(many=True)
+    reinforcements = ReinforcementRowSerializer(many=True)

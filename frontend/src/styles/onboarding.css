@@ -1,0 +1,146 @@
+/* Onboarding usa la primitiva ui/Stepper (P25). */
+
+.onboarding-panel {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.onboarding-card {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-lg);
+  display: grid;
+  gap: var(--space-12);
+  padding: var(--space-24);
+}
+
+.onboarding-card h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.onboarding-org {
+  align-items: center;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-12);
+}
+
+.onboarding-systems {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.onboarding-system {
+  align-items: center;
+  display: flex;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  text-align: left;
+  width: 100%;
+}
+
+.onboarding-system.is-picked,
+.onboarding-choice__card.is-picked {
+  border-color: var(--theme-accent);
+  outline: 1px solid var(--theme-accent);
+}
+
+.onboarding-system__meta {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.onboarding-choice {
+  display: grid;
+  gap: var(--space-8);
+  grid-template-columns: 1fr 1fr;
+}
+
+.onboarding-choice__card {
+  align-items: flex-start;
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-12);
+  text-align: left;
+}
+
+.onboarding-choice__card span {
+  color: var(--theme-text-secondary);
+  font-size: 0.75rem;
+}
+
+.onboarding-note {
+  border-top: 1px dashed var(--theme-border-subtle);
+  color: var(--theme-text-secondary);
+  margin: 0;
+  padding-top: var(--space-12);
+}
+
+.onboarding-link {
+  justify-self: start;
+}
+
+.onboarding-actions {
+  display: flex;
+  gap: var(--space-8);
+  justify-content: space-between;
+}
+
+.dashboard-empty__actions {
+  display: flex;
+  gap: var(--space-8);
+}
+
+@media (max-width: 640px) {
+  .onboarding-choice {
+    grid-template-columns: 1fr;
+  }
+}
+
+.eyebrow {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.organization-list {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.organization-list button {
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ——— Application shell: domain rail + work body ——— */
+
+/* P25 — la primera hoja del taller también lleva la marca en el rótulo. */
+.onboarding-brand {
+  align-items: baseline;
+  display: flex;
+  gap: var(--space-8);
+  margin-bottom: var(--space-16);
+}
+
+/* P22 — con los 8 pasos (configuración añadida) las etiquetas exceden el
+   ancho: el step global es flex:none y nunca se contrae. Aquí, acotado al
+   asistente, el paso cede y la etiqueta envuelve en dos líneas. */
+.onboarding .ui-stepper__item {
+  min-width: 0;
+}
+
+.onboarding .ui-stepper__step {
+  flex: 1;
+  min-width: 0;
+}
+
+.onboarding .ui-stepper__label {
+  min-width: 0;
+}

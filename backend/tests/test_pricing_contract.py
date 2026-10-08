@@ -112,6 +112,7 @@ def test_position_cost_uses_engine_area_for_shaped_glass(monkeypatch):
     result = SimpleNamespace(
         profile_cuts=[], reinforcements=[], glasses=[glass],
         panels=[], hardware_items=[], fittings=[], leaf_weights=[],
+        finish_key=None, color_surcharges=[],
     )
 
     class Cursor:
@@ -179,6 +180,7 @@ def test_position_cost_prices_fittings_as_unit_pieces(monkeypatch):
     result = SimpleNamespace(
         profile_cuts=[], reinforcements=[], glasses=[glass],
         panels=[], hardware_items=[], fittings=[fitting], leaf_weights=[],
+        finish_key=None, color_surcharges=[],
     )
 
     class Cursor:
@@ -283,6 +285,8 @@ def test_design_batch_preview_prices_before_and_after(monkeypatch):
         }],
         'project_versions': [],
         'pricing_rules': [{
+            'pricing_mode': 'COST_PLUS_MARGIN',
+            'default_margin_pct': Decimal('0.25'),
             'waste_factor_pct': Decimal('0'),
             'labor_rate_per_m2': Decimal('0'),
             'installation_rate_per_m2': Decimal('0'),
@@ -342,7 +346,15 @@ def test_design_batch_preview_prices_before_and_after(monkeypatch):
 
     def fake_cost(repo, position, rules):
         priced.append(position)
-        return (Decimal('100') if len(priced) == 1 else Decimal('120'), None, None)
+        formation = {
+            'hardware_option_delta': '0',
+            'color_surcharge_delta': '0',
+            'extra_sell_delta': '0',
+        }
+        return (
+            Decimal('100') if len(priced) == 1 else Decimal('120'),
+            Decimal('1'), None, formation,
+        )
 
     monkeypatch.setattr(service, 'position_cost', fake_cost)
 
@@ -368,7 +380,118 @@ def test_design_batch_preview_prices_before_and_after(monkeypatch):
     assert item['unit_cost_before'] == '100'
     assert item['unit_cost_after'] == '120'
     assert item['line_cost_after'] == '240'
+    # COST_PLUS_MARGIN net sell = cost / (1 - margin)
+    assert item['unit_net_before'] == '133.3333'
+    assert item['unit_net_after'] == '160.0000'
     assert result['currency'] == 'CLP'
+
+
+def test_design_batch_preview_unsaved_position_prices_after_only(monkeypatch):
+    """P04 live-price chip — a null position_id carries no stored row: the
+    proposed design alone is gated + priced, before fields stay null."""
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    import pricing.service as service
+    import projects.service as projects_service
+
+    org_id, project_id, system_id = uuid4(), uuid4(), uuid4()
+    tables = {
+        'projects': [{'id': project_id, 'status': 'DRAFT', 'current_revision': 1}],
+        'project_versions': [],
+        'pricing_rules': [{
+            'pricing_mode': 'COST_PLUS_MARGIN',
+            'default_margin_pct': Decimal('0.25'),
+            'waste_factor_pct': Decimal('0'),
+            'labor_rate_per_m2': Decimal('0'),
+            'installation_rate_per_m2': Decimal('0'),
+        }],
+        'tenancy_organizations': [{'currency': 'CLP'}],
+        'project_positions': [],
+    }
+
+    def _table(query):
+        return next(key for key in tables if f'public.{key}' in query)
+
+    monkeypatch.setattr(
+        service, 'one',
+        lambda query, params=(), code='missing': tables[_table(query)][0],
+    )
+    monkeypatch.setattr(
+        service, 'rows',
+        lambda query, params=(): tables[_table(query)],
+    )
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, sql):
+            return None
+
+    class Conn:
+        def cursor(self):
+            return Cursor()
+
+    monkeypatch.setattr(service, 'connection', Conn())
+    from contextlib import nullcontext
+
+    import documents.repository as documents_repository
+    monkeypatch.setattr(documents_repository, 'documentary_backend', nullcontext)
+    monkeypatch.setattr(
+        service, 'PricingRepository',
+        lambda *a: SimpleNamespace(authorities=[], convert=lambda value, c: value),
+    )
+    checked = []
+    monkeypatch.setattr(
+        projects_service, 'calculate_design',
+        lambda oid, design: checked.append(design),
+    )
+    priced = []
+
+    def fake_cost(repo, position, rules):
+        priced.append(position)
+        return (Decimal('120'), Decimal('1'), None, {
+            'hardware_option_delta': '0',
+            'color_surcharge_delta': '0',
+            'extra_sell_delta': '0',
+        })
+
+    monkeypatch.setattr(service, 'position_cost', fake_cost)
+
+    result = service.design_batch_preview(org_id, None, {
+        'project_id': str(project_id),
+        'effective_date': '2026-01-01',
+        'items': [{
+            'position_id': None,
+            'quantity': 3,
+            'design': {
+                'system_id': str(system_id),
+                'nominal_width_mm': '1500',
+                'nominal_height_mm': '1200',
+                'color': 'WHITE',
+                'parametric_tree': {'version': 'product-v2'},
+            },
+        }],
+    })
+
+    assert len(checked) == 1
+    assert len(priced) == 1  # only the proposed design — no stored row
+    item = result['items'][0]
+    assert item['ok'] is True
+    assert item['position_id'] is None
+    assert item['index'] is None
+    assert item['quantity'] == 3
+    assert item['unit_cost_before'] is None
+    assert item['line_cost_before'] is None
+    assert item['unit_cost_after'] == '120'
+    assert item['line_cost_after'] == '360'
+    assert item['unit_net_after'] == '160.0000'
+    assert item['line_net_after'] == '480.0000'
+    assert item['unit_net_before'] is None
 
 
 def test_design_batch_preview_refuses_sealed_revision(monkeypatch):
@@ -464,3 +587,191 @@ def test_extras_serializer_contract():
     assert not PriceRequestSerializer(data=blank_label).is_valid()
     overflow = {**base,'extras':[{'label':str(i),'kind':'OTHER','amount':'1'} for i in range(11)]}
     assert not PriceRequestSerializer(data=overflow).is_valid()
+
+
+def test_position_cost_glass_product_min_area_and_surcharges(monkeypatch):
+    """D02: a registered glass product bills its declared minimum area and
+    emits a line per applicable surcharge (tempered m² + polished metres).
+    Money still comes from the cost list — the product only shapes the
+    quantity and the extras."""
+    from types import SimpleNamespace
+
+    from dekopen_engine.glass_composition import parse_glass_notation
+    from dekopen_engine.models import (
+        GlassPiece,
+        GlassProduct,
+        GlassSurchargeRate,
+        GlassSurchargeSelection,
+    )
+    import pricing.service as service
+
+    glass = GlassPiece(
+        bay_id="B1", width_mm=Decimal("800.00"), height_mm=Decimal("600.00"),
+        area_m2=Decimal("0.48"), weight_kg=Decimal("7.20"),
+        thickness_net_mm=Decimal("8.00"),
+        composition=parse_glass_notation("6 templado"),
+        surcharge_selections=[
+            GlassSurchargeSelection(kind="EDGE_POLISH", edges=["top", "left"])
+        ],
+    )
+    result = SimpleNamespace(
+        profile_cuts=[], reinforcements=[], glasses=[glass],
+        panels=[], hardware_items=[], fittings=[], leaf_weights=[],
+        finish_key=None, color_surcharges=[],
+    )
+    product = GlassProduct(
+        sku="VID-T", name="Templado 6",
+        composition=parse_glass_notation("6 templado"),
+        min_area_m2=Decimal("0.50"),
+        surcharges=[
+            GlassSurchargeRate(kind="TEMPERED", unit="M2", amount=Decimal("5000"), currency="CLP", label="Templado"),
+            GlassSurchargeRate(kind="EDGE_POLISH", unit="M", amount=Decimal("2500"), currency="CLP", label="Canto pulido"),
+            GlassSurchargeRate(kind="DRILL", unit="EA", amount=Decimal("3500"), currency="CLP", label="Perforación"),
+        ],
+    )
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, sql):
+            return None
+
+    class Conn:
+        needs_rollback = False
+
+        def cursor(self):
+            return Cursor()
+
+    class Repo:
+        org_id = "org"
+
+        def cost(self, sku, unit):
+            assert (sku, unit) == ("VID-T", "M2")
+            return Decimal("10000")
+
+        def convert(self, amount, currency):
+            return amount
+
+    position = {
+        "system_id": "sys", "width_mm": Decimal("2000"),
+        "height_mm": Decimal("1000"),
+        "parametric_tree": {"id": "B1", "glass_article_sku": "VID-T"},
+        "color_interior": "WHITE", "color_exterior": "WHITE",
+    }
+    params_repo = SimpleNamespace(
+        load_visible=lambda *a, **k: SimpleNamespace(
+            glass_products={"VID-T": product}
+        ),
+        load_coupler_articles=lambda *a, **k: {},
+    )
+    monkeypatch.setattr(service, "connection", Conn())
+    monkeypatch.setattr(service, "SystemParamsRepository", lambda: params_repo)
+    monkeypatch.setattr(service, "CuttingRepository", lambda: SimpleNamespace())
+    monkeypatch.setattr(
+        service, "engine_result_from_api", lambda **kwargs: result
+    )
+    monkeypatch.setattr(
+        service, "one", lambda *a, **k: {"currency": "CLP"}
+    )
+    total, _area, _result, formation = service.position_cost(
+        Repo(), position,
+        {"waste_factor_pct": Decimal("0"),
+         "labor_rate_per_m2": Decimal("0"),
+         "installation_rate_per_m2": Decimal("0")},
+    )
+    glass_lines = [
+        line for line in formation["composition"]
+        if line["kind"].startswith("GLASS")
+    ]
+    by_kind = {line["kind"]: line for line in glass_lines}
+    # area 0.48 m2 < declared minimum 0.50 → the base and the tempered
+    # surcharge both bill 0.50 m2.
+    assert by_kind["GLASS"]["quantity"] == "0.5000"
+    assert by_kind["GLASS"]["cost"] == "5000.0000"
+    assert by_kind["GLASS_TEMPERED"]["quantity"] == "0.5000"
+    assert by_kind["GLASS_TEMPERED"]["cost"] == "2500.0000"
+    # polished metres: top (0.8 m) + left (0.6 m) = 1.4 m.
+    assert by_kind["GLASS_EDGE_POLISH"]["quantity"] == "1.4000"
+    assert by_kind["GLASS_EDGE_POLISH"]["cost"] == "3500.0000"
+    # No DRILL selection → no drill line.
+    assert "GLASS_DRILL" not in by_kind
+    assert total == Decimal("5000.0000") + Decimal("2500.0000") + Decimal("3500.0000")
+
+
+def test_module_net_split_reparte_el_neto_por_motor(monkeypatch=None):
+    """P06 — el reparto del neto del conjunto es proporcional al costo de
+    material atribuido por el motor a cada módulo; el total cuadra al neto
+    (último módulo cierra el redondeo) y las líneas sin dueño se reparten
+    en la misma proporción."""
+    from decimal import Decimal
+
+    import pricing.service as service
+
+    design = {
+        'parametric_tree': {
+            'version': 'product-v2',
+            'assembly': {
+                'modules': [{'id': 'm1'}, {'id': 'm2'}, {'id': 'm3'}],
+                'couplings': [],
+            },
+        },
+    }
+    formation = {
+        'composition': [
+            {'module_id': 'm1', 'cost': '30'},
+            {'module_id': 'm2', 'cost': '60'},
+            {'module_id': 'm3', 'cost': '30'},
+            # corte de coplador: sin dueño — no entra en las bases pero el
+            # neto total ya lo incluye, repartido en proporción.
+            {'module_id': None, 'cost': '10'},
+        ],
+    }
+    split = service._module_net_split(Decimal('120.0000'), formation, design)
+    assert [entry['module_id'] for entry in split] == ['m1', 'm2', 'm3']
+    values = [Decimal(entry['unit_net']) for entry in split]
+    assert sum(values) == Decimal('120.0000')
+    # 30/120, 60/120, 30/120 → 30/60/30
+    assert values == [Decimal('30.0000'), Decimal('60.0000'), Decimal('30.0000')]
+
+
+def test_module_net_split_redondeo_cierra_en_el_ultimo():
+    from decimal import Decimal
+
+    import pricing.service as service
+
+    design = {
+        'parametric_tree': {
+            'version': 'product-v2',
+            'assembly': {'modules': [{'id': 'm1'}, {'id': 'm2'}], 'couplings': []},
+        },
+    }
+    formation = {'composition': [
+        {'module_id': 'm1', 'cost': '1'},
+        {'module_id': 'm2', 'cost': '1'},
+    ]}
+    split = service._module_net_split(Decimal('100.0001'), formation, design)
+    # ROUND_HALF_EVEN: 50.00005 → 50.0000 en el primero, el resto al último
+    assert [Decimal(e['unit_net']) for e in split] == [
+        Decimal('50.0000'),
+        Decimal('50.0001'),
+    ]
+    assert sum(Decimal(e['unit_net']) for e in split) == Decimal('100.0001')
+
+
+def test_module_net_split_sin_conjunto_devuelve_none():
+    from decimal import Decimal
+
+    import pricing.service as service
+
+    assert service._module_net_split(Decimal('10'), {'composition': []}, {}) is None
+    assert service._module_net_split(None, {'composition': []}, {}) is None
+    # diseño sin módulos — no hay reparto honesto
+    assert service._module_net_split(
+        Decimal('10'),
+        {'composition': [{'module_id': 'm1', 'cost': '5'}]},
+        {'parametric_tree': {'version': 'product-v2', 'assembly': {'modules': []}}},
+    ) is None

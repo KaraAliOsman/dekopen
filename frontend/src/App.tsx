@@ -5,8 +5,10 @@ import { t } from "./i18n/es-CL";
 
 import { AppShell } from "./app/AppShell";
 import { RouteErrorBoundary } from "./app/RouteErrorBoundary";
-import { DashboardPage } from "./app/DashboardPage";
+import { HoyPage } from "./app/HoyPage";
 import { JobsPage } from "./app/JobsPage";
+import { NotFoundPage } from "./app/NotFoundPage";
+import { OfflineOverlay } from "./app/OfflineOverlay";
 import { SettingsPage } from "./app/SettingsPage";
 import { AuthCallbackPage } from "./auth/AuthCallbackPage";
 import { ReadyGuard, SessionGuard } from "./auth/AuthGuards";
@@ -16,6 +18,20 @@ import { MfaPage } from "./auth/MfaPage";
 import { SelectOrganizationPage } from "./auth/SelectOrganizationPage";
 import { consumeReturnTo } from "./auth/returnTo";
 import { LandingPage } from "./features/landing/LandingPage";
+
+export const DEV_ONLY_ROUTE_PATHS = [
+  "/projects/demo/positions/g1/edit",
+  "/benchmark",
+  "/dev/ui",
+  "/dev/ui/mal",
+  "/dev/correos",
+] as const;
+
+export function visibleDevOnlyRoutePaths(
+  env: Pick<ImportMetaEnv, "DEV"> = import.meta.env,
+): readonly string[] {
+  return env.DEV ? DEV_ONLY_ROUTE_PATHS : [];
+}
 const WalletPage = lazy(async () => ({
   default: (await import("./features/billing/WalletPage")).WalletPage,
 }));
@@ -76,6 +92,50 @@ const ProductionPage = lazy(async () => {
   const module = await import("./features/production/ProductionPage");
   return { default: module.ProductionPage };
 });
+const AnalyticsPage = lazy(async () => {
+  const module = await import("./features/analytics/AnalyticsPage");
+  return { default: module.AnalyticsPage };
+});
+
+const QuotationsPage = lazy(async () => {
+  const module = await import("./features/quotations/QuotationsPage");
+  return { default: module.QuotationsPage };
+});
+
+const DeliveriesPage = lazy(async () => {
+  const module = await import("./features/deliveries/DeliveriesPage");
+  return { default: module.DeliveriesPage };
+});
+
+const FieldAgendaPage = lazy(async () => {
+  const module = await import("./features/field/FieldAgendaPage");
+  return { default: module.FieldAgendaPage };
+});
+
+const FieldOrderPage = lazy(async () => {
+  const module = await import("./features/field/FieldOrderPage");
+  return { default: module.FieldOrderPage };
+});
+
+const FieldDispatchPage = lazy(async () => {
+  const module = await import("./features/field/FieldDispatchPage");
+  return { default: module.FieldDispatchPage };
+});
+
+const FieldIncidentsPage = lazy(async () => {
+  const module = await import("./features/field/FieldIncidentsPage");
+  return { default: module.FieldIncidentsPage };
+});
+
+const FieldServicePage = lazy(async () => {
+  const module = await import("./features/field/FieldServicePage");
+  return { default: module.FieldServicePage };
+});
+
+const InventoryPage = lazy(async () => {
+  const module = await import("./features/inventory/InventoryPage");
+  return { default: module.InventoryPage };
+});
 
 const PortalQuotePage = lazy(async () => {
   const module = await import("./features/portal/PortalQuotePage");
@@ -90,9 +150,20 @@ const BenchmarkPage = lazy(async () => {
   return { default: module.BenchmarkPage };
 });
 
-function isFloorRole(role: string | undefined): boolean {
-  return ["INSTALLER", "OPERATOR"].includes(role ?? "");
-}
+const DevUiPage = lazy(async () => {
+  const module = await import("./dev/DevUiPage");
+  return { default: module.DevUiPage };
+});
+
+const DevUiContrast = lazy(async () => {
+  const module = await import("./dev/DevUiContrast");
+  return { default: module.DevUiContrast };
+});
+
+const DevMailPage = lazy(async () => {
+  const module = await import("./dev/DevMailPage");
+  return { default: module.DevMailPage };
+});
 
 function HomeRedirect(): JSX.Element {
   const auth = useAuthSession();
@@ -104,31 +175,12 @@ function HomeRedirect(): JSX.Element {
     return <Navigate to="/select-organization" replace />;
   }
   if (auth.status === "ready") {
-    // Floor roles live on the production floor — the commercial dashboard
-    // would deny its queries and greet them with errors.
-    const home = isFloorRole(auth.me?.active_organization?.role) ? "/production" : "/dashboard";
-    // A magic link can land on `/` instead of /auth/callback when the site
-    // URL differs from the requested origin — still honor the stashed
-    // destination rather than dropping it on the dashboard.
-    return <Navigate to={consumeReturnTo(home)} replace />;
+    // «Hoy» le sirve a los cinco roles — es el único hogar: cada quien ve
+    // qué tiene que hacer hoy y por qué.
+    return <Navigate to={consumeReturnTo("/dashboard")} replace />;
   }
   // Anonymous visitors get the public product presentation, not a bare login.
   return <LandingPage />;
-}
-
-/** /dashboard is a commercial surface: its queries are role-gated, so a floor
- * role deep-linking here met a wall of 403s. Redirect them to the floor home
- * instead (review: OPERATOR on /dashboard). */
-function DashboardRoute(): JSX.Element {
-  const auth = useAuthSession();
-  if (isFloorRole(auth.me?.active_organization?.role)) {
-    return <Navigate to="/production" replace />;
-  }
-  return (
-    <AppShell>
-      <DashboardPage />
-    </AppShell>
-  );
 }
 
 export function AppRoutes(): JSX.Element {
@@ -173,18 +225,58 @@ export function AppRoutes(): JSX.Element {
             </ReadyGuard>
           }
         />
-        <Route
-          path="/projects/demo/positions/g1/edit"
-          element={
-            <ReadyGuard>
-              <AppShell>
-                <Suspense fallback={<p role="status">{t("canvas.loading")}</p>}>
-                  <CanvasEditor2DView demoRoute />
+        {visibleDevOnlyRoutePaths().length > 0 && (
+          <>
+            <Route
+              path="/projects/demo/positions/g1/edit"
+              element={
+                <ReadyGuard>
+                  <AppShell>
+                    <Suspense fallback={<p role="status">{t("canvas.loading")}</p>}>
+                      <CanvasEditor2DView demoRoute />
+                    </Suspense>
+                  </AppShell>
+                </ReadyGuard>
+              }
+            />
+            <Route
+              path="/benchmark"
+              element={
+                <Suspense fallback={<p role="status" />}>
+                  <BenchmarkPage />
                 </Suspense>
-              </AppShell>
-            </ReadyGuard>
-          }
-        />
+              }
+            />
+            <Route
+              path="/dev/ui"
+              element={
+                <Suspense fallback={<p role="status" />}>
+                  <DevUiPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/dev/ui/mal"
+              element={
+                <Suspense fallback={<p role="status" />}>
+                  <DevUiContrast />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/dev/correos"
+              element={
+                <ReadyGuard>
+                  <AppShell>
+                    <Suspense fallback={<p role="status" />}>
+                      <DevMailPage />
+                    </Suspense>
+                  </AppShell>
+                </ReadyGuard>
+              }
+            />
+          </>
+        )}
         <Route
           path="/pricing/commercial"
           element={
@@ -226,16 +318,6 @@ export function AppRoutes(): JSX.Element {
             </Suspense>
           }
         />
-        {import.meta.env.DEV && (
-          <Route
-            path="/benchmark"
-            element={
-              <Suspense fallback={<p role="status" />}>
-                <BenchmarkPage />
-              </Suspense>
-            }
-          />
-        )}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route
@@ -258,7 +340,9 @@ export function AppRoutes(): JSX.Element {
           path="/dashboard"
           element={
             <ReadyGuard>
-              <DashboardRoute />
+              <AppShell>
+                <HoyPage />
+              </AppShell>
             </ReadyGuard>
           }
         />
@@ -305,6 +389,18 @@ export function AppRoutes(): JSX.Element {
               <AppShell>
                 <Suspense fallback={<p role="status">{t("production.loading")}</p>}>
                   <ProductionPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/analitica"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("analytics.loading")}</p>}>
+                  <AnalyticsPage />
                 </Suspense>
               </AppShell>
             </ReadyGuard>
@@ -361,7 +457,7 @@ export function AppRoutes(): JSX.Element {
           }
         />
         <Route
-          path="/settings/general"
+          path="/settings/:section"
           element={
             <ReadyGuard>
               <AppShell>
@@ -370,13 +466,109 @@ export function AppRoutes(): JSX.Element {
             </ReadyGuard>
           }
         />
+        <Route
+          path="/quotations"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("quotations.loading")}</p>}>
+                  <QuotationsPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/deliveries"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("deliveries.loading")}</p>}>
+                  <DeliveriesPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/inventory"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("inventory.loading")}</p>}>
+                  <InventoryPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/field/agenda"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("field.loading")}</p>}>
+                  <FieldAgendaPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/field/orders/:orderId"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("field.loading")}</p>}>
+                  <FieldOrderPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/field/dispatch"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("field.loading")}</p>}>
+                  <FieldDispatchPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/field/incidents"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("field.loading")}</p>}>
+                  <FieldIncidentsPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/field/service"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("field.loading")}</p>}>
+                  <FieldServicePage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route path="/field" element={<Navigate to="/field/agenda" replace />} />
         {/* Bare guesses land on their real surface instead of silently
-         * bouncing home — /inventory lives inside Purchasing, /settings
-         * inside General. */}
+         * bouncing home — /settings lives inside General. */}
         <Route path="/settings" element={<Navigate to="/settings/general" replace />} />
-        <Route path="/inventory" element={<Navigate to="/purchasing" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      <OfflineOverlay />
     </RouteErrorBoundary>
   );
 }

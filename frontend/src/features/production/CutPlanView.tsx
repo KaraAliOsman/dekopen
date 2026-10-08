@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 
 import type { OptimizeStrategyStats } from "../../api/generated/models";
 import { cutRoleLabel } from "./labels";
-import { fmtMm, fmtPct } from "../../format";
+import { Dims, EntityCode, Length } from "../../ui/format";
+import { fmtMm, formatPercent } from "../../format";
 import { t, tOptional } from "../../i18n/es-CL";
 
 // Full engine payload contract (backend/production/service.py →
@@ -42,6 +43,7 @@ export type CutBar = {
   stock_authority_id?: string;
   source?: "NEW" | "REMNANT";
   remnant_id?: string | null;
+  remnant_code?: string | null;
 };
 export type PurchaseLine = {
   commercial_sku: string;
@@ -73,6 +75,7 @@ export type SheetLayout = {
   workshop_sku?: string;
   source?: "NEW" | "REMNANT";
   remnant_id?: string | null;
+  remnant_code?: string | null;
   produced_remnants?: { x_mm: string; y_mm: string; width_mm: string; height_mm: string }[];
 };
 export type UnnestedPiece = {
@@ -113,7 +116,12 @@ export type StockReservation = {
 };
 
 export type RemnantLedger = {
-  consumed?: { id: string; kind: string; rack_location?: string | null }[];
+  consumed?: {
+    id: string;
+    kind: string;
+    rack_location?: string | null;
+    remnant_code?: string | null;
+  }[];
   produced_bars?: { stock_authority_id: string; remainder_mm: string }[];
   produced_sheets?: { workshop_sku: string; width_mm: string; height_mm: string }[];
 };
@@ -445,7 +453,9 @@ function CutPlanSheetSvg({
 }
 
 function shortId(value: string | null | undefined): string {
-  return value ? value.slice(0, 8) : "—";
+  // Missing human label = corrupted plan — never print a UUID fragment:
+  // surface a tiny tag that can never masquerade as a folio.
+  return value ? `#${value.slice(-4).toLowerCase()}` : "—";
 }
 
 /** Human piece identity for the workshop: the workshop SKU the printed
@@ -529,9 +539,9 @@ export function CutPlanView({
               <strong>
                 {t("production.optimizeBar")} #{bar.bar_index}
               </strong>{" "}
-              {bar.commercial_sku} · {fmtMm(bar.stock_length_mm)} mm ·{" "}
-              {t("production.cutplanYield")} {fmtPct(bar.yield_pct)}% ·{" "}
-              {t("production.cutplanRemainder")} {fmtMm(bar.remainder_mm)} mm
+              <EntityCode value={bar.commercial_sku} /> · <Length value={bar.stock_length_mm} /> ·{" "}
+              {t("production.cutplanYield")} {formatPercent(bar.yield_pct, "points")} ·{" "}
+              {t("production.cutplanRemainder")} <Length value={bar.remainder_mm} />
             </figcaption>
             <CutPlanBarSvg
               bar={bar}
@@ -550,9 +560,9 @@ export function CutPlanView({
                   <strong>
                     {t("production.optimizeSheet")} #{layout.sheet_index}
                   </strong>{" "}
-                  {layout.purchasing_sku} · {fmtMm(layout.sheet_width_mm)}×
-                  {fmtMm(layout.sheet_height_mm)} mm · {t("production.cutplanYield")}{" "}
-                  {fmtPct(layout.yield_pct)}%
+                  {layout.purchasing_sku} ·{" "}
+                  <Dims width={layout.sheet_width_mm} height={layout.sheet_height_mm} /> ·{" "}
+                  {t("production.cutplanYield")} {formatPercent(layout.yield_pct, "points")}
                 </figcaption>
                 <CutPlanSheetSvg
                   layout={layout}
@@ -584,7 +594,7 @@ export function CutPlanView({
                       {pane.quantity > 1 ? ` ×${pane.quantity}` : ""}
                     </td>
                     <td>
-                      {fmtMm(pane.width_mm)}×{fmtMm(pane.height_mm)} mm
+                      <Dims width={pane.width_mm} height={pane.height_mm} />
                     </td>
                     <td>{tOptional(`production.unnestedReason.${pane.reason}`) ?? pane.reason}</td>
                   </tr>

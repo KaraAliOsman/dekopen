@@ -20,6 +20,16 @@ export interface CatalogImportResponse {
   result: CatalogImportResponseResultItem[];
   /** @nullable */
   error_code: string | null;
+  /** @nullable */
+  created_by: string | null;
+  /** @nullable */
+  created_by_label?: string | null;
+  /** @nullable */
+  reviewed_by: string | null;
+  /** @nullable */
+  reviewed_by_label?: string | null;
+  /** @nullable */
+  reviewed_at: string | null;
   created_at: string;
   updated_at: string;
 }

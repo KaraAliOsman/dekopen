@@ -2,6 +2,7 @@ import { t } from "../../i18n/es-CL";
 import type { IntentNode } from "./intentEditing";
 import type { MemberGeometry, MemberSpec } from "./members";
 import { normalizedSection } from "./Product3DScene";
+import { fmtMm } from "../../format";
 
 /** §05-G technical output — a horizontal cut through a bay (the "detalle
  * de nodo" every fenestration drawing carries). The SAME normalized
@@ -182,7 +183,7 @@ export function SectionView({
         className="section-dim__text"
         transform={`rotate(90 ${span + 14} ${depth / 2})`}
       >
-        {depth.toFixed(0)}
+        {fmtMm(depth)}
       </text>
       {/* legend note when any member is approximate */}
       {members_drawn.some((spec) => sectionPath(spec).approximate) && (

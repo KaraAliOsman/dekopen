@@ -11,6 +11,7 @@
  * * `fitting_purchase_mappings` - fitting_purchase_mappings
  * * `glass_purchase_mappings` - glass_purchase_mappings
  * * `glazing_bead_matrix` - glazing_bead_matrix
+ * * `glazing_spacers` - glazing_spacers
  * * `handle_requirement_policies` - handle_requirement_policies
  * * `hardware_kits` - hardware_kits
  * * `infill_articles` - infill_articles
@@ -18,6 +19,8 @@
  * * `profile_articles` - profile_articles
  * * `profile_systems` - profile_systems
  * * `reinforcement_cut_policies` - reinforcement_cut_policies
+ * * `system_frame_uf` - system_frame_uf
+ * * `system_performance_tests` - system_performance_tests
  */
 export type AuthorityTableEnum = (typeof AuthorityTableEnum)[keyof typeof AuthorityTableEnum];
 
@@ -26,6 +29,7 @@ export const AuthorityTableEnum = {
   fitting_purchase_mappings: "fitting_purchase_mappings",
   glass_purchase_mappings: "glass_purchase_mappings",
   glazing_bead_matrix: "glazing_bead_matrix",
+  glazing_spacers: "glazing_spacers",
   handle_requirement_policies: "handle_requirement_policies",
   hardware_kits: "hardware_kits",
   infill_articles: "infill_articles",
@@ -33,4 +37,6 @@ export const AuthorityTableEnum = {
   profile_articles: "profile_articles",
   profile_systems: "profile_systems",
   reinforcement_cut_policies: "reinforcement_cut_policies",
+  system_frame_uf: "system_frame_uf",
+  system_performance_tests: "system_performance_tests",
 } as const;

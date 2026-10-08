@@ -23,6 +23,7 @@ from documents.renderers import render_dispatch_note
 from documents.storage import SupabaseDocumentStorage
 from pricing.repository import one, rows
 from projects import org_branding
+from projects.sii_envio import integration_state
 
 SIGNED_URL_TTL_SECONDS = 600
 
@@ -150,6 +151,7 @@ def issue_dispatch_note(
         "note_code": note_code,
         "organization": org_branding.branding_for_snapshot(org_id=org_id),
         "issued_at": timezone.now().isoformat(),
+        "tributary": integration_state(org_id=org_id),
         "order": {
             "code": order["order_code"],
             "id": order_id_s,

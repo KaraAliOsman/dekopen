@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { CategoryEnum } from "./categoryEnum";
+import type { ComponentCutRule } from "./componentCutRule";
+import type { ComponentQtyRule } from "./componentQtyRule";
+import type { MachiningDeclaration } from "./machiningDeclaration";
 
 export interface HardwareComponent {
   sku: string;
@@ -14,4 +17,29 @@ export interface HardwareComponent {
   qty: string;
   unit: string;
   category?: CategoryEnum;
+  /** Declared rule behind qty */
+  qty_rule?: ComponentQtyRule | null;
+  cut_rule?: ComponentCutRule | null;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,9}(?:\.\d{0,3})?$
+   */
+  weight_kg?: string | null;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,10}(?:\.\d{0,2})?$
+   */
+  cost_clp?: string | null;
+  machining?: MachiningDeclaration[];
+  /**
+   * Resolved cut length on the emitted BOM line
+   * @nullable
+   * @pattern ^-?\d{0,10}(?:\.\d{0,2})?$
+   */
+  length_mm?: string | null;
+  /**
+   * Option that brought this component into the leaf BOM
+   * @nullable
+   */
+  option_sku?: string | null;
 }

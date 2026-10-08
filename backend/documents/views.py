@@ -36,6 +36,8 @@ from documents.serializers import (
     DocumentaryPreparationResponseSerializer,
     FreezeRequestSerializer,
     FreezeResponseSerializer,
+    QuotePreviewResponseSerializer,
+    QuotePreviewSerializer,
     RevisionCompareQuerySerializer,
     RevisionCompareResponseSerializer,
     SignedAccessResponseSerializer,
@@ -44,6 +46,7 @@ from documents.service import (
     compare_versions,
     freeze_revision_a,
     prepare_documentary_inputs,
+    preview_quote_document,
     save_documentary_inputs,
 )
 
@@ -116,6 +119,9 @@ DOCUMENTARY_ERROR_DETAILS = {
     "order_state_invalid": (
         "El pedido no admite esa acción en su estado actual; revisa recepciones y estado."
     ),
+    "receipt_over_received": (
+        "La recepción excede lo pedido en una o más líneas; confirma la sobre-recepción."
+    ),
     "order_type_allocation_incomplete": (
         "Hay necesidades pendientes sin asignación a un pedido; revisa la selección por tipo."
     ),
@@ -136,6 +142,28 @@ DOCUMENTARY_ERROR_DETAILS = {
     "invalid_purchase_requirement": "La necesidad de compra no es válida para esta versión.",
     "invalid_supplier": "El proveedor no es válido para este pedido.",
     "invalid_supplier_eligibility": "La elegibilidad indicada no corresponde al proveedor.",
+    "glazier_order_mixed_versions": (
+        "Un pedido al vidriero solo agrupa órdenes de la misma versión congelada."
+    ),
+    "glazier_order_no_glass": (
+        "La orden no contiene vidrios; el pedido al vidriero queda vacío."
+    ),
+    # P23 — despacho, obra y postventa.
+    "crew_not_found": "La cuadrilla no existe o está inactiva.",
+    "installer_not_member": "El instalador asignado no pertenece a la organización.",
+    "incident_not_found": "La incidencia no existe en esta organización.",
+    "service_ticket_not_found": "El ticket de postventa no existe en esta organización.",
+    "purchase_request_not_found": "La solicitud de compra de terreno no existe.",
+    "position_not_found": "La posición no existe en este proyecto.",
+    "site_incident_rejected": "La incidencia de obra no pudo registrarse.",
+    "purchase_request_rejected": "La solicitud de compra no pudo registrarse.",
+    "service_ticket_rejected": "El ticket de postventa no pudo registrarse.",
+    "warranty_months_invalid": "Los meses de garantía deben ser un entero entre 0 y 240.",
+    "installation_check_rejected": "El checklist de instalación no pudo guardarse.",
+    "site_measurement_rejected": "La medición de obra no pudo registrarse.",
+    "delivery_load_mismatch": (
+        "La carga no coincide con el manifiesto del viaje; revisa las unidades faltantes."
+    ),
 }
 
 
@@ -332,6 +360,24 @@ class DocumentaryInputsView(APIView):
                     actor_id=token.user_id,
                     project_id=project_id,
                     data=data,
+                )
+        return Response(output)
+
+
+class QuotePreviewView(APIView):
+    @extend_schema(
+        operation_id="documentary_quote_preview",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=QuotePreviewSerializer,
+        responses={200: QuotePreviewResponseSerializer, **ERRORS},
+        tags=["documents"],
+    )
+    def post(self, request, project_id: UUID):
+        data = validate(QuotePreviewSerializer, request.data)
+        with documentary_scope(request, ("OWNER", "ESTIMATOR")) as (_, _, org_id):
+            with documentary_backend():
+                output = preview_quote_document(
+                    org_id=org_id, project_id=project_id, data=data
                 )
         return Response(output)
 

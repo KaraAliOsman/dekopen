@@ -40,6 +40,11 @@ urlpatterns = [
         views.ArticleReviewView.as_view(),
         name="catalog-article-review",
     ),
+    path(
+        "articles/<uuid:row_id>/ficha/",
+        views.ArticleFichaView.as_view(),
+        name="catalog-article-ficha",
+    ),
     path("glazing/", views.BeadCollectionView.as_view(), name="catalog-bead-list"),
     path(
         "glazing/<uuid:row_id>/",
@@ -62,10 +67,90 @@ urlpatterns = [
         views.KitReviewView.as_view(),
         name="catalog-kit-review",
     ),
+    path(
+        "extra-articles/",
+        views.ExtraArticleCollectionView.as_view(),
+        name="catalog-extra-article-list",
+    ),
+    path(
+        "extra-articles/<uuid:row_id>/",
+        views.ExtraArticleDetailView.as_view(),
+        name="catalog-extra-article-detail",
+    ),
+    path(
+        "extra-articles/<uuid:row_id>/review/",
+        views.ExtraArticleReviewView.as_view(),
+        name="catalog-extra-article-review",
+    ),
+    path(
+        "service-articles/",
+        views.ServiceArticleCollectionView.as_view(),
+        name="catalog-service-article-list",
+    ),
+    path(
+        "service-articles/<uuid:row_id>/",
+        views.ServiceArticleDetailView.as_view(),
+        name="catalog-service-article-detail",
+    ),
+    path(
+        "service-articles/<uuid:row_id>/review/",
+        views.ServiceArticleReviewView.as_view(),
+        name="catalog-service-article-review",
+    ),
+    path(
+        "glazing-spacers/",
+        views.SpacerCollectionView.as_view(),
+        name="catalog-spacer-list",
+    ),
+    path(
+        "glazing-spacers/<uuid:row_id>/",
+        views.SpacerDetailView.as_view(),
+        name="catalog-spacer-detail",
+    ),
+    path(
+        "glazing-spacers/<uuid:row_id>/review/",
+        views.SpacerReviewView.as_view(),
+        name="catalog-spacer-review",
+    ),
+    path(
+        "frame-uf/",
+        views.FrameUfCollectionView.as_view(),
+        name="catalog-frame-uf-list",
+    ),
+    path(
+        "frame-uf/<uuid:row_id>/",
+        views.FrameUfDetailView.as_view(),
+        name="catalog-frame-uf-detail",
+    ),
+    path(
+        "frame-uf/<uuid:row_id>/review/",
+        views.FrameUfReviewView.as_view(),
+        name="catalog-frame-uf-review",
+    ),
+    path(
+        "performance-tests/",
+        views.PerformanceTestCollectionView.as_view(),
+        name="catalog-performance-test-list",
+    ),
+    path(
+        "performance-tests/<uuid:row_id>/",
+        views.PerformanceTestDetailView.as_view(),
+        name="catalog-performance-test-detail",
+    ),
+    path(
+        "performance-tests/<uuid:row_id>/review/",
+        views.PerformanceTestReviewView.as_view(),
+        name="catalog-performance-test-review",
+    ),
     path("evidence/", views.EvidenceCollectionView.as_view(), name="catalog-evidence-list"),
     path(
         "evidence/<uuid:row_id>/review/",
         views.EvidenceReviewView.as_view(),
         name="catalog-evidence-review",
+    ),
+    path(
+        "mounting-rules/",
+        views.MountingRuleCollectionView.as_view(),
+        name="catalog-mounting-rules",
     ),
 ]

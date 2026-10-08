@@ -1,0 +1,2658 @@
+{
+  "summary": {
+    "generated_at": "2026-10-06T03:21:50.086Z",
+    "routes": 24,
+    "routes_with_findings": [
+      "production-manager",
+      "production-operator",
+      "production-installer"
+    ],
+    "total_findings": 598
+  },
+  "results": [
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/production-manager--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/production-manager--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/production-manager--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/production-manager--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/production-manager--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/production-manager--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/production-manager--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "a · Saltar al contenido · 150×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button ·  · 32×32px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Buscar o ejecutar…Ctrl K/ · 99×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 9 · 28×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · IA · 57×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "input ·  · 316×24px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Rastrear · 76×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Liberar · 61×25px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Todas · 51×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Liberada · 64×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · En producción · 96×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · En espera · 72×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Completada · 82×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Despachada · 84×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Instalada · 68×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Cancelada · 73×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Con escasez · 86×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Listas para despacho · 131×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-01EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-02EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-03EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-04EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-05EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-07EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-08EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-09EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-10EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-02Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-03Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-01Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Centros CNC y herramientas▸ · 338×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · GD-0005 · OT-P-000009-REV-A-02-U01 · 265×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Emitir DTE-52 · 109×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Exportar vidrios (CSV) · 154×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pack de corte (PDF) · 176×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pack de producción (PDF) · 216×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pedido al vidriero (PDF) · 216×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Lista vidriero (CSV) · 184×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Mecanizado CNC▸ · 307×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M10·R · P02-U01-M11·R1 066 · 261×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M10·R · P02-U01-M11·R · 1 06 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M01·R · P02-U01-M04·R1 370 · 92×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M02·R · P02-U01-M03·R1 170 · 87×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M01·R · P02-U01-M04·R · 1 37 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M01·R · P02-U01-M04·R · 1 37 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M02·R · P02-U01-M03·R · 1 17 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M02·R · P02-U01-M03·R · 1 17 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M17·R1 070 · 92×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M17·R · 1 070mm · 165×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M09 · P02-U01-M12622 · 198×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M09 · P02-U01-M12 · 622mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M10 (mec.) · P02-U01-M111 102 · 96×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M10 (mec.) · P02-U01-M11 · 1 · 309×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M10 (mec.) · P02-U01-M11 · 1 · 309×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M09 · P02-U01-M12 · 622mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M06 · P02-U01-M071 119 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M14 · P02-U01-M15985 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M05 · P02-U01-M08639 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M06 · P02-U01-M07 · 1 119mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M06 · P02-U01-M07 · 1 119mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M14 · P02-U01-M15 · 985mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 4 · P02-U01-M14 · P02-U01-M15 · 985mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 5 · P02-U01-M05 · P02-U01-M08 · 639mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 6 · P02-U01-M05 · P02-U01-M08 · 639mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M13 · P02-U01-M16505 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M13 · P02-U01-M16 · 505mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M13 · P02-U01-M16 · 505mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M01 · P02-U01-M041 406 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M02 · P02-U01-M031 206 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M01 · P02-U01-M04 · 1 406mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M01 · P02-U01-M04 · 1 406mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M02 · P02-U01-M03 · 1 206mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 4 · P02-U01-M02 · P02-U01-M03 · 1 206mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M171 080 · 93×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M17 · 1 080mm · 153×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Etiquetas · 82×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · CE-0002 · 66×21px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Corte de perfiles · 98×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Mecanizado · 73×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Soldadura · 62×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Limpieza de esquinas · 99×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Armado de hojas · 81×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Montaje de herrajes · 109×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Vidriado y paneles · 105×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Control de calidad · 105×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Embalaje · 57×18px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/production-manager--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "a · Saltar al contenido · 150×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button ·  · 32×32px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Buscar o ejecutar…Ctrl K/ · 99×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 9 · 28×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · IA · 57×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "input ·  · 316×24px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Rastrear · 76×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Liberar · 61×25px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Todas · 51×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Liberada · 64×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · En producción · 96×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · En espera · 72×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Completada · 82×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Despachada · 84×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Instalada · 68×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Cancelada · 73×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Con escasez · 86×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Listas para despacho · 131×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-01EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-02EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-03EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-04EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-05EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-07EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-08EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-09EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-10EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-02Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-03Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-01Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Centros CNC y herramientas▸ · 338×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · GD-0005 · OT-P-000009-REV-A-02-U01 · 265×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Emitir DTE-52 · 109×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Exportar vidrios (CSV) · 154×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pack de corte (PDF) · 176×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pack de producción (PDF) · 216×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pedido al vidriero (PDF) · 216×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Lista vidriero (CSV) · 184×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Mecanizado CNC▸ · 307×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M10·R · P02-U01-M11·R1 066 · 261×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M10·R · P02-U01-M11·R · 1 06 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M01·R · P02-U01-M04·R1 370 · 92×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M02·R · P02-U01-M03·R1 170 · 87×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M01·R · P02-U01-M04·R · 1 37 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M01·R · P02-U01-M04·R · 1 37 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M02·R · P02-U01-M03·R · 1 17 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M02·R · P02-U01-M03·R · 1 17 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M17·R1 070 · 92×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M17·R · 1 070mm · 165×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M09 · P02-U01-M12622 · 198×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M09 · P02-U01-M12 · 622mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M10 (mec.) · P02-U01-M111 102 · 96×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M10 (mec.) · P02-U01-M11 · 1 · 309×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M10 (mec.) · P02-U01-M11 · 1 · 309×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M09 · P02-U01-M12 · 622mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M06 · P02-U01-M071 119 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M14 · P02-U01-M15985 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M05 · P02-U01-M08639 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M06 · P02-U01-M07 · 1 119mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M06 · P02-U01-M07 · 1 119mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M14 · P02-U01-M15 · 985mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 4 · P02-U01-M14 · P02-U01-M15 · 985mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 5 · P02-U01-M05 · P02-U01-M08 · 639mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 6 · P02-U01-M05 · P02-U01-M08 · 639mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M13 · P02-U01-M16505 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M13 · P02-U01-M16 · 505mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M13 · P02-U01-M16 · 505mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M01 · P02-U01-M041 406 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M02 · P02-U01-M031 206 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M01 · P02-U01-M04 · 1 406mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M01 · P02-U01-M04 · 1 406mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M02 · P02-U01-M03 · 1 206mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 4 · P02-U01-M02 · P02-U01-M03 · 1 206mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M171 080 · 93×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M17 · 1 080mm · 153×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Etiquetas · 82×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · CE-0002 · 66×21px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Corte de perfiles · 98×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Mecanizado · 73×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Soldadura · 62×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Limpieza de esquinas · 99×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Armado de hojas · 81×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Montaje de herrajes · 109×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Vidriado y paneles · 105×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Control de calidad · 105×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Embalaje · 57×18px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/production-operator--1440x900--light.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=work_order&refs=%7B%22work_order_id%22%3A%220b507a05-73bf-401f-8f3e-2f9956684ca7%22%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/production-operator--1440x900--dark.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=work_order&refs=%7B%22work_order_id%22%3A%220b507a05-73bf-401f-8f3e-2f9956684ca7%22%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/production-operator--1280x800--light.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=work_order&refs=%7B%22work_order_id%22%3A%220b507a05-73bf-401f-8f3e-2f9956684ca7%22%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/production-operator--1280x800--dark.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=work_order&refs=%7B%22work_order_id%22%3A%220b507a05-73bf-401f-8f3e-2f9956684ca7%22%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/production-operator--1024x768--light.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=work_order&refs=%7B%22work_order_id%22%3A%220b507a05-73bf-401f-8f3e-2f9956684ca7%22%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/production-operator--1024x768--dark.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=work_order&refs=%7B%22work_order_id%22%3A%220b507a05-73bf-401f-8f3e-2f9956684ca7%22%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/production-operator--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "a · Saltar al contenido · 150×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button ·  · 32×32px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Buscar o ejecutar…Ctrl K/ · 99×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · 28×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · IA · 57×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "input ·  · 316×24px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Rastrear · 76×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-01EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-02EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-03EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-04EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-05EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-07EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-08EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-09EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-10EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Todas · 51×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Liberada · 64×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · En producción · 96×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · En espera · 72×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Completada · 82×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Despachada · 84×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Instalada · 68×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Cancelada · 73×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Con escasez · 86×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Listas para despacho · 131×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-02Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-03Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-01Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Centros CNC y herramientas▸ · 338×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · GD-0005 · OT-P-000009-REV-A-02-U01 · 265×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Exportar vidrios (CSV) · 154×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pack de corte (PDF) · 176×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pack de producción (PDF) · 216×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pedido al vidriero (PDF) · 216×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Lista vidriero (CSV) · 184×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Mecanizado CNC▸ · 307×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M10·R · P02-U01-M11·R1 066 · 261×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M10·R · P02-U01-M11·R · 1 06 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M01·R · P02-U01-M04·R1 370 · 92×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M02·R · P02-U01-M03·R1 170 · 87×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M01·R · P02-U01-M04·R · 1 37 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M01·R · P02-U01-M04·R · 1 37 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M02·R · P02-U01-M03·R · 1 17 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M02·R · P02-U01-M03·R · 1 17 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M17·R1 070 · 92×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M17·R · 1 070mm · 165×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M09 · P02-U01-M12622 · 198×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M09 · P02-U01-M12 · 622mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M10 (mec.) · P02-U01-M111 102 · 96×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M10 (mec.) · P02-U01-M11 · 1 · 309×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M10 (mec.) · P02-U01-M11 · 1 · 309×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M09 · P02-U01-M12 · 622mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M06 · P02-U01-M071 119 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M14 · P02-U01-M15985 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M05 · P02-U01-M08639 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M06 · P02-U01-M07 · 1 119mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M06 · P02-U01-M07 · 1 119mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M14 · P02-U01-M15 · 985mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 4 · P02-U01-M14 · P02-U01-M15 · 985mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 5 · P02-U01-M05 · P02-U01-M08 · 639mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 6 · P02-U01-M05 · P02-U01-M08 · 639mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M13 · P02-U01-M16505 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M13 · P02-U01-M16 · 505mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M13 · P02-U01-M16 · 505mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M01 · P02-U01-M041 406 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M02 · P02-U01-M031 206 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M01 · P02-U01-M04 · 1 406mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M01 · P02-U01-M04 · 1 406mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M02 · P02-U01-M03 · 1 206mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 4 · P02-U01-M02 · P02-U01-M03 · 1 206mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M171 080 · 93×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M17 · 1 080mm · 153×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Etiquetas · 82×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · CE-0002 · 66×21px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Corte de perfiles · 98×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Mecanizado · 73×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Soldadura · 62×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Limpieza de esquinas · 99×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Armado de hojas · 81×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Montaje de herrajes · 109×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Vidriado y paneles · 105×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Control de calidad · 105×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Embalaje · 57×18px"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=work_order&refs=%7B%22work_order_id%22%3A%220b507a05-73bf-401f-8f3e-2f9956684ca7%22%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/production-operator--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "a · Saltar al contenido · 150×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button ·  · 32×32px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Buscar o ejecutar…Ctrl K/ · 99×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · 28×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · IA · 57×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "input ·  · 316×24px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Rastrear · 76×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-01EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-02EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-03EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-04EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-05EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-07EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-08EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-09EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000007-REV-A-10EmbalajePendiente · 314×39px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Todas · 51×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Liberada · 64×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · En producción · 96×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · En espera · 72×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Completada · 82×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Despachada · 84×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Instalada · 68×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Cancelada · 73×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Con escasez · 86×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Listas para despacho · 131×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-02Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-03Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-01Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Centros CNC y herramientas▸ · 338×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · GD-0005 · OT-P-000009-REV-A-02-U01 · 265×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Exportar vidrios (CSV) · 154×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pack de corte (PDF) · 176×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pack de producción (PDF) · 216×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pedido al vidriero (PDF) · 216×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Lista vidriero (CSV) · 184×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Mecanizado CNC▸ · 307×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M10·R · P02-U01-M11·R1 066 · 261×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M10·R · P02-U01-M11·R · 1 06 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M01·R · P02-U01-M04·R1 370 · 92×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M02·R · P02-U01-M03·R1 170 · 87×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M01·R · P02-U01-M04·R · 1 37 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M01·R · P02-U01-M04·R · 1 37 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M02·R · P02-U01-M03·R · 1 17 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M02·R · P02-U01-M03·R · 1 17 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M17·R1 070 · 92×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M17·R · 1 070mm · 165×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M09 · P02-U01-M12622 · 198×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M09 · P02-U01-M12 · 622mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M10 (mec.) · P02-U01-M111 102 · 96×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M10 (mec.) · P02-U01-M11 · 1 · 309×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M10 (mec.) · P02-U01-M11 · 1 · 309×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M09 · P02-U01-M12 · 622mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M06 · P02-U01-M071 119 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M14 · P02-U01-M15985 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M05 · P02-U01-M08639 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M06 · P02-U01-M07 · 1 119mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M06 · P02-U01-M07 · 1 119mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M14 · P02-U01-M15 · 985mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 4 · P02-U01-M14 · P02-U01-M15 · 985mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 5 · P02-U01-M05 · P02-U01-M08 · 639mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 6 · P02-U01-M05 · P02-U01-M08 · 639mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M13 · P02-U01-M16505 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M13 · P02-U01-M16 · 505mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M13 · P02-U01-M16 · 505mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M01 · P02-U01-M041 406 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M02 · P02-U01-M031 206 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M01 · P02-U01-M04 · 1 406mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M01 · P02-U01-M04 · 1 406mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M02 · P02-U01-M03 · 1 206mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 4 · P02-U01-M02 · P02-U01-M03 · 1 206mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M171 080 · 93×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M17 · 1 080mm · 153×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Etiquetas · 82×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · CE-0002 · 66×21px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Corte de perfiles · 98×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Mecanizado · 73×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Soldadura · 62×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Limpieza de esquinas · 99×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Armado de hojas · 81×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Montaje de herrajes · 109×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Vidriado y paneles · 105×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Control de calidad · 105×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Embalaje · 57×18px"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=work_order&refs=%7B%22work_order_id%22%3A%220b507a05-73bf-401f-8f3e-2f9956684ca7%22%7D"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/provider/status/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/production-installer--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/production-installer--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/production-installer--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/production-installer--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/production-installer--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/production-installer--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/production-installer--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "a · Saltar al contenido · 150×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button ·  · 32×32px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Buscar o ejecutar…Ctrl K/ · 99×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · 28×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "input ·  · 316×24px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Rastrear · 76×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Todas · 51×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Liberada · 64×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · En producción · 96×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · En espera · 72×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Completada · 82×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Despachada · 84×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Instalada · 68×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Cancelada · 73×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Con escasez · 86×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Listas para despacho · 131×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-02Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-03Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-01Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · GD-0005 · OT-P-000009-REV-A-02-U01 · 265×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Exportar vidrios (CSV) · 154×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pack de corte (PDF) · 176×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pack de producción (PDF) · 216×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pedido al vidriero (PDF) · 216×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Lista vidriero (CSV) · 184×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Mecanizado CNC▸ · 307×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M10·R · P02-U01-M11·R1 066 · 261×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M10·R · P02-U01-M11·R · 1 06 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M01·R · P02-U01-M04·R1 370 · 92×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M02·R · P02-U01-M03·R1 170 · 87×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M01·R · P02-U01-M04·R · 1 37 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M01·R · P02-U01-M04·R · 1 37 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M02·R · P02-U01-M03·R · 1 17 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M02·R · P02-U01-M03·R · 1 17 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M17·R1 070 · 92×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M17·R · 1 070mm · 165×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M09 · P02-U01-M12622 · 198×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M09 · P02-U01-M12 · 622mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M10 (mec.) · P02-U01-M111 102 · 96×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M10 (mec.) · P02-U01-M11 · 1 · 309×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M10 (mec.) · P02-U01-M11 · 1 · 309×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M09 · P02-U01-M12 · 622mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M06 · P02-U01-M071 119 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M14 · P02-U01-M15985 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M05 · P02-U01-M08639 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M06 · P02-U01-M07 · 1 119mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M06 · P02-U01-M07 · 1 119mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M14 · P02-U01-M15 · 985mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 4 · P02-U01-M14 · P02-U01-M15 · 985mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 5 · P02-U01-M05 · P02-U01-M08 · 639mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 6 · P02-U01-M05 · P02-U01-M08 · 639mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M13 · P02-U01-M16505 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M13 · P02-U01-M16 · 505mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M13 · P02-U01-M16 · 505mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M01 · P02-U01-M041 406 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M02 · P02-U01-M031 206 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M01 · P02-U01-M04 · 1 406mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M01 · P02-U01-M04 · 1 406mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M02 · P02-U01-M03 · 1 206mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 4 · P02-U01-M02 · P02-U01-M03 · 1 206mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M171 080 · 93×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M17 · 1 080mm · 153×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Etiquetas · 82×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · CE-0002 · 66×21px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Corte de perfiles · 98×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Mecanizado · 73×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Soldadura · 62×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Limpieza de esquinas · 99×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Armado de hojas · 81×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Montaje de herrajes · 109×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Vidriado y paneles · 105×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Control de calidad · 105×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Embalaje · 57×18px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/production-installer--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "a · Saltar al contenido · 150×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button ·  · 32×32px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Buscar o ejecutar…Ctrl K/ · 99×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · 28×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "input ·  · 316×24px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Rastrear · 76×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Todas · 51×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Liberada · 64×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · En producción · 96×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · En espera · 72×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Completada · 82×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Despachada · 84×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Instalada · 68×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Cancelada · 73×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Con escasez · 86×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Listas para despacho · 131×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-02Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-03Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · OT-P-000009-REV-A-01Instalada9/9 pasos · 340×42px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · GD-0005 · OT-P-000009-REV-A-02-U01 · 265×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Exportar vidrios (CSV) · 154×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pack de corte (PDF) · 176×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pack de producción (PDF) · 216×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Pedido al vidriero (PDF) · 216×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Lista vidriero (CSV) · 184×31px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Mecanizado CNC▸ · 307×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M10·R · P02-U01-M11·R1 066 · 261×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M10·R · P02-U01-M11·R · 1 06 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M01·R · P02-U01-M04·R1 370 · 92×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M02·R · P02-U01-M03·R1 170 · 87×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M01·R · P02-U01-M04·R · 1 37 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M01·R · P02-U01-M04·R · 1 37 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M02·R · P02-U01-M03·R · 1 17 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M02·R · P02-U01-M03·R · 1 17 · 264×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M17·R1 070 · 92×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M17·R · 1 070mm · 165×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M09 · P02-U01-M12622 · 198×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M09 · P02-U01-M12 · 622mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M10 (mec.) · P02-U01-M111 102 · 96×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M10 (mec.) · P02-U01-M11 · 1 · 309×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M10 (mec.) · P02-U01-M11 · 1 · 309×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M09 · P02-U01-M12 · 622mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M06 · P02-U01-M071 119 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M14 · P02-U01-M15985 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M05 · P02-U01-M08639 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M06 · P02-U01-M07 · 1 119mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M06 · P02-U01-M07 · 1 119mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M14 · P02-U01-M15 · 985mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 4 · P02-U01-M14 · P02-U01-M15 · 985mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 5 · P02-U01-M05 · P02-U01-M08 · 639mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 6 · P02-U01-M05 · P02-U01-M08 · 639mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M13 · P02-U01-M16505 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M13 · P02-U01-M16 · 505mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M13 · P02-U01-M16 · 505mm ·  · 287×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M01 · P02-U01-M041 406 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M02 · P02-U01-M031 206 · 75×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M01 · P02-U01-M04 · 1 406mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · P02-U01-M01 · P02-U01-M04 · 1 406mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 3 · P02-U01-M02 · P02-U01-M03 · 1 206mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 4 · P02-U01-M02 · P02-U01-M03 · 1 206mm  · 295×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "g · P02-U01-M171 080 · 93×23px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 1 · P02-U01-M17 · 1 080mm · 153×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Etiquetas · 82×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · CE-0002 · 66×21px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Corte de perfiles · 98×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Mecanizado · 73×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Soldadura · 62×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Limpieza de esquinas · 99×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Armado de hojas · 81×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Montaje de herrajes · 109×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Vidriado y paneles · 105×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Control de calidad · 105×36px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Embalaje · 57×18px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production?order=0b507a05-73bf-401f-8f3e-2f9956684ca7"
+    }
+  ]
+}

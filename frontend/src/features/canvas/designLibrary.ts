@@ -1,5 +1,7 @@
 import type { TranslationKey } from "../../i18n/es-CL";
-import type { IntentNode, Opening } from "./intentEditing";
+import type { IntentNode, LeafSpecPayload, Opening, OpeningSpecPayload } from "./intentEditing";
+import { SLIDE_XO_LAYOUT } from "./intentEditing";
+import { fmtWire } from "../../format";
 import {
   makeArchModule,
   makeBowProduct,
@@ -12,6 +14,17 @@ import {
 
 function starterTree(opening: Opening): IntentNode {
   return { id: crypto.randomUUID(), type: "BAY", opening_type: opening };
+}
+
+/** Spec-form bay for the advanced typologies (D08): the legacy enum can't
+ * express LIFT_SLIDE / FOLD / PIVOT / VERTICAL_SLIDE, so the recipe declares
+ * the leaf spec the catalog capability row emits. */
+function specTree(opening: OpeningSpecPayload, extra?: Partial<IntentNode>): IntentNode {
+  return { id: crypto.randomUUID(), type: "BAY", opening, ...extra };
+}
+
+function leavesTree(leaves: LeafSpecPayload[], extra?: Partial<IntentNode>): IntentNode {
+  return { id: crypto.randomUUID(), type: "BAY", leaves, ...extra };
 }
 
 export interface StarterDefinition {
@@ -35,14 +48,14 @@ function coupledModules(
       modules: [
         {
           id: crypto.randomUUID(),
-          width_mm: (widthMm * firstShare).toFixed(2),
-          height_mm: heightMm.toFixed(2),
+          width_mm: fmtWire(widthMm * firstShare),
+          height_mm: fmtWire(heightMm),
           tree: first,
         },
         {
           id: crypto.randomUUID(),
-          width_mm: (widthMm * (1 - firstShare)).toFixed(2),
-          height_mm: heightMm.toFixed(2),
+          width_mm: fmtWire(widthMm * (1 - firstShare)),
+          height_mm: fmtWire(heightMm),
           tree: second,
         },
       ],
@@ -61,12 +74,12 @@ function splitBay(
     {
       id: crypto.randomUUID(),
       type: direction,
-      split_offset_mm: (direction === "SPLIT_V" ? widthMm / 2 : heightMm / 2).toFixed(2),
+      split_offset_mm: direction === "SPLIT_V" ? fmtWire(widthMm / 2) : fmtWire(heightMm / 2),
       mullion_profile_sku: null,
       children,
     },
-    widthMm.toFixed(2),
-    heightMm.toFixed(2),
+    fmtWire(widthMm),
+    fmtWire(heightMm),
   );
 }
 
@@ -77,13 +90,13 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
     key: "fixed",
     titleKey: "assembly.starter.fixed",
     hintKey: "assembly.starter.fixedHint",
-    build: (w, h) => wrapTreeAsProduct(starterTree("FIXED"), w.toFixed(2), h.toFixed(2)),
+    build: (w, h) => wrapTreeAsProduct(starterTree("FIXED"), fmtWire(w), fmtWire(h)),
   },
   {
     key: "sash",
     titleKey: "assembly.starter.sash",
     hintKey: "assembly.starter.sashHint",
-    build: (w, h) => wrapTreeAsProduct(starterTree("TILT_TURN_LEFT"), w.toFixed(2), h.toFixed(2)),
+    build: (w, h) => wrapTreeAsProduct(starterTree("TILT_TURN_LEFT"), fmtWire(w), fmtWire(h)),
   },
   {
     key: "twoSash",
@@ -96,19 +109,19 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
     key: "sliding2",
     titleKey: "assembly.starter.sliding2",
     hintKey: "assembly.starter.sliding2Hint",
-    build: (w, h) => wrapTreeAsProduct(starterTree("SLIDING_2L"), w.toFixed(2), h.toFixed(2)),
+    build: (w, h) => wrapTreeAsProduct(starterTree("SLIDING_2L"), fmtWire(w), fmtWire(h)),
   },
   {
     key: "sliding3",
     titleKey: "assembly.starter.sliding3",
     hintKey: "assembly.starter.sliding3Hint",
-    build: (w, h) => wrapTreeAsProduct(starterTree("SLIDING_3L"), w.toFixed(2), h.toFixed(2)),
+    build: (w, h) => wrapTreeAsProduct(starterTree("SLIDING_3L"), fmtWire(w), fmtWire(h)),
   },
   {
     key: "awning",
     titleKey: "assembly.starter.awning",
     hintKey: "assembly.starter.awningHint",
-    build: (w, h) => wrapTreeAsProduct(starterTree("AWNING"), w.toFixed(2), h.toFixed(2)),
+    build: (w, h) => wrapTreeAsProduct(starterTree("AWNING"), fmtWire(w), fmtWire(h)),
   },
   {
     key: "awningBand",
@@ -138,7 +151,37 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
     key: "bow3",
     titleKey: "assembly.starter.bow3",
     hintKey: "assembly.starter.bow3Hint",
-    build: (w, h) => makeBowProduct({ moduleCount: 3, widthMm: w, heightMm: h, angleDeg: 15 }),
+    // P06 — canonical bow: fixed center, tilt-turn laterals, 2 × 22,5°. The
+    // e2e bar builds this design in ≤10 interactions from the library pick.
+    build: (w, h) =>
+      makeBowProduct({
+        moduleCount: 3,
+        widthMm: w,
+        heightMm: h,
+        angleDeg: 22.5,
+        moduleOpenings: ["TILT_TURN_LEFT", "FIXED", "TILT_TURN_RIGHT"],
+      }),
+  },
+  {
+    key: "bay45",
+    titleKey: "assembly.starter.bay45",
+    hintKey: "assembly.starter.bay45Hint",
+    build: (w, h) => makeBowProduct({ moduleCount: 3, widthMm: w, heightMm: h, angleDeg: 45 }),
+  },
+  {
+    key: "corner90",
+    titleKey: "assembly.starter.corner90",
+    hintKey: "assembly.starter.corner90Hint",
+    build: (w, h) => makeBowProduct({ moduleCount: 2, widthMm: w, heightMm: h, angleDeg: 90 }),
+  },
+  {
+    key: "windowTransom",
+    titleKey: "assembly.starter.windowTransom",
+    hintKey: "assembly.starter.windowTransomHint",
+    // Sobreluz: la división horizontal deja la ventana abajo (children[0])
+    // y el fijo arriba (children[1]) — el motor compone un solo módulo.
+    build: (w, h) =>
+      splitBay("SPLIT_H", [starterTree("TILT_TURN_LEFT"), starterTree("FIXED")], w, h),
   },
   {
     key: "bow5",
@@ -156,8 +199,8 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
         modules: [
           makeTrapezoidModule(
             "m1",
-            w.toFixed(2),
-            h.toFixed(2),
+            fmtWire(w),
+            fmtWire(h),
             Math.round(w * 0.15),
             Math.round(w * 0.15),
             starterTree("FIXED"),
@@ -175,13 +218,7 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
       version: "product-v2" as const,
       assembly: {
         modules: [
-          makeArchModule(
-            "m1",
-            w.toFixed(2),
-            h.toFixed(2),
-            Math.round(w * 0.2),
-            starterTree("FIXED"),
-          ),
+          makeArchModule("m1", fmtWire(w), fmtWire(h), Math.round(w * 0.2), starterTree("FIXED")),
         ],
         couplings: [],
       },
@@ -194,10 +231,127 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
     build: (w, h) => ({
       version: "product-v2" as const,
       assembly: {
-        modules: [makeFramelessModule("m1", w.toFixed(2), h.toFixed(2), starterTree("FIXED"))],
+        modules: [makeFramelessModule("m1", fmtWire(w), fmtWire(h), starterTree("FIXED"))],
         couplings: [],
       },
     }),
+  },
+  // -------------------------------------------------------------------
+  // Tipologías avanzadas (D08) — spec bays; solo las ofrece la biblioteca
+  // cuando la serie seleccionada declara la composición en opening_options.
+  // -------------------------------------------------------------------
+  {
+    key: "hst",
+    titleKey: "assembly.starter.hst",
+    hintKey: "assembly.starter.hstHint",
+    build: (w, h) =>
+      wrapTreeAsProduct(
+        specTree({ movement: "LIFT_SLIDE" }, { sliding_layout: SLIDE_XO_LAYOUT }),
+        fmtWire(w),
+        fmtWire(h),
+      ),
+  },
+  {
+    key: "psk",
+    titleKey: "assembly.starter.psk",
+    hintKey: "assembly.starter.pskHint",
+    build: (w, h) =>
+      wrapTreeAsProduct(
+        specTree({ movement: "PARALLEL_SLIDE" }, { sliding_layout: SLIDE_XO_LAYOUT }),
+        fmtWire(w),
+        fmtWire(h),
+      ),
+  },
+  {
+    key: "foldable",
+    titleKey: "assembly.starter.foldable",
+    hintKey: "assembly.starter.foldableHint",
+    // Plegable 3+0 hacia adentro con hoja de paso en la jamba izquierda —
+    // la composición que el catálogo emite para una capacidad FOLD.
+    build: (w, h) =>
+      wrapTreeAsProduct(
+        leavesTree([
+          {
+            slot: "L1",
+            opening: {
+              movement: "FOLD",
+              hinge_side: "LEFT",
+              direction: "INWARD",
+              leaf_role: "ACTIVE",
+            },
+          },
+          {
+            slot: "L2",
+            opening: {
+              movement: "FOLD",
+              hinge_side: "LEFT",
+              direction: "INWARD",
+              leaf_role: "PASSIVE",
+            },
+          },
+          {
+            slot: "L3",
+            opening: {
+              movement: "FOLD",
+              hinge_side: "LEFT",
+              direction: "INWARD",
+              leaf_role: "PASSIVE",
+            },
+          },
+        ]),
+        fmtWire(w),
+        fmtWire(h),
+      ),
+  },
+  {
+    key: "pivot",
+    titleKey: "assembly.starter.pivot",
+    hintKey: "assembly.starter.pivotHint",
+    // Puerta pivotante de eje vertical — el eje desplazado se declara ahora
+    // (la fabricación rechaza una hoja pivotante sin axis_offset_mm).
+    build: (w, h) =>
+      wrapTreeAsProduct(
+        leavesTree(
+          [
+            {
+              slot: "PRIMARY",
+              opening: { movement: "PIVOT_V" },
+              axis_offset_mm: Math.min(500, Math.round(w / 3)),
+            },
+          ],
+          { unit_kind: "DOOR" },
+        ),
+        fmtWire(w),
+        fmtWire(h),
+      ),
+  },
+  {
+    key: "guillotina",
+    titleKey: "assembly.starter.guillotina",
+    hintKey: "assembly.starter.guillotinaHint",
+    // Guillotina simple: paño fijo arriba (TOP) y corredera vertical abajo.
+    build: (w, h) =>
+      wrapTreeAsProduct(
+        leavesTree([
+          { slot: "TOP", opening: { movement: "FIXED" } },
+          { slot: "BOTTOM", opening: { movement: "VERTICAL_SLIDE" } },
+        ]),
+        fmtWire(w),
+        fmtWire(h),
+      ),
+  },
+  {
+    key: "slidingDoor",
+    titleKey: "assembly.starter.slidingDoor",
+    hintKey: "assembly.starter.slidingDoorHint",
+    // Puerta corredera: hoja SLIDE en unidad DOOR — umbral y cerradura de
+    // patio los aporta el kit DOOR_SLIDING de la serie.
+    build: (w, h) =>
+      wrapTreeAsProduct(
+        specTree({ movement: "SLIDE" }, { unit_kind: "DOOR", sliding_layout: SLIDE_XO_LAYOUT }),
+        fmtWire(w),
+        fmtWire(h),
+      ),
   },
 ];
 
@@ -209,8 +363,14 @@ export function starterNominalSize(key: string): { widthMm: number; heightMm: nu
   switch (key) {
     case "bow3":
       return { widthMm: 2400, heightMm: 1400 };
+    case "bay45":
+      return { widthMm: 2400, heightMm: 1400 };
     case "bow5":
       return { widthMm: 3000, heightMm: 1400 };
+    case "corner90":
+      return { widthMm: 2000, heightMm: 1500 };
+    case "windowTransom":
+      return { widthMm: 1200, heightMm: 2000 };
     case "doorSide":
       return { widthMm: 1600, heightMm: 2200 };
     case "trapezoid":
@@ -227,6 +387,18 @@ export function starterNominalSize(key: string): { widthMm: number; heightMm: nu
       return { widthMm: 1200, heightMm: 800 };
     case "twoSash":
       return { widthMm: 1400, heightMm: 1400 };
+    case "hst":
+      return { widthMm: 2000, heightMm: 2200 };
+    case "psk":
+      return { widthMm: 1400, heightMm: 1400 };
+    case "foldable":
+      return { widthMm: 2800, heightMm: 2400 };
+    case "pivot":
+      return { widthMm: 1200, heightMm: 2200 };
+    case "guillotina":
+      return { widthMm: 1200, heightMm: 1800 };
+    case "slidingDoor":
+      return { widthMm: 1800, heightMm: 2200 };
     default:
       return { widthMm: 1200, heightMm: 1400 };
   }

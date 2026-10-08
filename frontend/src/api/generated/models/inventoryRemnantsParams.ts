@@ -15,6 +15,7 @@ export type InventoryRemnantsParams = {
    * @minLength 1
    */
   kind?: InventoryRemnantsKind;
+  physical_stock_identity?: string;
   /**
    * * `AVAILABLE` - AVAILABLE
    * * `RESERVED` - RESERVED
@@ -23,4 +24,9 @@ export type InventoryRemnantsParams = {
    * @minLength 1
    */
   status?: InventoryRemnantsStatus;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  stock_identity?: string;
 };

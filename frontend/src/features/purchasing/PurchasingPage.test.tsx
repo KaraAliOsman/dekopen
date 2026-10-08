@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { apiMutator } from "../../api/apiMutator";
 import { t } from "../../i18n/es-CL";
+import { domainLabel } from "../../i18n/domainLabels";
 import { ConfirmProvider } from "../../ui";
 import { PurchasingPage } from "./PurchasingPage";
 
@@ -262,9 +263,10 @@ it("renders trace labels with a short digest fallback for unlabelled ids", async
   renderPage();
   const cell = (await screen.findByText("4 unidades")).closest("tr")!;
   // "5".repeat(64) carries the I-01 label; "6".repeat(64) has none and renders
-  // as a truncated digest — never char-by-char enumeration.
+  // as a technical digest (#últimos4) — never char-by-char enumeration or a
+  // hex fragment.
   expect(within(cell).getByText("I-01")).toBeInTheDocument();
-  expect(within(cell).getByText(`${"6".repeat(12)}…`)).toBeInTheDocument();
+  expect(within(cell).getByText("#6666")).toBeInTheDocument();
   expect(within(cell).queryByText(/^0=/)).not.toBeInTheDocument();
 });
 
@@ -415,9 +417,13 @@ it("lists org-wide orders with supplier, expected date and outstanding, filtered
   expect(within(index).getByText("OC-HW-7")).toBeInTheDocument();
   expect(within(index).getByText("OC-GL-2")).toBeInTheDocument();
   expect(within(index).getByText("Vorne SPA")).toBeInTheDocument();
-  expect(within(index).getByText("2026-10-01")).toBeInTheDocument();
+  expect(within(index).getByText("01-10-2026")).toBeInTheDocument();
   expect(within(index).getByText("8")).toBeInTheDocument();
-  fireEvent.click(within(index).getByRole("button", { name: t("purchasing.sent") }));
+  fireEvent.click(
+    within(index).getByRole("button", {
+      name: domainLabel("OrderStatusEnum", "SENT").label,
+    }),
+  );
   expect(within(index).getByText("OC-HW-7")).toBeInTheDocument();
   expect(within(index).queryByText("OC-GL-2")).not.toBeInTheDocument();
 });

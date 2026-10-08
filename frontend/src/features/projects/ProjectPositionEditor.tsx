@@ -1,10 +1,14 @@
-import { fmtMm } from "../../format";
+import { formatDateTime, fmtMm, fmtWire } from "../../format";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   engineSystems,
+  mountingRulesList,
+  organizationExtrasConfigRead,
   positionsCreate,
+  positionsMeasurementConfirm,
+  positionsMeasurementResolve,
   positionsRetrieve,
   positionsUpdate,
   projectDesignOptions,
@@ -13,6 +17,7 @@ import {
 import type {
   EngineAssemblyCalculateResponse,
   EngineCalculateResponse,
+  MeasurementResolveResponse,
   PositionDesignRequest,
   PositionResponse,
 } from "../../api/generated/models";
@@ -21,8 +26,11 @@ import { ApiError } from "../../api/apiMutator";
 import { UnsavedChangesGuard } from "../../app/UnsavedChangesGuard";
 import { useShellLeaf } from "../../app/shellLeaf";
 import { t, tDynamic, tOptional } from "../../i18n/es-CL";
-import { DeniedState } from "../../ui";
+import { domainLabel } from "../../i18n/domainLabels";
+import { DeniedState, Popover } from "../../ui";
+import { useMediaQuery } from "../../utils/useMediaQuery";
 import { type CanvasDesignInputs, useCanvasStore } from "../canvas/canvasStore";
+import { ColorSelector, combinationIssue } from "./ColorSelector";
 import { useProject } from "./useProject";
 import { AssemblyEditor, issueText } from "../canvas/AssemblyEditor";
 import { useAssistantSurface } from "../assistant/assistantContext";
@@ -33,7 +41,6 @@ import {
   starterNominalSize,
   type StarterDefinition,
 } from "../canvas/designLibrary";
-import { resolveMembers } from "../canvas/members";
 import {
   clearPositionDraft,
   positionDraftKey,
@@ -41,14 +48,27 @@ import {
   readPositionDraft,
   writePositionDraft,
 } from "./positionDraft";
-import { StarterGallery } from "../canvas/StarterGallery";
+import { VanoSection } from "./VanoSection";
+import {
+  EMPTY_VANO,
+  vanoDimFromResolution,
+  vanoDraftFromSaved,
+  vanoDraftPayload,
+  vanoIdentity,
+  type VanoDraft,
+} from "./vano";
 import {
   elevationEnvelopeMm,
   isProductModel,
   isSingleUnit,
   wrapTreeAsProduct,
+  type ExtraSelectionJson,
   type ProductJson,
 } from "../canvas/productEditing";
+import { PositionExtrasPanel } from "./PositionExtrasPanel";
+import { LivePriceChip, useLivePrice } from "./LivePriceChip";
+import { PositionStrip } from "./PositionStrip";
+import { WhatsMissing, type MissingItem } from "./WhatsMissing";
 
 import "./projects.css";
 
@@ -113,6 +133,7 @@ function initial(): CanvasDesignInputs {
     nominalWidthMm: "1000.00",
     nominalHeightMm: "1000.00",
     color: "WHITE",
+    colorExterior: "",
     parametricTree: product.assembly.modules[0]?.tree ?? starterTree("FIXED"),
     product,
   };
@@ -249,20 +270,32 @@ function designPayload(
   // silently coerced.
   const color = allowedColors.includes(inputs.color) ? inputs.color : null;
   if (product === null || !inputs.systemId || color === null) return null;
+  // D05: bicolor emits the exterior code only when it differs — the backend
+  // re-derives the canonical preimage the same way; an undeclared exterior
+  // blocks the save just like an undeclared interior.
+  const colorExterior =
+    inputs.colorExterior && inputs.colorExterior !== color ? inputs.colorExterior : null;
+  if (colorExterior !== null && !allowedColors.includes(colorExterior)) return null;
   const single = isSingleUnit(product) ? product.assembly.modules[0] : undefined;
-  return single !== undefined
+  // D06: the classic single-unit shape is a bare IntentNode — it has nowhere
+  // to carry `product.extras`. A single that declares extras persists as
+  // product-v2 like a coupled one (contoured/frameless singles already do).
+  const hasExtras = (product.extras?.length ?? 0) > 0;
+  return single !== undefined && !hasExtras
     ? {
         system_id: inputs.systemId,
         nominal_width_mm: single.width_mm,
         nominal_height_mm: single.height_mm,
         color,
+        ...(colorExterior !== null ? { color_exterior: colorExterior } : {}),
         parametric_tree: single.tree,
       }
     : {
         system_id: inputs.systemId,
-        nominal_width_mm: elevationEnvelopeMm(product).width.toFixed(2),
-        nominal_height_mm: elevationEnvelopeMm(product).height.toFixed(2),
+        nominal_width_mm: fmtWire(elevationEnvelopeMm(product).width),
+        nominal_height_mm: fmtWire(elevationEnvelopeMm(product).height),
         color,
+        ...(colorExterior !== null ? { color_exterior: colorExterior } : {}),
         parametric_tree: product,
       };
 }
@@ -274,6 +307,10 @@ function designPayload(
 function designIdentity(inputs: CanvasDesignInputs): string {
   return canonicalize({
     color: inputs.color,
+    // Normalized like the save payload — "equal to interior" and "no
+    // exterior" are the same monocolor design.
+    colorExterior:
+      inputs.colorExterior && inputs.colorExterior !== inputs.color ? inputs.colorExterior : "",
     nominalHeightMm: inputs.nominalHeightMm,
     nominalWidthMm: inputs.nominalWidthMm,
     product: inputs.product,
@@ -317,6 +354,9 @@ function PositionWorkspace({
   const [result, setResult] = useState<EngineCalculateResponse | null>(null);
   const [location, setLocation] = useState("");
   const [quantity, setQuantity] = useState("1");
+  // P10 — alternativa presupuestable: queda fuera del total hasta que el
+  // cliente la pida o el estimador la promueva.
+  const [isOption, setIsOption] = useState(false);
   // The breadcrumb leaf is the estimator's own tag («Dormitorio») — the
   // shell falls back to «Vano» while the field is blank.
   useShellLeaf(location.trim() || null);
@@ -325,7 +365,16 @@ function PositionWorkspace({
     design: string;
     location: string;
     quantity: string;
+    measurement: string;
+    isOption: boolean;
   } | null>(null);
+  // D07 — registro del vano (obrador), preview resuelto por el motor y
+  // confirmación explícita que gobierna la liberación de producción.
+  const [vanoDraft, setVanoDraft] = useState<VanoDraft>(EMPTY_VANO);
+  const [vanoPreview, setVanoPreview] = useState<MeasurementResolveResponse | null>(null);
+  const [vanoPreviewBusy, setVanoPreviewBusy] = useState(false);
+  const [vanoPreviewError, setVanoPreviewError] = useState(false);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const mutationLock = useRef(false);
   const [message, setMessage] = useState("");
@@ -342,9 +391,6 @@ function PositionWorkspace({
   // When opened via ?copy=<id>, the source vano's index for the banner that
   // explains what's conserved — the copy is intent, not identity.
   const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
-  // New positions open on the design library (the start point); saved ones go
-  // straight to the canvas — picking a starter collapses it.
-  const [libraryOpen, setLibraryOpen] = useState(!positionId && !copyId);
   const generation = useRef(0);
   const inputs = useCanvasStore((s) => s.inputs);
   const canUndo = useCanvasStore((s) => s.past.length > 0);
@@ -386,6 +432,29 @@ function PositionWorkspace({
     enabled: !!systemId,
     retry: false,
   });
+  // D07 — reglas de montaje efectivas de la serie elegida (org > global).
+  const mountingRules = useQuery({
+    queryKey: ["mounting-rules", orgId, systemId],
+    queryFn: async () => {
+      const response = await mountingRulesList({ system_id: systemId }, requestOptions);
+      if (response.status !== 200) throw new Error("load");
+      return response.data.items;
+    },
+    enabled: !!systemId,
+    retry: false,
+  });
+  // D06: org default templates — extras preselected into NEW positions,
+  // matched to the system the vano uses. A template only seeds the
+  // selection record; the engine re-measures it like any declaration.
+  const extrasConfig = useQuery({
+    queryKey: ["org-extras-config", orgId],
+    queryFn: async () => {
+      const response = await organizationExtrasConfigRead(requestOptions);
+      if (response.status !== 200) throw new Error("load");
+      return response.data;
+    },
+    retry: false,
+  });
   // Finishes the series declares. A stored finish it stopped offering still
   // displays — the picker lists it once — but can't save: the engine's color
   // contract is the authority, not this list's length.
@@ -394,6 +463,10 @@ function PositionWorkspace({
     inputs.color && !declaredColors.includes(inputs.color)
       ? [...declaredColors, inputs.color]
       : declaredColors;
+  // D05: the declared finish catalog drives the swatch picker; the plain
+  // code list remains the fallback for binary-era systems.
+  const colorOptions = options.data?.color_options ?? [];
+  const bicolorAllowed = options.data?.bicolor_allowed === true;
 
   useEffect(() => {
     let active = true;
@@ -401,13 +474,15 @@ function PositionWorkspace({
       baselineDesign: string,
       baselineLocation: string,
       baselineQuantity: string,
+      baselineMeasurement: string,
     ) => {
       const draft = readPositionDraft(draftKey);
       if (!draft) return;
       if (
         designIdentity(draft.inputs) !== baselineDesign ||
         draft.location !== baselineLocation ||
-        draft.quantity !== baselineQuantity
+        draft.quantity !== baselineQuantity ||
+        (draft.vano ? vanoIdentity(draft.vano) : "null") !== baselineMeasurement
       )
         setPendingDraft(draft);
       else clearPositionDraft(draftKey);
@@ -419,12 +494,15 @@ function PositionWorkspace({
       if (preferredSystem) blank.systemId = preferredSystem;
       useCanvasStore.getState().loadDesign(blank);
       const baselineDesign = designIdentity(blank);
+      setVanoDraft(EMPTY_VANO);
       setBaseline({
         design: baselineDesign,
         location: "",
         quantity: "1",
+        measurement: vanoIdentity(EMPTY_VANO),
+        isOption: false,
       });
-      offerDraftIfDivergent(baselineDesign, "", "1");
+      offerDraftIfDivergent(baselineDesign, "", "1", vanoIdentity(EMPTY_VANO));
       setLoaded(true);
     } else
       void positionsRetrieve(positionId || copyId, { headers: { "X-Organization-ID": orgId } })
@@ -450,6 +528,10 @@ function PositionWorkspace({
             // the picker lists it once so the field is honest, while
             // designPayload refuses to save a finish the engine can't map.
             color: item.design.color,
+            colorExterior:
+              item.design.color_exterior && item.design.color_exterior !== item.design.color
+                ? item.design.color_exterior
+                : "",
             parametricTree:
               product.assembly.modules.at(0)?.tree ??
               ({ id: "m1", type: "BAY", opening_type: "FIXED" } as IntentNode),
@@ -458,6 +540,12 @@ function PositionWorkspace({
           useCanvasStore.getState().loadDesign(loadedInputs);
           setCopiedFrom(copyId ? `P${item.position_index}` : null);
           setSaved(copyId ? null : item);
+          // El duplicado no hereda el registro del vano: la medida en obra
+          // es de ese vano concreto, no de su diseño.
+          const loadedVano =
+            !copyId && item.measurement ? vanoDraftFromSaved(item.measurement) : EMPTY_VANO;
+          setVanoDraft(loadedVano);
+          const loadedOption = !copyId && !!item.is_option;
           setBaseline(
             copyId
               ? null
@@ -465,15 +553,19 @@ function PositionWorkspace({
                   design: designIdentity(loadedInputs),
                   location: item.location_tag ?? "",
                   quantity: String(item.quantity),
+                  measurement: vanoIdentity(loadedVano),
+                  isOption: loadedOption,
                 },
           );
           offerDraftIfDivergent(
             designIdentity(loadedInputs),
             item.location_tag ?? "",
             String(item.quantity),
+            vanoIdentity(loadedVano),
           );
           setLocation(item.location_tag ?? "");
           setQuantity(String(item.quantity));
+          setIsOption(loadedOption);
           setResult(item.bom);
           setLoaded(true);
         })
@@ -512,6 +604,31 @@ function PositionWorkspace({
     }
   }, [inputs, options.data]);
 
+  // Apply org extra templates once the design context exists (new vanos
+  // only — a saved position's sealed tree is authoritative). Templates of
+  // the position's system merge in without touching skus the estimator
+  // already declared, mirroring merge_extra_templates in the engine.
+  const templatesApplied = useRef<string | null>(null);
+  useEffect(() => {
+    if (positionId || copyId || !systemId || !extrasConfig.data) return;
+    if (templatesApplied.current === systemId) return;
+    const product = inputs.product;
+    if (!product || (product.extras?.length ?? 0) > 0) return;
+    const templates = (extrasConfig.data.extra_templates ?? []).filter(
+      (template) => template.system_id === systemId,
+    );
+    templatesApplied.current = systemId;
+    if (templates.length === 0) return;
+    const merged: ExtraSelectionJson[] = templates.map((template) => ({
+      sku: template.sku,
+      sides: template.sides.length ? template.sides : undefined,
+      qty: template.qty ?? undefined,
+    }));
+    // Deterministic preselection is not a user step — no history entry,
+    // same contract as resolveDefaults above.
+    useCanvasStore.getState().replaceInputs({ ...inputs, product: { ...product, extras: merged } });
+  }, [inputs, extrasConfig.data, systemId, positionId, copyId]);
+
   function applyHistory(direction: "undo" | "redo"): void {
     const store = useCanvasStore.getState();
     if (direction === "undo") store.undo();
@@ -542,13 +659,16 @@ function PositionWorkspace({
   // designIdentity deep-serializes the product — memoize on the inputs
   // reference so location/quantity keystrokes skip the canonicalization.
   const identity = useMemo(() => designIdentity(inputs), [inputs]);
+  const vanoDraftIdentity = useMemo(() => vanoIdentity(vanoDraft), [vanoDraft]);
 
   const isDirty =
     baseline === null
       ? true
       : identity !== baseline.design ||
         location !== baseline.location ||
-        quantity !== baseline.quantity;
+        quantity !== baseline.quantity ||
+        vanoDraftIdentity !== baseline.measurement ||
+        isOption !== baseline.isOption;
 
   // Debounced draft write — clears once the design matches the saved state
   // again (including right after a successful save).
@@ -559,20 +679,101 @@ function PositionWorkspace({
       return;
     }
     const timer = setTimeout(
-      () => writePositionDraft(draftKey, { inputs, location, quantity, savedAt: Date.now() }),
+      () =>
+        writePositionDraft(draftKey, {
+          inputs,
+          location,
+          quantity,
+          vano: vanoDraft,
+          savedAt: Date.now(),
+        }),
       600,
     );
     return () => clearTimeout(timer);
-  }, [loaded, isDirty, identity, location, quantity, draftKey, inputs]);
+  }, [loaded, isDirty, identity, location, quantity, draftKey, inputs, vanoDraft]);
+
+  // D07 — preview vano→fabricación resuelto por el motor, con debounce: lo
+  // que el lienzo muestra es exactamente lo que el guardado validará.
+  const designWidthMm = inputs.nominalWidthMm;
+  const designHeightMm = inputs.nominalHeightMm;
+  useEffect(() => {
+    const payload = vanoDraftPayload(vanoDraft);
+    if (
+      payload === null ||
+      payload === "invalid" ||
+      !payload.vano ||
+      !payload.mounting_rule_id ||
+      !systemId ||
+      !designWidthMm ||
+      !designHeightMm
+    ) {
+      setVanoPreview(null);
+      setVanoPreviewError(false);
+      setVanoPreviewBusy(false);
+      return;
+    }
+    setVanoPreviewBusy(true);
+    let stale = false;
+    const timer = setTimeout(() => {
+      positionsMeasurementResolve(
+        projectId,
+        {
+          system_id: systemId,
+          vano: payload.vano!,
+          mounting_rule_id: payload.mounting_rule_id!,
+          fabrication_lock: payload.fabrication_lock ?? null,
+          width_mm: designWidthMm,
+          height_mm: designHeightMm,
+        },
+        requestOptions,
+      )
+        .then((res) => {
+          if (stale) return;
+          setVanoPreview(res.status === 200 ? res.data : null);
+          setVanoPreviewError(res.status !== 200);
+        })
+        .catch(() => {
+          if (stale) return;
+          setVanoPreview(null);
+          setVanoPreviewError(true);
+        })
+        .finally(() => {
+          if (!stale) setVanoPreviewBusy(false);
+        });
+    }, 350);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vanoDraft, systemId, designWidthMm, designHeightMm, projectId]);
 
   const assemblyUnsaveable =
     assemblyEval?.status === "INVALID" ||
     (assemblyEval?.modules ?? []).some((module) => module.result == null);
   // Only flag once the options payload actually arrived — an empty declared
-  // list pre-load is "unknown", not "undeclared".
+  // list pre-load is "unknown", not "undeclared". Both faces obey the same
+  // contract: an exterior code the system can't map is just as unsaveable.
   const colorUndeclared =
-    options.data !== undefined && inputs.color !== null && !declaredColors.includes(inputs.color);
+    options.data !== undefined &&
+    (!declaredColors.includes(inputs.color) ||
+      (!!inputs.colorExterior &&
+        inputs.colorExterior !== inputs.color &&
+        !declaredColors.includes(inputs.colorExterior)));
+  // The engine's combination rules, previewed — a pair it will refuse is
+  // named before Guardar even enables.
+  const colorPairIssue = combinationIssue(
+    colorOptions,
+    bicolorAllowed,
+    inputs.color,
+    inputs.colorExterior && inputs.colorExterior !== inputs.color ? inputs.colorExterior : "",
+  );
   const quantityInvalid = !/^[1-9]\d*$/.test(quantity) || Number(quantity) > 2147483647;
+  // D07 — un registro del vano a medias no se puede guardar: el borrador
+  // incompleto bloquea con la misma regla que el backend (un eje sin el
+  // otro, montaje sin vano, fijación sin medida).
+  const vanoPayload = vanoDraftPayload(vanoDraft);
+  const vanoInvalid = vanoPayload === "invalid";
   // Local, cheap check: a bay with neither glass nor panel fill can never
   // evaluate — name it so the disabled Guardar isn't a silent dead end.
   const fillUnassigned = (inputs.product?.assembly.modules ?? []).some((module) =>
@@ -584,15 +785,40 @@ function PositionWorkspace({
     ? t("projects.qtyInvalid")
     : colorUndeclared
       ? t("projects.colorNotDeclared")
-      : fillUnassigned
-        ? t("projects.glazingMissing")
-        : assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
-          ? issueText(
-              assemblyEval.issues[0]!,
-              inputs.product?.assembly.modules ?? [],
-              inputs.product?.assembly.couplings ?? [],
-            )
-          : null;
+      : colorPairIssue
+        ? colorPairIssue
+        : vanoInvalid
+          ? t("projects.vanoInvalid")
+          : fillUnassigned
+            ? t("projects.glazingMissing")
+            : assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
+              ? issueText(
+                  assemblyEval.issues[0]!,
+                  inputs.product?.assembly.modules ?? [],
+                  inputs.product?.assembly.couplings ?? [],
+                )
+              : null;
+
+  // D07 — la confirmación es un acto humano separado del guardado: golpea su
+  // propio endpoint y refresca la posición persistida (incl. updated_at).
+  async function confirmMeasurement(confirmed: boolean): Promise<void> {
+    if (!saved || confirmBusy || busy) return;
+    setConfirmBusy(true);
+    try {
+      const response = await positionsMeasurementConfirm(saved.id, { confirmed }, requestOptions);
+      if (response.status === 200) {
+        const value = response.data as PositionResponse;
+        setSaved(value);
+        setMessage(confirmed ? t("projects.vanoConfirmed") : t("projects.vanoReopened"));
+      } else {
+        setMessage(t("projects.saveError"));
+      }
+    } catch {
+      setMessage(t("projects.saveError"));
+    } finally {
+      setConfirmBusy(false);
+    }
+  }
 
   async function save(): Promise<void> {
     if (
@@ -603,10 +829,15 @@ function PositionWorkspace({
       busy ||
       !options.data ||
       !declaredColors.includes(inputs.color) ||
+      (!!inputs.colorExterior &&
+        inputs.colorExterior !== inputs.color &&
+        !declaredColors.includes(inputs.colorExterior)) ||
+      colorPairIssue !== null ||
       inputs.product === null ||
       !systemId ||
       !/^[1-9]\d*$/.test(quantity) ||
-      Number(quantity) > 2147483647
+      Number(quantity) > 2147483647 ||
+      vanoInvalid
     )
       return;
     mutationLock.current = true;
@@ -616,10 +847,14 @@ function PositionWorkspace({
     // A lone unit persists in the classic documentary shape; real assemblies
     // save as product-v2. The in-canvas model is always compositional.
     const design = designPayload(inputs, declaredColors) as PositionDesignRequest;
+    // El registro del vano viaja con la posición: el backend lo vuelve a
+    // validar contra el motor y marca el estado de la medida.
     const body = {
       location_tag: location,
       quantity: Number(quantity),
+      is_option: isOption,
       design,
+      ...(vanoPayload !== null ? { measurement: vanoPayload } : {}),
     };
     try {
       const response = saved
@@ -635,7 +870,13 @@ function PositionWorkspace({
       const value = response.data as PositionResponse;
       setSaved(value);
       setResult(value.bom);
-      setBaseline({ design: designIdentity(inputs), location, quantity });
+      setBaseline({
+        design: designIdentity(inputs),
+        location,
+        quantity,
+        measurement: vanoDraftIdentity,
+        isOption,
+      });
       setMessage(t("projects.saved"));
       // The unsaved-changes blocker still sees dirty=true until the baseline
       // commits, so the post-create navigation must wait for the next render.
@@ -668,6 +909,44 @@ function PositionWorkspace({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // D07 — la cota doble del lienzo y el chip leen la misma resolución: la
+  // preview en vivo cuando el borrador cambió, la guardada cuando no.
+  const liveResolution = vanoPreview?.resolution ?? saved?.measurement?.resolution ?? null;
+  // The strip's breadcrumbs and the dock's filmstrip read the project the
+  // parent already fetched — same query key, no second request.
+  const projectData = useProject(projectId);
+  const project = projectData.data;
+  const currency = project?.currency ?? "CLP";
+  const readOnly = useMediaQuery("(max-width: 1023px)");
+  const [systemChipOpen, setSystemChipOpen] = useState(false);
+  const [colorChipOpen, setColorChipOpen] = useState(false);
+  const systemAnchorRef = useRef<HTMLButtonElement>(null);
+  const colorAnchorRef = useRef<HTMLButtonElement>(null);
+  // Live net price: same `design_batch_preview` gate as Guardar, debounced.
+  // While a quote is in flight the chip says "calculando" — never a stale
+  // number presented as current.
+  const livePrice = useLivePrice({
+    projectId,
+    positionId: saved?.id ?? null,
+    quantity,
+    designPayload: () => designPayload(inputs, declaredColors) as { [key: string]: unknown } | null,
+    enabled: loaded && !readOnly,
+  });
+  const liveMountingLabel = useMemo(() => {
+    const rule = vanoPreview?.mounting_rule ?? saved?.measurement?.mounting_rule ?? null;
+    return rule ? domainLabel("MountingRuleCodeEnum", rule.code).label : "";
+  }, [vanoPreview, saved]);
+  const vanoDim = vanoDimFromResolution(liveResolution, liveMountingLabel);
+  const vanoChip =
+    vanoDim === null || liveResolution === null
+      ? null
+      : t("projects.vanoChip")
+          .replace("{w}", fmtMm(liveResolution.used_width_mm))
+          .replace("{h}", fmtMm(liveResolution.used_height_mm))
+          .replace("{fw}", fmtMm(liveResolution.fabrication_width_mm))
+          .replace("{fh}", fmtMm(liveResolution.fabrication_height_mm))
+          .replace("{mounting}", liveMountingLabel || t("projects.vanoMountingNone"));
+
   if (!loaded) return <p role={message ? "alert" : "status"}>{message || t("projects.loading")}</p>;
   const dirty = isDirty;
   const restoreDraft = (draft: PositionDraft) => {
@@ -675,7 +954,7 @@ function PositionWorkspace({
     store.loadDesign(draft.inputs);
     setLocation(draft.location);
     setQuantity(draft.quantity);
-    setLibraryOpen(false);
+    setVanoDraft(draft.vano ?? EMPTY_VANO);
     setViewEpoch((epoch) => epoch + 1);
     setPendingDraft(null);
     setMessage("");
@@ -692,87 +971,389 @@ function PositionWorkspace({
       Math.max(widthMm, nominal.widthMm),
       Math.max(heightMm, nominal.heightMm),
     );
+    // D06: extras declared on the position (templates or by hand) survive a
+    // starter swap — the library replaces geometry, never the declarations.
+    if (product?.extras?.length) nextProduct.extras = product.extras;
     const store = useCanvasStore.getState();
     store.commitInputs({ ...inputs, product: nextProduct });
     // Coupled starters mint fresh module ids — a stale selection would leave
     // the inspector pointed at a module that no longer exists.
     store.select(nextProduct.assembly.modules[0]?.id ?? null);
     setViewEpoch((epoch) => epoch + 1);
-    setLibraryOpen(false);
     onAssemblyChanged();
   };
   // Overview-level position facts — the editable fields live in the
   // .position-head strip; this card answers "what is this vano" at a glance.
   const systemName = systems.data?.find((system) => system.id === inputs.systemId)?.name ?? "—";
-  const positionPanel = (
-    <section className="assembly-inspector position-panel" aria-label={t("projects.positionData")}>
-      <header className="assembly-inspector__header">
-        <h4>{t("projects.positionData")}</h4>
-      </header>
-      <dl className="inspector-summary__list">
-        <div className="inspector-summary__row">
-          <dt>{t("projects.location")}</dt>
-          <dd>{location.trim() || "—"}</dd>
-        </div>
-        <div className="inspector-summary__row">
-          <dt>{t("pricing.quantity")}</dt>
-          <dd>{quantity || "1"}</dd>
-        </div>
-        <div className="inspector-summary__row">
-          <dt>{t("projects.system")}</dt>
-          <dd>{systemName}</dd>
-        </div>
-      </dl>
-    </section>
+  const selectedSystem = systems.data?.find((system) => system.id === inputs.systemId);
+  const limitsLine = (selectedSystem?.typology_limits ?? [])
+    .map((limit) => {
+      const parts: string[] = [];
+      if (limit.min_leaf_width_mm || limit.max_leaf_width_mm) {
+        parts.push(`${limit.min_leaf_width_mm ?? "—"}–${limit.max_leaf_width_mm ?? "—"} mm ancho`);
+      }
+      if (limit.min_leaf_height_mm || limit.max_leaf_height_mm) {
+        parts.push(`${limit.min_leaf_height_mm ?? "—"}–${limit.max_leaf_height_mm ?? "—"} mm alto`);
+      }
+      if (limit.max_leaf_weight_kg) {
+        parts.push(`≤ ${limit.max_leaf_weight_kg} kg`);
+      }
+      const source = tDynamic("projects.limitSource", limit.source);
+      return `${tDynamic("catalog.option", limit.opening_type)}: ${parts.join(" × ")} (${source})`;
+    })
+    .join(" · ");
+  const extrasPanel = (
+    <PositionExtrasPanel
+      articles={options.data?.extra_articles ?? []}
+      extras={product?.extras ?? []}
+      suggestions={assemblyEval?.extra_suggestions ?? []}
+      lines={assemblyEval?.bom?.extra_lines ?? []}
+      disabled={busy}
+      onChange={(next) => {
+        if (!product) return;
+        useCanvasStore.getState().commitInputs({
+          ...inputs,
+          product: { ...product, extras: next },
+        });
+        setMessage("");
+      }}
+    />
   );
+  const positionPanel = (
+    <>
+      <section
+        className="assembly-inspector position-panel"
+        aria-label={t("projects.positionData")}
+      >
+        <header className="assembly-inspector__header">
+          <h4>{t("projects.positionData")}</h4>
+        </header>
+        <dl className="inspector-summary__list">
+          <div className="inspector-summary__row">
+            <dt>{t("projects.location")}</dt>
+            <dd>{location.trim() || "—"}</dd>
+          </div>
+          <div className="inspector-summary__row">
+            <dt>{t("pricing.quantity")}</dt>
+            <dd>{quantity || "1"}</dd>
+          </div>
+          <div className="inspector-summary__row">
+            <dt>{t("projects.system")}</dt>
+            <dd>{systemName}</dd>
+          </div>
+        </dl>
+        <VanoSection
+          draft={vanoDraft}
+          onDraftChange={setVanoDraft}
+          rules={mountingRules.data}
+          rulesPending={mountingRules.isPending}
+          preview={vanoPreview}
+          previewPending={vanoPreviewBusy}
+          previewError={vanoPreviewError}
+          saved={saved?.measurement ?? null}
+          onConfirm={(confirmed) => void confirmMeasurement(confirmed)}
+          confirmBusy={confirmBusy}
+          positionPersisted={saved !== null && !copyId}
+          disabled={busy}
+        />
+      </section>
+      {extrasPanel}
+    </>
+  );
+  // «Qué falta» — one item per blocker, workshop language, anchored to the
+  // field that resolves it. Order = the order an estimator would fix them.
+  const missingItems: MissingItem[] = [];
+  if (!systemId) {
+    missingItems.push({
+      key: "system",
+      reason: t("projects.chooseSystem"),
+      action: t("projects.missingActionPick"),
+      anchor: "[data-missing=system]",
+    });
+  }
+  if (quantityInvalid) {
+    missingItems.push({
+      key: "quantity",
+      reason: t("projects.qtyInvalid"),
+      action: t("projects.missingActionFix"),
+      anchor: "[data-missing=quantity]",
+    });
+  }
+  if (colorUndeclared) {
+    missingItems.push({
+      key: "color",
+      reason: t("projects.colorNotDeclared"),
+      action: t("projects.missingActionPick"),
+      anchor: "[data-missing=color]",
+    });
+  } else if (colorPairIssue !== null) {
+    missingItems.push({
+      key: "color",
+      reason: colorPairIssue,
+      action: t("projects.missingActionPick"),
+      anchor: "[data-missing=color]",
+    });
+  }
+  if (vanoInvalid) {
+    missingItems.push({
+      key: "vano",
+      reason: t("projects.vanoInvalid"),
+      action: t("projects.missingActionFix"),
+      anchor: ".position-panel",
+    });
+  }
+  if (fillUnassigned) {
+    missingItems.push({
+      key: "glazing",
+      reason: t("projects.glazingMissing"),
+      action: t("projects.missingActionPick"),
+      anchor: "[data-section=glazing]",
+    });
+  }
+  if (assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0) {
+    missingItems.push({
+      key: "engine",
+      reason: issueText(
+        assemblyEval.issues[0]!,
+        inputs.product?.assembly.modules ?? [],
+        inputs.product?.assembly.couplings ?? [],
+      ),
+      anchor: ".assembly-canvas",
+    });
+  }
+  const missingBlocked =
+    !systemId || quantityInvalid || colorUndeclared || colorPairIssue !== null || vanoInvalid;
+
+  const colorChipLabel =
+    colorOptions.find((option) => option.code === inputs.color)?.name ??
+    tDynamic("projects.color", inputs.color);
+
   return (
-    <section className="projects-page position-editor">
+    <section className="position-editor-shell">
       <UnsavedChangesGuard dirty={dirty} message={t("projects.leaveUnsaved")} />
-      <header className="projects-header">
-        <div>
+      {/* Franja superior ≈48 px: migas, campos, chips, precio, estado. */}
+      <header className="editor-strip" data-testid="editor-strip">
+        <h1 className="visually-hidden">{location || t("projects.position")}</h1>
+        <nav className="editor-strip__crumbs" aria-label={t("crumb.label")}>
           <Link
-            className="ui-backlink ui-backlink--back"
-            to={projectId ? `/projects/${projectId}` : "/projects"}
+            className="editor-strip__crumb"
+            aria-label={`${t("projects.back")}: ${project?.name ?? t("crumb.projectFallback")}`}
+            to={`/projects/${projectId}`}
           >
-            {t("projects.back")}
+            {project?.name ?? t("crumb.projectFallback")}
           </Link>
-          <h1>{location || t("projects.position")}</h1>
-        </div>
-        <span role="status">
-          {dirty
-            ? t("projects.unsaved")
-            : saved === null
-              ? t("projects.draft")
-              : t("projects.savedState")}
-        </span>
-        <button disabled={!canUndo || busy} onClick={() => applyHistory("undo")}>
-          {t("projects.undo")}
-        </button>
-        <button disabled={!canRedo || busy} onClick={() => applyHistory("redo")}>
-          {t("projects.redo")}
+          <span aria-hidden="true" className="editor-strip__sep">
+            ›
+          </span>
+          <span className="editor-strip__crumb editor-strip__crumb--here">
+            {saved
+              ? t("projects.positionIndex").replace("{n}", String(saved.position_index))
+              : t("crumb.positionNew")}
+          </span>
+        </nav>
+        <input
+          className="editor-strip__location"
+          data-option-tag={isOption ? "true" : undefined}
+          aria-label={t("projects.location")}
+          placeholder={t("projects.locationPlaceholder")}
+          value={location}
+          disabled={busy || readOnly}
+          onChange={(e) => setLocation(e.target.value)}
+        />
+        <label className="editor-strip__qty">
+          <span aria-hidden="true">×</span>
+          <input
+            aria-label={t("pricing.quantity")}
+            data-missing="quantity"
+            inputMode="numeric"
+            value={quantity}
+            disabled={busy || readOnly}
+            onChange={(e) => setQuantity(e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className="editor-strip__chip editor-strip__option"
+          data-active={isOption}
+          aria-pressed={isOption}
+          aria-label={t("projects.isOption")}
+          title={t("projects.isOptionHint")}
+          disabled={busy || readOnly}
+          onClick={() => setIsOption((prev) => !prev)}
+        >
+          {t("projects.isOption")}
         </button>
         <button
-          className="primary-action"
-          disabled={
-            uncertainCreate ||
-            busy ||
-            !result ||
-            !options.data ||
-            assemblyUnsaveable ||
-            quantityInvalid ||
-            colorUndeclared
-          }
-          title={
-            saveBlockReason !== null
-              ? `${t("projects.saveBlocked")}: ${saveBlockReason}`
-              : !result || assemblyUnsaveable
-                ? t("projects.saveBlocked")
-                : `${t("projects.save")} (Ctrl+S)`
-          }
-          onClick={() => void save()}
+          type="button"
+          ref={systemAnchorRef}
+          className="editor-strip__chip"
+          data-missing="system"
+          aria-label={t("projects.system")}
+          aria-expanded={systemChipOpen}
+          aria-haspopup="dialog"
+          disabled={busy || readOnly}
+          onClick={() => setSystemChipOpen((open) => !open)}
         >
-          {t("projects.save")}
+          {systemName}
         </button>
+        {systemChipOpen && (
+          <Popover anchorRef={systemAnchorRef} onClose={() => setSystemChipOpen(false)}>
+            <div className="editor-pop" role="dialog" aria-label={t("projects.system")}>
+              <label className="editor-pop__field">
+                <span>{t("projects.system")}</span>
+                <select
+                  className="assembly-select"
+                  aria-label={t("projects.system")}
+                  value={systemId}
+                  onChange={(e) => {
+                    const next = e.target.value || null;
+                    if (inputs.systemId !== next) {
+                      useCanvasStore.getState().commitInputs({ ...inputs, systemId: next });
+                      setMessage("");
+                    }
+                    // Single-pick chip: choosing a series closes the popover —
+                    // left open it overlays and blocks the inspector below.
+                    setSystemChipOpen(false);
+                  }}
+                >
+                  <option value="">{t("projects.chooseSystem")}</option>
+                  {systems.data
+                    ?.filter((system) => system.quote_ready)
+                    .map((system) => (
+                      <option key={system.id} value={system.id}>
+                        {system.name}
+                        {system.is_demo ? ` · ${t("projects.synthetic")}` : ""}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              {limitsLine && (
+                <p className="editor-pop__hint">
+                  {t("projects.systemLimits")}: {limitsLine}
+                </p>
+              )}
+            </div>
+          </Popover>
+        )}
+        <button
+          type="button"
+          ref={colorAnchorRef}
+          className="editor-strip__chip"
+          data-missing="color"
+          aria-label={t("projects.color")}
+          aria-expanded={colorChipOpen}
+          aria-haspopup="dialog"
+          disabled={busy || readOnly}
+          onClick={() => setColorChipOpen((open) => !open)}
+        >
+          {colorChipLabel}
+        </button>
+        {colorChipOpen && (
+          <Popover anchorRef={colorAnchorRef} onClose={() => setColorChipOpen(false)}>
+            <div className="editor-pop" role="dialog" aria-label={t("projects.color")}>
+              {colorOptions.length > 0 ? (
+                <ColorSelector
+                  options={colorOptions}
+                  bicolorAllowed={bicolorAllowed}
+                  colorInterior={inputs.color}
+                  colorExterior={inputs.colorExterior}
+                  disabled={busy}
+                  onChange={(color, colorExterior) =>
+                    useCanvasStore.getState().commitInputs({
+                      ...inputs,
+                      color,
+                      colorExterior,
+                    })
+                  }
+                />
+              ) : (
+                <select
+                  className="assembly-select"
+                  aria-label={t("projects.color")}
+                  disabled={busy || declaredColors.length === 0}
+                  value={inputs.color}
+                  onChange={(event) =>
+                    useCanvasStore.getState().commitInputs({
+                      ...inputs,
+                      color: event.target.value as CanvasDesignInputs["color"],
+                      colorExterior: "",
+                    })
+                  }
+                >
+                  {colorChoices.length === 0 && (
+                    <option value={inputs.color}>{inputs.color}</option>
+                  )}
+                  {colorChoices.map((color) => (
+                    <option key={color} value={color}>
+                      {tDynamic("projects.color", color)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </Popover>
+        )}
+        {vanoChip !== null && (
+          <span className="ui-badge ui-chip ui-badge--info vano-chip">{vanoChip}</span>
+        )}
+        <div className="editor-strip__end">
+          <span className="editor-strip__save" role="status">
+            {dirty
+              ? t("projects.unsaved")
+              : saved === null
+                ? t("projects.draft")
+                : t("projects.savedState")}
+          </span>
+          <button
+            className="editor-strip__tool"
+            disabled={!canUndo || busy || readOnly}
+            title={`${t("projects.undo")} — Ctrl+Z`}
+            aria-label={t("projects.undo")}
+            onClick={() => applyHistory("undo")}
+          >
+            ↺
+          </button>
+          <button
+            className="editor-strip__tool"
+            disabled={!canRedo || busy || readOnly}
+            title={`${t("projects.redo")} — Ctrl+Y`}
+            aria-label={t("projects.redo")}
+            onClick={() => applyHistory("redo")}
+          >
+            ↻
+          </button>
+          <LivePriceChip
+            price={livePrice.price}
+            pending={livePrice.pending}
+            currency={currency}
+            moduleIds={inputs.product?.assembly.modules.map((module) => module.id) ?? []}
+          />
+          <WhatsMissing items={missingItems} blocked={missingBlocked} disabled={readOnly} />
+          <button
+            className="primary-action"
+            disabled={
+              uncertainCreate ||
+              busy ||
+              readOnly ||
+              !result ||
+              !options.data ||
+              assemblyUnsaveable ||
+              quantityInvalid ||
+              colorUndeclared ||
+              vanoInvalid
+            }
+            title={
+              saveBlockReason !== null
+                ? `${t("projects.saveBlocked")}: ${saveBlockReason}`
+                : !result || assemblyUnsaveable
+                  ? t("projects.saveBlocked")
+                  : `${t("projects.save")} (Ctrl+S)`
+            }
+            onClick={() => void save()}
+          >
+            {t("projects.save")}
+          </button>
+        </div>
       </header>
       {/* The blocked hint lives BELOW the header row — inside the flex it
        * pushed Deshacer/Guardar left whenever it appeared, and a click aimed
@@ -794,13 +1375,7 @@ function PositionWorkspace({
       {pendingDraft !== null && (
         <div className="draft-banner" role="status">
           <span>
-            {t("projects.draftFound").replace(
-              "{time}",
-              new Date(pendingDraft.savedAt).toLocaleString("es-CL", {
-                dateStyle: "short",
-                timeStyle: "short",
-              }),
-            )}
+            {t("projects.draftFound").replace("{time}", formatDateTime(pendingDraft.savedAt))}
           </span>
           <button type="button" onClick={() => restoreDraft(pendingDraft)}>
             {t("projects.restoreDraft")}
@@ -816,121 +1391,45 @@ function PositionWorkspace({
           </button>
         </div>
       )}
-      <fieldset className="position-head" disabled={busy}>
-        {/* <fieldset> can't be a flex container — the row wraps the fields
-            so the strip stays horizontal. */}
-        <div className="position-head__row">
-          <label className="position-head__field">
-            <span>{t("projects.location")}</span>
-            <input
-              aria-label={t("projects.location")}
-              placeholder={t("projects.locationPlaceholder")}
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
+      <AssemblyEditor
+        organizationId={orgId}
+        couplerSkus={options.data?.coupler_skus ?? []}
+        glassSkus={options.data?.glass_skus ?? []}
+        panelSkus={options.data?.panel_skus ?? []}
+        options={options.data}
+        optionsReady={options.data !== undefined || options.isError}
+        disabled={busy}
+        onChanged={onAssemblyChanged}
+        onEvaluationChange={onAssemblyEvaluation}
+        positionId={saved?.id ?? null}
+        positionPanel={positionPanel}
+        contentEpoch={viewEpoch}
+        vano={vanoDim}
+        onPickStarter={pickStarter}
+        currency={currency}
+        currentLineNet={livePrice.price?.netless ? null : (livePrice.price?.lineNet ?? null)}
+        quoteProposal={async (proposed) => {
+          const payload = designPayload({ ...inputs, product: proposed }, declaredColors) as {
+            [key: string]: unknown;
+          } | null;
+          return livePrice.quote(payload, Math.max(1, Number.parseInt(quantity, 10) || 1));
+        }}
+        dock={{
+          positions: project?.positions ? (
+            <PositionStrip
+              projectId={projectId}
+              positions={project.positions}
+              currentId={saved?.id ?? null}
+              currency={currency}
             />
-          </label>
-          <label className="position-head__field">
-            <span>{t("pricing.quantity")}</span>
-            <input
-              inputMode="numeric"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-            />
-          </label>
-          <label className="position-head__field position-head__field--wide">
-            <span>{t("projects.system")}</span>
-            <select
-              className="assembly-select"
-              aria-label={t("projects.system")}
-              value={systemId}
-              onChange={(e) => {
-                const next = e.target.value || null;
-                if (inputs.systemId !== next) {
-                  useCanvasStore.getState().commitInputs({ ...inputs, systemId: next });
-                  setMessage("");
-                }
-              }}
-            >
-              <option value="">{t("projects.chooseSystem")}</option>
-              {systems.data
-                ?.filter((system) => system.quote_ready)
-                .map((system) => (
-                  <option key={system.id} value={system.id}>
-                    {system.name}
-                    {system.is_demo ? ` · ${t("projects.synthetic")}` : ""}
-                  </option>
-                ))}
-            </select>
-          </label>
-          {(systems.isError || options.isError) && (
-            <p className="position-head__alert" role="alert">
-              {t("projects.catalogError")}
-            </p>
-          )}
-          {(systems.isPending || (systemId && options.isPending)) && (
-            <p className="position-head__alert" role="status">
-              {t("projects.loading")}
-            </p>
-          )}
-          <label className="position-head__color">
-            <span>{t("projects.color")}</span>
-            <select
-              className="assembly-select"
-              aria-label={t("projects.color")}
-              disabled={busy || declaredColors.length === 0}
-              value={inputs.color}
-              onChange={(event) =>
-                useCanvasStore.getState().commitInputs({
-                  ...inputs,
-                  color: event.target.value as CanvasDesignInputs["color"],
-                })
-              }
-            >
-              {colorChoices.length === 0 && <option value={inputs.color}>{inputs.color}</option>}
-              {colorChoices.map((color) => (
-                <option key={color} value={color}>
-                  {tDynamic("projects.color", color)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </fieldset>
-      <div className="position-body">
-        <div className="position-workspace">
-          <details
-            className="starter-library"
-            open={libraryOpen}
-            onToggle={(event) => setLibraryOpen(event.currentTarget.open)}
-          >
-            <summary>{t("assembly.starterLibrary")}</summary>
-            <StarterGallery
-              members={resolveMembers(options.data)}
-              disabled={busy}
-              onPick={pickStarter}
-            />
-          </details>
-          <AssemblyEditor
-            organizationId={orgId}
-            couplerSkus={options.data?.coupler_skus ?? []}
-            glassSkus={options.data?.glass_skus ?? []}
-            panelSkus={options.data?.panel_skus ?? []}
-            options={options.data}
-            optionsReady={options.data !== undefined || options.isError}
-            disabled={busy}
-            onChanged={onAssemblyChanged}
-            onEvaluationChange={onAssemblyEvaluation}
-            positionId={saved?.id ?? null}
-            positionPanel={positionPanel}
-            contentEpoch={viewEpoch}
-          />
-        </div>
-      </div>
-      {result ? (
-        <ProjectBom result={result} />
-      ) : (
-        <p role="status">{t("projects.calculationRequired")}</p>
-      )}
+          ) : null,
+          bom: result ? (
+            <ProjectBom result={result} />
+          ) : (
+            <p role="status">{t("projects.calculationRequired")}</p>
+          ),
+        }}
+      />
     </section>
   );
 }
@@ -1003,7 +1502,11 @@ export function ProjectBom({ result }: { result: EngineCalculateResponse }): JSX
               {(result.fittings ?? []).map((item, index) => (
                 <tr key={index}>
                   <td>{item.sku}</td>
-                  <td>{tOptional(`assembly.fittingKind.${item.kind}`) ?? item.kind}</td>
+                  <td>
+                    {tOptional(`assembly.fittingKind.${item.kind}`) ??
+                      tOptional(`catalog.extraKind.${item.kind}`) ??
+                      item.kind}
+                  </td>
                   <td>{item.qty}</td>
                 </tr>
               ))}

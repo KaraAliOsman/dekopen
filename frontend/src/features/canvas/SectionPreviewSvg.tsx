@@ -44,10 +44,10 @@ export function SectionPreviewSvg({
     ? polygonBounds(declared)
     : { minX: 0, minY: 0, width: widthMm, height: heightMm };
   const fontSize = Math.max(widthMm, heightMm) * FONT_RATIO;
-  const viewX = bounds.minX - PAD_MM;
-  const viewY = bounds.minY - PAD_MM - fontSize;
-  const viewW = widthMm + PAD_MM * 2;
-  const viewH = heightMm + PAD_MM * 2 + fontSize;
+  const viewX = bounds.minX - PAD_MM - fontSize;
+  const viewY = bounds.minY - PAD_MM;
+  const viewW = widthMm + PAD_MM * 2 + fontSize;
+  const viewH = heightMm + PAD_MM * 2;
   const surface = memberSurface(material ?? "PVC");
   const provenance = declared
     ? declared.source === "DXF_REFERENCE"
@@ -104,17 +104,12 @@ export function SectionPreviewSvg({
             </text>
           </g>
         ))}
-        <text
-          className="section-preview__dims"
-          x={bounds.minX + widthMm / 2}
-          y={bounds.minY + heightMm + PAD_MM}
-          fontSize={fontSize}
-          textAnchor="middle"
-        >
-          {`${widthMm} × ${heightMm} mm`}
-        </text>
       </svg>
-      <figcaption>{provenance}</figcaption>
+      {/* Las cotas van en HTML: dentro del SVG escalan con el viewBox y en
+          secciones pequeñas caían bajo el piso legible (1–10 px). */}
+      <figcaption>
+        {provenance} · {`${widthMm} × ${heightMm} mm`}
+      </figcaption>
     </figure>
   );
 }

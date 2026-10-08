@@ -6,12 +6,21 @@ from decimal import Decimal, InvalidOperation
 from typing import Literal, cast
 
 from dekopen_engine import (
+    BayLeaf,
     BayOpeningType,
+    ColorCombinationError,
+    ColorSelection,
     CoupledAssembly,
     CouplingDef,
     EffectiveProfileArticle,
     EngineResult,
+    HingeSide,
+    IncompatibleTypologyError,
+    LeafRole,
     NodeType,
+    Opening,
+    OpeningDirection,
+    OpeningMovement,
     ParametricNode,
     ProductEvaluation,
     ProductModel,
@@ -19,12 +28,17 @@ from dekopen_engine import (
     SlidingLayout,
     SlidingPanel,
     SlidingPanelKind,
+    SlidingTravel,
     SystemParams,
+    UnitKind,
     calculate_geometry,
     evaluate_product,
+    resolve_color_selection,
 )
 from dekopen_engine.contour import Contour
-from dekopen_engine.models import PlanPoint
+from dekopen_engine.glass_composition import composition_from_dict
+from dekopen_engine.models import GlassOptions, PlanPoint
+from dekopen_engine.models import ExtraSelection
 from dekopen_engine.product import (
     ConnectionKind,
     EdgeSide,
@@ -56,12 +70,22 @@ _NODE_FIELDS = {
     "opening_type",
     "glass_thickness_mm",
     "glass_spec",
+    "glass_composition",
+    "glass_options",
     "glass_article_sku",
     "panel_article_sku",
     "hardware_set_sku",
     "handle_height_mm",
+    "handle_model_sku",
+    "handle_color_sku",
+    "hardware_option_skus",
     "door_handedness",
     "sliding_layout",
+    # D03 — the opening spec is the new source of truth; opening_type
+    # stays accepted for one version.
+    "opening",
+    "leaves",
+    "unit_kind",
 }
 _DECIMAL_NODE_FIELDS = {
     "width_mm",
@@ -113,14 +137,62 @@ def parse_parametric_node(payload: object) -> ParametricNode:
         "glass_article_sku",
         "panel_article_sku",
         "hardware_set_sku",
+        "handle_model_sku",
+        "handle_color_sku",
     ):
         if field_name in raw and raw[field_name] is not None:
             if not isinstance(raw[field_name], str):
                 raise InvalidEngineRequest(f"{field_name} must be a string")
             values[field_name] = raw[field_name]
 
+    if "hardware_option_skus" in raw and raw["hardware_option_skus"] is not None:
+        option_skus = raw["hardware_option_skus"]
+        if not isinstance(option_skus, list) or not all(
+            isinstance(sku, str) for sku in option_skus
+        ):
+            raise InvalidEngineRequest(
+                "hardware_option_skus must be an array of strings"
+            )
+        values["hardware_option_skus"] = list(option_skus)
+
     if "sliding_layout" in raw and raw["sliding_layout"] is not None:
         values["sliding_layout"] = _parse_sliding_layout(raw["sliding_layout"])
+
+    if "glass_composition" in raw and raw["glass_composition"] is not None:
+        if not isinstance(raw["glass_composition"], dict):
+            raise InvalidEngineRequest("glass_composition must be an object")
+        try:
+            values["glass_composition"] = composition_from_dict(
+                cast(dict[str, object], raw["glass_composition"])
+            )
+        except (ValueError, TypeError, KeyError) as error:
+            raise InvalidEngineRequest("Invalid glass_composition") from error
+
+    if "glass_options" in raw and raw["glass_options"] is not None:
+        if not isinstance(raw["glass_options"], dict):
+            raise InvalidEngineRequest("glass_options must be an object")
+        try:
+            values["glass_options"] = GlassOptions(
+                **cast(dict[str, object], raw["glass_options"])
+            )
+        except (ValueError, TypeError) as error:
+            raise InvalidEngineRequest("Invalid glass_options") from error
+
+    if "opening" in raw and raw["opening"] is not None:
+        values["opening"] = _parse_opening(raw["opening"])
+    # An empty leaf list is the unset form — pydantic serializes the
+    # default as [], so the wire contract treats it as absent.
+    if raw.get("leaves"):
+        values["leaves"] = _parse_leaves(raw["leaves"])
+    if "unit_kind" in raw and raw["unit_kind"] is not None:
+        if not isinstance(raw["unit_kind"], str):
+            raise InvalidEngineRequest("unit_kind must be a string")
+        try:
+            values["unit_kind"] = UnitKind(cast(str, raw["unit_kind"]))
+        except ValueError as error:
+            raise InvalidEngineRequest(
+                "unit_kind must be WINDOW or DOOR"
+            ) from error
 
     if "door_handedness" in raw and raw["door_handedness"] is not None:
         if raw["door_handedness"] not in ("LEFT", "RIGHT"):
@@ -137,24 +209,108 @@ def parse_parametric_node(payload: object) -> ParametricNode:
         raise InvalidEngineRequest("Invalid parametric_tree") from error
 
 
+_OPENING_FIELDS = {"movement", "hinge_side", "direction", "leaf_role", "fixed_in_sash"}
+_LEAF_FIELDS = {"slot", "opening", "axis_offset_mm"}
+
+
+def _parse_opening(payload: object) -> Opening:
+    """Deserialize a leaf's kinematics (D03): movement × hinge × direction
+    × role; the engine's own validators reject incoherent combinations."""
+    raw = _require_dict(payload, "opening")
+    unexpected = set(raw) - _OPENING_FIELDS
+    if unexpected:
+        raise InvalidEngineRequest(
+            f"opening contains unsupported fields: {sorted(unexpected)}"
+        )
+    values: dict[str, object] = {}
+    movement_raw = _require_str(raw.get("movement"), "opening.movement")
+    try:
+        values["movement"] = OpeningMovement(movement_raw)
+    except ValueError as error:
+        raise InvalidEngineRequest(
+            "opening.movement must be one of "
+            + ", ".join(member.value for member in OpeningMovement)
+        ) from error
+    for field_name, enum in (
+        ("hinge_side", HingeSide),
+        ("direction", OpeningDirection),
+        ("leaf_role", LeafRole),
+    ):
+        if field_name in raw and raw[field_name] is not None:
+            text = _require_str(raw[field_name], f"opening.{field_name}")
+            try:
+                values[field_name] = enum(text)
+            except ValueError as error:
+                raise InvalidEngineRequest(
+                    f"opening.{field_name} must be one of "
+                    + ", ".join(member.value for member in enum)
+                ) from error
+    if raw.get("fixed_in_sash") is not None:
+        if not isinstance(raw["fixed_in_sash"], bool):
+            raise InvalidEngineRequest("opening.fixed_in_sash must be a boolean")
+        values["fixed_in_sash"] = raw["fixed_in_sash"]
+    try:
+        return Opening(**values)
+    except ValueError as error:
+        raise InvalidEngineRequest(f"invalid opening: {error}") from error
+
+
+def _parse_leaves(payload: object) -> list[BayLeaf]:
+    if not isinstance(payload, list) or not payload:
+        raise InvalidEngineRequest("leaves must be a non-empty array")
+    leaves: list[BayLeaf] = []
+    for index, item in enumerate(payload):
+        raw = _require_dict(item, f"leaves[{index}]")
+        unexpected = set(raw) - _LEAF_FIELDS
+        if unexpected:
+            raise InvalidEngineRequest(
+                f"leaves[{index}] contains unsupported fields: "
+                f"{sorted(unexpected)}"
+            )
+        axis_raw = raw.get("axis_offset_mm")
+        axis_offset: Decimal | None = None
+        if axis_raw is not None:
+            try:
+                axis_offset = Decimal(str(axis_raw))
+            except InvalidOperation as error:
+                raise InvalidEngineRequest(
+                    f"leaves[{index}].axis_offset_mm must be numeric"
+                ) from error
+        leaves.append(
+            BayLeaf(
+                slot=_require_str(raw.get("slot"), f"leaves[{index}].slot"),
+                opening=_parse_opening(raw.get("opening")),
+                axis_offset_mm=axis_offset,
+            )
+        )
+    return leaves
+
+
 def _parse_sliding_layout(payload: object) -> SlidingLayout:
     """Deserialize a node's declared sliding topology: rail count plus the
     ordered panels with their kind/track."""
     raw = _require_dict(payload, "sliding_layout")
-    unexpected = set(raw) - {"tracks", "panels"}
+    unexpected = set(raw) - {"tracks", "panels", "primary_index"}
     if unexpected:
         raise InvalidEngineRequest(
             f"sliding_layout contains unsupported fields: {sorted(unexpected)}"
         )
     if not isinstance(raw.get("tracks"), int) or isinstance(raw.get("tracks"), bool):
         raise InvalidEngineRequest("sliding_layout.tracks must be an integer")
+    primary_index = raw.get("primary_index")
+    if primary_index is not None and (
+        not isinstance(primary_index, int) or isinstance(primary_index, bool)
+    ):
+        raise InvalidEngineRequest(
+            "sliding_layout.primary_index must be an integer or null"
+        )
     panels = raw.get("panels")
     if not isinstance(panels, list) or not panels:
         raise InvalidEngineRequest("sliding_layout.panels must be a non-empty array")
     parsed_panels: list[SlidingPanel] = []
     for index, panel in enumerate(panels):
         panel_raw = _require_dict(panel, f"sliding_layout.panels[{index}]")
-        unexpected_panel = set(panel_raw) - {"slot", "kind", "track"}
+        unexpected_panel = set(panel_raw) - {"slot", "kind", "track", "travel"}
         if unexpected_panel:
             raise InvalidEngineRequest(
                 "sliding_layout.panels contains unsupported fields: "
@@ -173,10 +329,30 @@ def _parse_sliding_layout(payload: object) -> SlidingLayout:
             not isinstance(track, int) or isinstance(track, bool)
         ):
             raise InvalidEngineRequest("sliding_layout.panels[].track must be an integer or null")
-        parsed_panels.append(
-            SlidingPanel(slot=panel_raw["slot"], kind=kind, track=track)
+        travel = panel_raw.get("travel")
+        if travel is not None:
+            try:
+                travel = SlidingTravel(cast(str, travel))
+            except ValueError as error:
+                raise InvalidEngineRequest(
+                    "sliding_layout.panels[].travel must be LEFT, RIGHT or null"
+                ) from error
+        try:
+            parsed_panels.append(
+                SlidingPanel(
+                    slot=panel_raw["slot"], kind=kind, track=track, travel=travel
+                )
+            )
+        except ValueError as error:
+            raise InvalidEngineRequest(
+                f"invalid sliding_layout panel: {error}"
+            ) from error
+    try:
+        return SlidingLayout(
+            tracks=raw["tracks"], panels=parsed_panels, primary_index=primary_index
         )
-    return SlidingLayout(tracks=raw["tracks"], panels=parsed_panels)
+    except ValueError as error:
+        raise InvalidEngineRequest(f"invalid sliding_layout: {error}") from error
 
 
 def parse_contour(payload: object) -> Contour | None:
@@ -317,18 +493,51 @@ def parse_frameless(payload: object) -> FramelessSpec | None:
         raise InvalidEngineRequest("Invalid module frameless spec") from error
 
 
+class InvalidColorCombination(InvalidEngineRequest):
+    """A rejected finish pair — the engine's declared reason (es-CL) is
+    user-facing: it names the faces and the rule, so it flows to the API
+    error detail under its own contract code, never a generic validation."""
+
+    def __init__(self, detail: str, *, reason: str) -> None:
+        super().__init__(detail)
+        self.reason = reason
+
+
+def color_selection_from_api(
+    *,
+    color: str,
+    color_exterior: str | None,
+    params: SystemParams,
+) -> ColorSelection:
+    """The requested finish pair validated against the declared catalog (D05).
+
+    ``color`` is the interior face; ``color_exterior`` defaults to it when
+    absent — a request without the field behaves exactly like the pre-D05
+    single-finish contract. Every impossible combination surfaces the
+    engine's declared reason, never a silent coercion.
+    """
+    try:
+        return resolve_color_selection(
+            params,
+            interior_code=color,
+            exterior_code=color_exterior or color,
+        )
+    except ColorCombinationError as error:
+        raise InvalidColorCombination(str(error), reason=error.code) from error
+
+
 def normalized_root_from_api(
     *,
     parametric_tree: object,
     nominal_width_mm: Decimal,
     nominal_height_mm: Decimal,
     color: str,
+    color_exterior: str | None = None,
     params: SystemParams,
 ) -> ParametricNode:
-    if color not in params.finishes:
-        raise InvalidEngineRequest(
-            f"finish '{color}' is not declared for system {params.system_code}"
-        )
+    color_selection_from_api(
+        color=color, color_exterior=color_exterior, params=params
+    )
 
     root = parse_parametric_node(parametric_tree)
     if root.width_mm is not None and root.width_mm != nominal_width_mm:
@@ -343,21 +552,31 @@ def normalized_root_from_api(
 
 def calculate_from_api(
     *, parametric_tree: object, nominal_width_mm: Decimal, nominal_height_mm: Decimal,
-    color: str, params: SystemParams,
+    color: str, color_exterior: str | None = None, params: SystemParams,
 ) -> EngineResult:
+    selection = color_selection_from_api(
+        color=color, color_exterior=color_exterior, params=params
+    )
     root = normalized_root_from_api(
         parametric_tree=parametric_tree, nominal_width_mm=nominal_width_mm,
-        nominal_height_mm=nominal_height_mm, color=color, params=params,
+        nominal_height_mm=nominal_height_mm, color=color,
+        color_exterior=color_exterior, params=params,
     )
     try:
-        return calculate_geometry(root, params, is_foiled=color != "WHITE")
+        return calculate_geometry(root, params, color_selection=selection)
+    except IncompatibleTypologyError:
+        # DomainRejection is a ValueError — let it through untranslated so
+        # the view can answer typology_incompatible with the systems that
+        # do admit the opening (D08's "no disponible con causa" contract).
+        raise
     except NotImplementedError as error:
         raise UnsupportedEngineContract(str(error)) from error
     except ValueError as error:
         raise InvalidEngineRequest(str(error)) from error
 
 
-_PRODUCT_FIELDS = {"version", "assembly"}
+_PRODUCT_FIELDS = {"version", "assembly", "extras"}
+_EXTRA_FIELDS = {"sku", "sides", "qty", "vuelo_left_mm", "vuelo_right_mm"}
 _ASSEMBLY_FIELDS = {"modules", "couplings"}
 _MODULE_FIELDS = {
     "id", "width_mm", "height_mm", "tree", "contour", "frameless",
@@ -370,6 +589,63 @@ _COUPLING_FIELDS = {
     "modules",
     "edges",
 }
+
+
+def _parse_extras(payload: object) -> list[ExtraSelection]:
+    """D06 extras declared on the position — shape-checked at the edge; the
+    engine decides which sku it can actually measure and sell."""
+    if payload is None:
+        return []
+    if not isinstance(payload, list):
+        raise InvalidEngineRequest("product.extras must be an array")
+    selections: list[ExtraSelection] = []
+    for index, item in enumerate(payload):
+        label = f"product.extras[{index}]"
+        raw = _require_dict(item, label)
+        unexpected = set(raw) - _EXTRA_FIELDS
+        if unexpected:
+            raise InvalidEngineRequest(
+                f"{label} contains unsupported fields: {sorted(unexpected)}"
+            )
+        sku = _require_str(raw.get("sku"), f"{label}.sku")
+        sides_raw = raw.get("sides", [])
+        if not isinstance(sides_raw, list) or any(
+            side not in EdgeSide._value2member_map_ for side in sides_raw
+        ):
+            raise InvalidEngineRequest(
+                f"{label}.sides must be an array of sides "
+                "(left/right/top/bottom)"
+            )
+        qty_raw = raw.get("qty")
+        qty = (
+            None
+            if qty_raw is None
+            else _positive_qty(qty_raw, f"{label}.qty")
+        )
+        vuelo_left = (
+            None
+            if raw.get("vuelo_left_mm") is None
+            else _decimal_string(
+                raw.get("vuelo_left_mm"), f"{label}.vuelo_left_mm"
+            )
+        )
+        vuelo_right = (
+            None
+            if raw.get("vuelo_right_mm") is None
+            else _decimal_string(
+                raw.get("vuelo_right_mm"), f"{label}.vuelo_right_mm"
+            )
+        )
+        selections.append(
+            ExtraSelection(
+                sku=sku,
+                sides=tuple(EdgeSide(side) for side in sides_raw),
+                qty=qty,
+                vuelo_left_mm=vuelo_left,
+                vuelo_right_mm=vuelo_right,
+            )
+        )
+    return selections
 
 
 def _require_dict(payload: object, field_name: str) -> dict[str, object]:
@@ -532,6 +808,7 @@ def parse_product_model(payload: object) -> ProductModel:
         return ProductModel(
             version=cast(Literal["product-v2"], "product-v2"),
             assembly=CoupledAssembly(modules=modules, couplings=couplings),
+            extras=_parse_extras(raw.get("extras")),
         )
     except ValueError as error:
         raise InvalidEngineRequest("Invalid product model") from error
@@ -541,20 +818,23 @@ def evaluate_assembly_from_api(
     *,
     product: object,
     color: str,
+    color_exterior: str | None = None,
     params: SystemParams,
     coupler_articles: dict[str, EffectiveProfileArticle] | None = None,
 ) -> ProductEvaluation:
-    if color not in params.finishes:
-        raise InvalidEngineRequest(
-            f"finish '{color}' is not declared for system {params.system_code}"
-        )
+    selection = color_selection_from_api(
+        color=color, color_exterior=color_exterior, params=params
+    )
     model = (
         product
         if isinstance(product, ProductModel)
         else parse_product_model(product)
     )
     return evaluate_product(
-        model, params, coupler_articles=coupler_articles, is_foiled=color != "WHITE"
+        model,
+        params,
+        coupler_articles=coupler_articles,
+        color_selection=selection,
     )
 
 
@@ -569,6 +849,7 @@ def engine_result_from_api(
     *,
     tree: object,
     color: str,
+    color_exterior: str | None = None,
     params: SystemParams,
     nominal_width_mm: Decimal | None = None,
     nominal_height_mm: Decimal | None = None,
@@ -583,6 +864,7 @@ def engine_result_from_api(
         evaluation = evaluate_assembly_from_api(
             product=tree,
             color=color,
+            color_exterior=color_exterior,
             params=params,
             coupler_articles=coupler_articles or {},
         )
@@ -598,5 +880,6 @@ def engine_result_from_api(
         nominal_width_mm=nominal_width_mm,
         nominal_height_mm=nominal_height_mm,
         color=color,
+        color_exterior=color_exterior,
         params=params,
     )

@@ -5,6 +5,7 @@ import {
   baySpec,
   changeOpening,
   exactMm,
+  flipBay,
   intentBays,
   moveDivision,
   requestTree,
@@ -216,13 +217,20 @@ describe("rectangular intent", () => {
     );
     expect(baySpec(bay)).toEqual({
       opening_type: "FIXED",
+      opening: null,
+      leaves: null,
       sliding_layout: null,
       door_handedness: null,
       glass_thickness_mm: "24.00",
       glass_spec: "4-16-4",
       glass_article_sku: "GLASS-A",
+      glass_composition: null,
+      glass_options: null,
       panel_article_sku: null,
       hardware_set_sku: null,
+      handle_model_sku: null,
+      handle_color_sku: null,
+      hardware_option_skus: null,
       handle_height_mm: null,
     });
   });
@@ -264,5 +272,45 @@ describe("rectangular intent", () => {
       useCanvasStore.getState().acceptIntent(base, { ...base, nominalWidthMm: "1200.00" }, "g1"),
     ).toBe(false);
     expect(useCanvasStore.getState().inputs.nominalWidthMm).toBe("1000.00");
+  });
+});
+
+describe("D08 — vanos spec de la familia slide", () => {
+  const hstBay: IntentNode = {
+    id: "bay-hst",
+    type: "BAY",
+    opening: { movement: "LIFT_SLIDE" },
+    sliding_layout: {
+      tracks: 2,
+      panels: [
+        { slot: "S1", kind: "MOVING", track: 1, travel: "RIGHT" },
+        { slot: "S2", kind: "FIXED", track: null, travel: null },
+      ],
+    },
+  };
+
+  it("el espejo invierte la topología declarada (X/O → O/X)", () => {
+    const flipped = flipBay(hstBay);
+    expect(flipped).not.toBeNull();
+    expect(flipped!.sliding_layout?.panels).toEqual([
+      { slot: "S2", kind: "FIXED", track: null, travel: null },
+      { slot: "S1", kind: "MOVING", track: 1, travel: "LEFT" },
+    ]);
+    expect(flipped!.opening).toEqual({ movement: "LIFT_SLIDE" });
+  });
+
+  it("dividir conserva una topología fabricable en cada mitad", () => {
+    const tree = splitBay(
+      hstBay,
+      hstBay.id,
+      { type: "SPLIT_V", offsetMm: "1000", mullionSku: "MULL-90" },
+      { split: "split-hst", secondBay: "bay-hst-2" },
+    );
+    const [left, right] = tree.children ?? [];
+    for (const half of [left, right]) {
+      expect(half?.sliding_layout?.panels?.some((p) => p.kind === "MOVING")).toBe(true);
+      expect(half?.opening).toEqual({ movement: "LIFT_SLIDE" });
+    }
+    expect(right?.sliding_layout).not.toBe(left?.sliding_layout);
   });
 });

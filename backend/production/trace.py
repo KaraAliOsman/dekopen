@@ -233,7 +233,7 @@ def trace_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, Any]:
 
     remnants = rows(
         """
-        SELECT id::text, kind, status, material, color,
+        SELECT id::text, remnant_code, kind, status, material, color,
                stock_authority_id::text, sheet_workshop_sku,
                physical_stock_identity::text,
                length_mm, width_mm, height_mm, origin,
@@ -349,7 +349,12 @@ def _trace_operations(
         return {"count": 0, "items": [], "unemitted_kinds": []}
     try:
         bars = [
-            CutBar.model_validate_json(json.dumps(bar)) for bar in raw_bars
+            CutBar.model_validate_json(
+                json.dumps(
+                    {k: v for k, v in bar.items() if k != "remnant_code"}
+                )
+            )
+            for bar in raw_bars
         ]
         fact_units = [
             ManufacturingFactsV1.model_validate_json(json.dumps(unit))

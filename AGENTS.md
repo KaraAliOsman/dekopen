@@ -49,6 +49,7 @@ Frontend dev server: `npm --prefix frontend run dev`. Backend: `python backend/m
   human click.
 - Formula changes ship with a golden-case test. Regenerate goldens only via
   `make goldgen` and review the diff.
+- UI: `docs/design/CONSTITUCION.md` is mandatory for product surfaces.
 
 ## Commits and PRs
 

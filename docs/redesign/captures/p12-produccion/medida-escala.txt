@@ -1,0 +1,1 @@
+OT de 100 posiciones (P-ESCALA, OT-P-000046-REV-A-01): detalle con pestañas en 406 ms, pestaña Piezas en 209 ms, total 650 ms (click en tarjeta → interactiva, stack local caliente).

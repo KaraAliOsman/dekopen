@@ -138,7 +138,9 @@ ADMIN_TABLES = {
     'cost-lists': ('cost_lists', ('supplier_name','description','currency','valid_from','valid_to','is_active')),
     'cost-items': ('cost_list_items', ('cost_list_id','sku','description','item_type','unit','unit_cost')),
     'rules': ('pricing_rules', ('pricing_mode','default_margin_pct','tax_rate_pct','waste_factor_pct',
-                              'labor_rate_per_m2','installation_rate_per_m2')),
+                              'labor_rate_per_m2','installation_rate_per_m2',
+                              'margin_min_pct','margin_max_pct',
+                              'discount_approval_threshold_pct')),
     'configurations': ('pricing_configurations', ('context_code','typology','pricing_mode','currency',
                                                 'rate_per_m2','base_glass_sku','catalog_price','is_active')),
     'matrix-cells': ('pricing_matrix_cells', ('configuration_id','width_mm','height_mm','price')),
@@ -154,15 +156,51 @@ def admin_list(resource, org_id):
                     'LEFT JOIN public.projects p ON p.id=l.project_id AND p.org_id=l.org_id '
                     'WHERE l.org_id=%s ORDER BY l.created_at DESC,l.id LIMIT 200', [org_id])
     if resource == 'coverage':
+        # P07 — los SKU que el motor efectivamente pide a la lista de costos:
+        # las identidades de compra declaradas por el catálogo (no la
+        # clase técnica). org_id NULL = catálogo global compartido.
         return rows("""WITH catalog AS (
-            SELECT sku::text AS sku, name::text AS name, 'PROFILE'::text AS kind, 'M'::text AS required_unit
-              FROM public.profile_articles WHERE org_id=%s OR org_id IS NULL
+            SELECT m.commercial_sku::text AS sku, a.name::text AS name,
+                   'PROFILE'::text AS kind, 'M'::text AS required_unit
+              FROM public.profile_purchase_mappings m
+              JOIN public.profile_articles a ON a.id=m.profile_article_id
+             WHERE m.org_id=%s OR m.org_id IS NULL
             UNION ALL
-            SELECT sku, name, 'GLASS', 'M2' FROM public.infill_articles WHERE org_id=%s OR org_id IS NULL
+            SELECT r.commercial_sku::text, r.name::text, 'REINFORCEMENT', 'M'
+              FROM public.reinforcement_articles r
+             WHERE r.org_id=%s OR r.org_id IS NULL
             UNION ALL
-            SELECT sku, name, 'HARDWARE', 'KIT' FROM public.hardware_kits WHERE org_id=%s OR org_id IS NULL
+            SELECT g.technical_sku::text, g.manufacturer_name::text, 'GLASS', 'M2'
+              FROM public.glass_purchase_mappings g
+             WHERE g.org_id=%s OR g.org_id IS NULL
             UNION ALL
-            SELECT sku, name, 'REINFORCEMENT', 'M' FROM public.reinforcement_articles WHERE org_id=%s OR org_id IS NULL
+            SELECT g.purchasing_sku::text, g.manufacturer_name::text, 'GLASS', 'EA'
+              FROM public.glass_purchase_mappings g
+             WHERE g.org_id=%s OR g.org_id IS NULL
+            UNION ALL
+            SELECT p.sku::text, p.name::text, 'PANEL', 'M2'
+              FROM public.infill_articles p
+             WHERE p.org_id=%s OR p.org_id IS NULL
+            UNION ALL
+            SELECT p.purchasing_sku::text, p.manufacturer_name::text, 'PANEL', 'EA'
+              FROM public.panel_purchase_authorities p
+             WHERE p.org_id=%s OR p.org_id IS NULL
+            UNION ALL
+            SELECT k.sku::text, k.name::text, 'HARDWARE', 'KIT'
+              FROM public.hardware_kits k
+             WHERE k.org_id=%s OR k.org_id IS NULL
+            UNION ALL
+            SELECT h.purchasing_sku::text, h.manufacturer_name::text, 'HARDWARE', 'KIT'
+              FROM public.hardware_purchase_mappings h
+             WHERE h.org_id=%s OR h.org_id IS NULL
+            UNION ALL
+            SELECT f.technical_sku::text, f.manufacturer_name::text, 'FITTING', 'EA'
+              FROM public.fitting_purchase_mappings f
+             WHERE f.org_id=%s OR f.org_id IS NULL
+            UNION ALL
+            SELECT f.purchasing_sku::text, f.manufacturer_name::text, 'FITTING', 'EA'
+              FROM public.fitting_purchase_mappings f
+             WHERE f.org_id=%s OR f.org_id IS NULL
         )
         SELECT c.sku, c.name, c.kind, c.required_unit, COUNT(i.id) AS active_cost_items
         FROM catalog c
@@ -172,7 +210,7 @@ def admin_list(resource, org_id):
                      WHERE l.id=i.cost_list_id AND l.org_id=%s AND l.is_active
                        AND (l.valid_to IS NULL OR l.valid_to>=current_date))
         GROUP BY c.sku, c.name, c.kind, c.required_unit
-        ORDER BY COUNT(i.id), c.kind, c.sku""", [org_id]*6)
+        ORDER BY COUNT(i.id), c.kind, c.sku""", [org_id]*11)
     if resource not in ADMIN_TABLES:
         raise PricingError('unknown_pricing_resource')
     table, _ = ADMIN_TABLES[resource]

@@ -5,6 +5,9 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { ProjectWriteRequestThermalWallAreas } from "./projectWriteRequestThermalWallAreas";
+import type { ProjectWriteRequestThermalZone } from "./projectWriteRequestThermalZone";
+import type { ThermalUseEnum } from "./thermalUseEnum";
 
 export interface ProjectWriteRequest {
   /**
@@ -33,4 +36,9 @@ export interface ProjectWriteRequest {
   delivery_address?: string;
   notes_commercial?: string;
   notes_internal?: string;
+  thermal_zone?:
+    (typeof ProjectWriteRequestThermalZone)[keyof typeof ProjectWriteRequestThermalZone] | null;
+  thermal_use?: ThermalUseEnum;
+  /** @nullable */
+  thermal_wall_areas?: ProjectWriteRequestThermalWallAreas;
 }

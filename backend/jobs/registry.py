@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 from uuid import UUID
 
 from rest_framework import serializers
@@ -35,7 +35,13 @@ class JobContext:
     payload: dict[str, Any]
 
 
-ProgressReporter = Callable[[float], None]
+class ProgressReporter(Protocol):
+    """The worker's progress channel. `phase` (IA3) is the named intermediate
+    state the UI renders next to the percent — None leaves it unchanged."""
+
+    def __call__(self, progress: float, phase: str | None = None) -> None: ...
+
+
 JobRunner = Callable[[dict[str, Any], JobContext, ProgressReporter], dict[str, Any]]
 PayloadAuthorizer = Callable[[dict[str, Any], str], bool]
 

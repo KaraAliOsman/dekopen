@@ -7,7 +7,15 @@ import type { PlanGeometry } from "../../api/generated/models";
 import { t } from "../../i18n/es-CL";
 import type { ProductJson } from "./productEditing";
 import { useTheme } from "../../theme/ThemeProvider";
-import { buildScene3D, type LeafMotion, type Scene3D, type Solid3D } from "./Product3DScene";
+import {
+  buildScene3D,
+  wallContext,
+  type LeafMotion,
+  type Scene3D,
+  type Solid3D,
+  type Vec3,
+} from "./Product3DScene";
+import { explodeLifts, leafPart, leafPose } from "./leafPose";
 import { solidToGeometry } from "./scene3dGeometry";
 import {
   contactShadowTexture,
@@ -19,9 +27,6 @@ import {
 import type { MemberGeometry } from "./members";
 import { webglAvailable } from "./webglAvailable";
 import type { SceneDiagnostic } from "./hardwareVisual";
-
-const SWING_RAD = (32 * Math.PI) / 180;
-const TILT_RAD = (13 * Math.PI) / 180;
 
 /** Enables per-material clipping planes once — the Corte toggle then just
  * supplies the plane through the scene center. */
@@ -36,48 +41,59 @@ function ClipSetup(): null {
   return null;
 }
 
+const PART_ORDER = ["sash", "bead", "glazing"] as const;
+
 /** §05-E — a leaf's presentation pose. Wraps the solids carrying its
  * leafId and eases them toward open/closed when the toggle flips — the
  * motion is UI state only and never feeds back into the product model.
  * Swing rotates about the hinge edge (+Y), tilt about the pivot edge (+X),
- * slide translates along X. */
+ * slide translates along X — the real mechanism's single axis, one ease
+ * well under the 280 ms motion contract. Despiece pulls the leaf apart in
+ * the glazing order (sash → junquillo → vidrio) along +z with thin guide
+ * rods back to each part's closed seat — never a floating leaf block. */
 function LeafGroup({
   motion,
   open,
   tiltPose,
   explode,
   depth,
-  children,
+  parts,
 }: {
   motion: LeafMotion;
   open: boolean;
   /** Abatir pose — tilt_turn leaves tip the top in on their bottom pivot
    * while other leaves keep their open pose. Presentation only. */
   tiltPose: boolean;
-  /** Despiece pose: leaves lift toward the room side (+z) — reads the
-   * frame↔sash↔glass layering apart without touching geometry. */
+  /** Despiece pose: ordered axial separation of the leaf's layers with
+   * guide lines back to their closed seat. */
   explode: boolean;
   depth: number;
-  children: React.ReactNode;
+  parts: Record<(typeof PART_ORDER)[number], React.ReactNode>;
 }): JSX.Element {
   const tiltGroup = useRef<THREE.Group>(null);
   const swingGroup = useRef<THREE.Group>(null);
   const inner = useRef<THREE.Group>(null);
+  const partRefs = useRef<Record<string, THREE.Group | null>>({});
+  const guideRefs = useRef<Record<string, THREE.Mesh | null>>({});
   const progress = useRef(0);
   const explodeProgress = useRef(0);
   const invalidate = useThree((state) => state.invalidate);
+  const guideColor = tokenColor("--model3d-edge", "rgb(107,112,117)");
   // A tilt_turn leaf owns two pivots — swing (side hinge) and tilt (bottom
   // rail). `activePivot` records which one `progress` currently expresses;
   // switching poses closes the leaf first, then reopens on the other pivot
   // — a real leaf cannot teleport between the two (review: Abatir dead
   // after Abrir).
   const activePivot = useRef<"swing" | "tilt">("swing");
-  // Abatir poses only tilt_turn leaves — other kinds keep obeying Abrir.
-  const wantOpen = motion.kind === "tilt_turn" ? open || tiltPose : open;
+  // Despiece always poses the leaf closed first — an exploded leaf reading
+  // half-open is exactly the floating-leaf slop P19 removes.
+  const wantOpen = !explode && (motion.kind === "tilt_turn" ? open || tiltPose : open);
   const target = wantOpen ? 1 : 0;
   const explodeTarget = explode ? 1 : 0;
   useFrame((_, delta) => {
-    const step = Math.min(1, delta * 5.5);
+    // §13/§8: pose easing settles inside the 280 ms motion contract —
+    // rate 11/s ≈ 95 % travelled at ~270 ms while still visibly eased.
+    const step = Math.min(1, delta * 11);
     const wantPivot = tiltPose ? "tilt" : "swing";
     let switched = false;
     let switching = motion.kind === "tilt_turn" && wantPivot !== activePivot.current;
@@ -106,9 +122,9 @@ function LeafGroup({
       const next = explodeProgress.current + (explodeTarget - explodeProgress.current) * step;
       explodeProgress.current = Math.abs(next - explodeTarget) < 0.004 ? explodeTarget : next;
     }
-    const pose = progress.current;
     const tilted = motion.kind === "tilt_turn" && activePivot.current === "tilt";
-    const lift = explodeProgress.current * Math.max(depth * 1.35, 60);
+    const pose = leafPose(motion, progress.current, tilted);
+    const lifts = explodeLifts(depth, explodeProgress.current);
     const tiltGroupEl = tiltGroup.current;
     const swingGroupEl = swingGroup.current;
     const innerGroup = inner.current;
@@ -117,40 +133,69 @@ function LeafGroup({
     // bottom rail for tilt_turn / top rail for awning), mid about the
     // hinge edge (Ry) — at most one carries an angle per pose. Mid's
     // position re-expresses the hinge pivot inside the tilted frame.
-    const tiltPivot = motion.tiltPivot ?? 0;
-    if (motion.kind === "swing") {
-      tiltGroupEl.position.set(0, 0, 0);
-      tiltGroupEl.rotation.x = 0;
-      swingGroupEl.position.set(motion.pivot, 0, 0);
-      swingGroupEl.rotation.y = motion.dir * pose * SWING_RAD;
-      innerGroup.position.set(-motion.pivot, 0, lift);
-    } else if (motion.kind === "tilt") {
-      tiltGroupEl.position.set(0, motion.pivot, 0);
-      tiltGroupEl.rotation.x = motion.dir * pose * TILT_RAD;
-      swingGroupEl.position.set(0, -motion.pivot, 0);
-      swingGroupEl.rotation.y = 0;
-      innerGroup.position.set(0, 0, lift);
-    } else if (motion.kind === "tilt_turn") {
-      tiltGroupEl.position.set(0, tiltPivot, 0);
-      tiltGroupEl.rotation.x = tilted ? pose * TILT_RAD : 0;
-      swingGroupEl.position.set(motion.pivot, -tiltPivot, 0);
-      swingGroupEl.rotation.y = tilted ? 0 : motion.dir * pose * SWING_RAD;
-      innerGroup.position.set(-motion.pivot, 0, lift);
-    } else {
-      tiltGroupEl.position.set(motion.dir * pose * motion.travel, 0, 0);
-      tiltGroupEl.rotation.x = 0;
-      swingGroupEl.position.set(0, 0, 0);
-      swingGroupEl.rotation.y = 0;
-      innerGroup.position.set(0, 0, lift);
+    tiltGroupEl.position.set(...pose.tiltPos);
+    tiltGroupEl.rotation.x = pose.tiltRotX;
+    swingGroupEl.position.set(...pose.swingPos);
+    swingGroupEl.rotation.y = pose.swingRotY;
+    innerGroup.position.set(...pose.innerPos);
+    for (const part of PART_ORDER) {
+      const group = partRefs.current[part];
+      if (group) group.position.set(0, 0, lifts[part]);
+      const guide = guideRefs.current[part];
+      if (guide) {
+        const lift = lifts[part];
+        guide.visible = lift > 0.5;
+        guide.position.set(motion.cx, motion.cy, motion.partZ[part] + lift / 2);
+        guide.scale.set(1, 1, Math.max(lift, 0.01));
+      }
     }
     invalidate();
   });
   return (
-    <group ref={tiltGroup}>
-      <group ref={swingGroup}>
-        <group ref={inner}>{children}</group>
+    <>
+      <group ref={tiltGroup}>
+        <group ref={swingGroup}>
+          <group ref={inner}>
+            <group
+              ref={(node) => {
+                partRefs.current.sash = node;
+              }}
+            >
+              {parts.sash}
+            </group>
+            <group
+              ref={(node) => {
+                partRefs.current.bead = node;
+              }}
+            >
+              {parts.bead}
+            </group>
+            <group
+              ref={(node) => {
+                partRefs.current.glazing = node;
+              }}
+            >
+              {parts.glazing}
+            </group>
+          </group>
+        </group>
       </group>
-    </group>
+      {/* Despiece guides — thin rods from each separated part back to its
+       * closed seat on the leaf's axis. */}
+      {PART_ORDER.map((part) => (
+        <mesh
+          key={part}
+          ref={(node) => {
+            guideRefs.current[part] = node;
+          }}
+          visible={false}
+          renderOrder={2}
+        >
+          <boxGeometry args={[2.2, 2.2, 1]} />
+          <meshBasicMaterial color={guideColor} transparent opacity={0.85} />
+        </mesh>
+      ))}
+    </>
   );
 }
 
@@ -187,6 +232,7 @@ function tokenColor(token: string, fallback: string): string {
 }
 
 function SolidMesh({
+  face,
   solid,
   selected,
   theme,
@@ -200,6 +246,9 @@ function SolidMesh({
    * flip CSS variables without otherwise re-rendering this subtree. */
   theme: string;
   mode: MaterialMode;
+  /** Which physical face the camera sees — the bicolor pair's exterior or
+   * interior swatch (D05). */
+  face: "exterior" | "interior";
   clipPlane: THREE.Plane | null;
   onPick(owner: string): void;
 }): JSX.Element {
@@ -207,7 +256,7 @@ function SolidMesh({
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- theme re-resolves
   // the same tokens against the new CSS variable values.
-  const material = useMemo(() => solidMaterial(solid, mode), [solid, mode]);
+  const material = useMemo(() => solidMaterial(solid, mode, face), [solid, mode, face]);
   const color = useMemo(
     () => tokenColor(material.colorToken, material.colorFallback),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -306,14 +355,27 @@ function StudioEnvironment({ commercial }: { commercial: boolean }): null {
 /** Keeps the live camera fitted when the scene bounds change — the Canvas
  * `camera` prop only applies at mount, so a growing assembly would leave
  * the original frustum. Refits along the current view direction so the
- * user's orbit angle survives a product edit. */
-function CameraRig({ radius }: { radius: number }): null {
+ * user's orbit angle survives a product edit. `focus` (the Detalle preset)
+ * dollies onto the leaf's declared hardware anchor instead. */
+function CameraRig({ radius, focus }: { radius: number; focus: Vec3 | null }): null {
   const camera = useThree((state) => state.camera);
   const controls = useThree((state) => state.controls) as unknown as {
     target?: THREE.Vector3;
     update?: () => void;
   } | null;
   useEffect(() => {
+    if (focus) {
+      // Detalle: a close orbit off the leaf's handle mount point — the
+      // camera drops toward the room face so the hardware reads first.
+      const anchor = new THREE.Vector3(focus[0], focus[1], focus[2]);
+      if (controls?.target) controls.target.copy(anchor);
+      camera.position.copy(anchor).add(new THREE.Vector3(190, 80, 420));
+      camera.near = 1;
+      camera.far = radius * 12;
+      camera.updateProjectionMatrix();
+      controls?.update?.();
+      return;
+    }
     const distance = radius * 2.4;
     // Refit along the current view direction around the controls' target —
     // panning moves both, so rescaling about the world origin would change
@@ -326,7 +388,7 @@ function CameraRig({ radius }: { radius: number }): null {
     camera.far = distance * 10;
     camera.updateProjectionMatrix();
     controls?.update?.();
-  }, [camera, controls, radius]);
+  }, [camera, controls, radius, focus]);
   return null;
 }
 
@@ -376,6 +438,8 @@ function SceneContent({
   clip,
   explode,
   tiltPose,
+  wall,
+  focus,
   onPick,
 }: {
   scene: Scene3D;
@@ -387,6 +451,11 @@ function SceneContent({
   clip: boolean;
   explode: boolean;
   tiltPose: boolean;
+  /** Vano toggle — draws the plastered wall opening + sill around the
+   * assembly so the product reads seated, not floating. */
+  wall: boolean;
+  /** Detalle preset — camera anchor (the first leaf's handle mount). */
+  focus: Vec3 | null;
   onPick(owner: string): void;
 }): JSX.Element {
   // Corte: a vertical section through the scene center keeps the left
@@ -399,6 +468,7 @@ function SceneContent({
       selected={selection === solid.owner}
       theme={theme}
       mode={mode}
+      face={inside ? "interior" : "exterior"}
       clipPlane={clip ? clipPlane : null}
       onPick={onPick}
     />
@@ -433,29 +503,54 @@ function SceneContent({
             >
               {/* Leaf solids animate as presentation pose — the leaf group
                * rotates/translates around its declared hinge/pivot; fixed
-               * members stay put. */}
-              {module.leaves.map((motion) => (
-                <LeafGroup
-                  key={motion.leafId}
-                  motion={motion}
-                  open={open}
-                  tiltPose={tiltPose}
-                  explode={explode}
-                  depth={module.depth}
-                >
-                  {module.solids
-                    .filter((solid) => solid.leafId === motion.leafId)
-                    .map((solid, index) =>
-                      renderSolid(solid, `${module.moduleId}-${motion.leafId}-${index}`),
-                    )}
-                </LeafGroup>
-              ))}
+               * members stay put. Solids split into despiece parts so the
+               * explode pose reads frame↔sash↔junquillo↔vidrio apart. */}
+              {module.leaves.map((motion) => {
+                const parts: Record<(typeof PART_ORDER)[number], React.ReactNode[]> = {
+                  sash: [],
+                  bead: [],
+                  glazing: [],
+                };
+                module.solids.forEach((solid, index) => {
+                  if (solid.leafId !== motion.leafId) return;
+                  parts[leafPart(solid.surface)].push(
+                    renderSolid(solid, `${module.moduleId}-${motion.leafId}-${index}`),
+                  );
+                });
+                return (
+                  <LeafGroup
+                    key={motion.leafId}
+                    motion={motion}
+                    open={open}
+                    tiltPose={tiltPose}
+                    explode={explode}
+                    depth={module.depth}
+                    parts={parts}
+                  />
+                );
+              })}
               {module.solids
                 .filter((solid) => solid.leafId == null)
                 .map((solid, index) => renderSolid(solid, `${module.moduleId}-f-${index}`))}
             </group>
           ))}
           {scene.couplers.map((solid, index) => renderSolid(solid, `coupler-${index}`))}
+          {/* Vano: the wall opening belongs to the product's world, so it
+           * rotates with the face toggle but never joins the model — no
+           * selection, no explode parts. */}
+          {wall &&
+            wallContext(scene.bounds).map((solid, index) => (
+              <SolidMesh
+                key={`wall-${index}`}
+                solid={solid}
+                selected={false}
+                theme={theme}
+                mode={mode}
+                face={inside ? "interior" : "exterior"}
+                clipPlane={clip ? clipPlane : null}
+                onPick={() => {}}
+              />
+            ))}
         </group>
       </group>
       <OrbitControls
@@ -465,7 +560,7 @@ function SceneContent({
         minDistance={scene.radius * 0.2}
         maxDistance={scene.radius * 8}
       />
-      <CameraRig radius={scene.radius} />
+      <CameraRig radius={scene.radius} focus={focus} />
     </>
   );
 }
@@ -478,6 +573,8 @@ export default function Model3DView({
   onSelectModule,
   onSelectBay,
   onSelectCoupling,
+  inside: insideProp,
+  onInsideChange,
 }: {
   product: ProductJson;
   members: MemberGeometry;
@@ -487,15 +584,41 @@ export default function Model3DView({
   onSelectModule(moduleId: string): void;
   onSelectBay(moduleId: string, bayId: string): void;
   onSelectCoupling(couplingId: string): void;
+  /** Controlled inside/outside override — the editor's Interior/Exterior
+   * selector drives the same state (uncontrolled falls back to internal). */
+  inside?: boolean;
+  onInsideChange?(inside: boolean): void;
 }): JSX.Element {
   const { theme } = useTheme();
   const [mode, setMode] = useState<MaterialMode>("commercial");
-  const [inside, setInside] = useState(false);
+  const [insideState, setInsideState] = useState(false);
+  const inside = insideProp ?? insideState;
+  const setInside = (value: boolean): void => {
+    setInsideState(value);
+    onInsideChange?.(value);
+  };
   const [open, setOpen] = useState(false);
   const [tiltPose, setTiltPose] = useState(false);
   const [clip, setClip] = useState(false);
   const [explode, setExplode] = useState(false);
+  const [wall, setWall] = useState(false);
+  const [detail, setDetail] = useState(false);
   const scene = useMemo(() => buildScene3D(product, members, plan), [product, members, plan]);
+  // Detalle preset anchor — the first leaf's declared handle mount,
+  // lifted from module space into the centered world frame.
+  const detailAnchor = useMemo<Vec3 | null>(() => {
+    for (const module of scene.modules) {
+      for (const motion of module.leaves) {
+        if (!motion.detail) continue;
+        return [
+          module.position[0] + motion.detail[0] - scene.center[0],
+          module.position[1] + motion.detail[1] - scene.center[1],
+          module.position[2] + motion.detail[2] - scene.center[2],
+        ];
+      }
+    }
+    return null;
+  }, [scene]);
   const hasLeaves = useMemo(
     () => scene.modules.some((module) => module.leaves.length > 0),
     [scene],
@@ -572,6 +695,27 @@ export default function Model3DView({
         <button type="button" className={inside ? "is-active" : ""} onClick={() => setInside(true)}>
           {t("assembly.view3dInside")}
         </button>
+        {detailAnchor !== null && (
+          <button
+            type="button"
+            className={detail ? "is-active" : ""}
+            onClick={() => {
+              setDetail((value) => !value);
+              // Hardware anchors live on the room face — the Detalle
+              // preset is an interior close-up by definition.
+              setInside(true);
+            }}
+          >
+            {t("assembly.view3dDetail")}
+          </button>
+        )}
+        <button
+          type="button"
+          className={wall ? "is-active" : ""}
+          onClick={() => setWall((value) => !value)}
+        >
+          {t("assembly.view3dWall")}
+        </button>
         {hasLeaves && (
           <button
             type="button"
@@ -601,7 +745,15 @@ export default function Model3DView({
           <button
             type="button"
             className={explode ? "is-active" : ""}
-            onClick={() => setExplode((value) => !value)}
+            onClick={() =>
+              setExplode((value) => {
+                // Parts separate toward the room (+z) — the glazing
+                // install direction — so despiece reads as an interior
+                // view by definition (same pattern as Detalle).
+                if (!value) setInside(true);
+                return !value;
+              })
+            }
           >
             {t("assembly.view3dExplode")}
           </button>
@@ -633,7 +785,9 @@ export default function Model3DView({
                     ? "assembly.diagHandleOutOfRange"
                     : item.code === "handle_datum_unsupported"
                       ? "assembly.diagHandleDatum"
-                      : "assembly.diagHardwareConvention",
+                      : item.code === "finish_convention"
+                        ? "assembly.diagFinishConvention"
+                        : "assembly.diagHardwareConvention",
               )}
             </span>
           ))}
@@ -664,6 +818,8 @@ export default function Model3DView({
           clip={clip}
           explode={explode}
           tiltPose={tiltPose}
+          wall={wall}
+          focus={detail ? detailAnchor : null}
           onPick={pick}
         />
       </Canvas>

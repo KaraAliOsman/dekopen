@@ -5,27 +5,40 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { ColorOptionChoice } from "./colorOptionChoice";
 import type { CouplerChoice } from "./couplerChoice";
+import type { ExtraArticleOption } from "./extraArticleOption";
+import type { GlassProductChoice } from "./glassProductChoice";
 import type { GlassSpecChoice } from "./glassSpecChoice";
 import type { GlazingBeadChoice } from "./glazingBeadChoice";
 import type { HandlePolicy } from "./handlePolicy";
+import type { HardwareFamily } from "./hardwareFamily";
+import type { HardwareOption } from "./hardwareOption";
 import type { KitChoice } from "./kitChoice";
+import type { OpeningOption } from "./openingOption";
 import type { PanelChoice } from "./panelChoice";
 import type { ProfileChoice } from "./profileChoice";
 
 export interface DesignOptions {
   profiles: ProfileChoice[];
+  opening_options?: OpeningOption[];
   glazing_thicknesses: string[];
   hardware_kits: KitChoice[];
+  hardware_families: HardwareFamily[];
+  hardware_options: HardwareOption[];
   handle_policy: HandlePolicy | null;
   glass_skus: string[];
+  glass_products: GlassProductChoice[];
   glass_specs: GlassSpecChoice[];
   colors: string[];
+  color_options?: ColorOptionChoice[];
+  bicolor_allowed?: boolean;
   coupler_skus: string[];
   coupler_profiles: CouplerChoice[];
   glazing_beads: GlazingBeadChoice[];
   panel_skus: string[];
   panel_choices: PanelChoice[];
+  extra_articles?: ExtraArticleOption[];
   rebate_depth_mm: string;
   sash_overlap_mm: string;
   depth_mm: string;

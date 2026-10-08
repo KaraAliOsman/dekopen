@@ -1,6 +1,6 @@
 """Typed project metadata and engine-owned position inputs."""
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from rest_framework import serializers
 
@@ -25,6 +25,40 @@ class ProjectWriteSerializer(StrictSerializer):
     delivery_address = serializers.CharField(required=False, allow_blank=True)
     notes_commercial = serializers.CharField(required=False, allow_blank=True)
     notes_internal = serializers.CharField(required=False, allow_blank=True)
+    # P18 — declaración térmica OGUC 4.1.10 (PATCH del proyecto).
+    thermal_zone = serializers.ChoiceField(
+        choices=("A", "B", "C", "D", "E", "F", "G", "H", "I"),
+        required=False, allow_null=True,
+    )
+    thermal_use = serializers.ChoiceField(
+        choices=("RESIDENTIAL", "EQUIPMENT"), required=False
+    )
+    thermal_wall_areas = serializers.DictField(
+        required=False, allow_null=True, allow_empty=True
+    )
+
+    def validate_thermal_wall_areas(self, value):
+        """{N|OP|S|OGT: m² expuestos} — claves de orientación de la norma,
+        superficies numéricas positivas."""
+        if value is None:
+            return value
+        allowed = {"N", "OP", "S", "OGT"}
+        for key, area in value.items():
+            if key not in allowed:
+                raise serializers.ValidationError(
+                    f"orientación inválida: {key}"
+                )
+            try:
+                number = Decimal(str(area))
+            except (InvalidOperation, ValueError) as error:
+                raise serializers.ValidationError(
+                    f"superficie no numérica en {key}"
+                ) from error
+            if number <= 0 or number > Decimal("100000"):
+                raise serializers.ValidationError(
+                    f"superficie fuera de rango en {key}"
+                )
+        return value
 
 
 class ResetPricingSerializer(StrictSerializer):
@@ -52,14 +86,138 @@ class PositionDesignSerializer(EngineCalculateRequestSerializer, StrictSerialize
     color = serializers.CharField(max_length=50)
 
 
+class VanoRecordSerializer(StrictSerializer):
+    """Registro del vano de obra: 1–3 medidas por eje (manda la menor),
+    tipo de muro y escuadra/desplome si se midió."""
+    width_points_mm = serializers.ListField(
+        child=DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1")),
+        min_length=1, max_length=3,
+    )
+    height_points_mm = serializers.ListField(
+        child=DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1")),
+        min_length=1, max_length=3,
+    )
+    wall_type = serializers.ChoiceField(
+        choices=("MASONRY", "CONCRETE", "PARTITION", "WOOD"),
+        required=False, allow_null=True,
+    )
+    square_mm = DecimalStringField(
+        max_digits=8, decimal_places=2, required=False, allow_null=True
+    )
+    plumb_mm = DecimalStringField(
+        max_digits=8, decimal_places=2, required=False, allow_null=True
+    )
+    notes = serializers.CharField(max_length=500, required=False, allow_blank=True)
+
+
+class FabricationLockSerializer(StrictSerializer):
+    """Fijación manual de la medida de fabricación — queda registrada."""
+    width_mm = DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1"))
+    height_mm = DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1"))
+    reason = serializers.CharField(max_length=500, required=False, allow_blank=True)
+
+
+class PositionMeasurementSerializer(StrictSerializer):
+    vano = VanoRecordSerializer(required=False, allow_null=True)
+    mounting_rule_id = serializers.UUIDField(required=False, allow_null=True)
+    fabrication_lock = FabricationLockSerializer(required=False, allow_null=True)
+
+
 class PositionWriteSerializer(StrictSerializer):
     location_tag = serializers.CharField(max_length=100, allow_blank=True)
     quantity = serializers.IntegerField(min_value=1, max_value=2147483647)
     design = PositionDesignSerializer()
+    measurement = PositionMeasurementSerializer(required=False, allow_null=True)
+    # P10 — la posición puede declararse alternativa: se precifica pero
+    # queda fuera del total de la cotización.
+    is_option = serializers.BooleanField(required=False, default=False)
+    thermal_orientation = serializers.ChoiceField(
+        choices=("N", "OP", "S", "OGT", "ROOF"),
+        required=False, allow_null=True,
+    )
 
 
 class PositionUpdateSerializer(PositionWriteSerializer):
     expected_updated_at = serializers.DateTimeField()
+
+
+class MeasurementBreakdownSerializer(serializers.Serializer):
+    side = serializers.CharField()
+    label = serializers.CharField()
+    mm = serializers.CharField()
+
+
+class MeasurementWarningSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    message = serializers.CharField()
+
+
+class MeasurementResolutionSerializer(serializers.Serializer):
+    vano_width_mm = serializers.CharField(allow_null=True)
+    vano_height_mm = serializers.CharField(allow_null=True)
+    width_spread_mm = serializers.CharField()
+    height_spread_mm = serializers.CharField()
+    fabrication_width_mm = serializers.CharField()
+    fabrication_height_mm = serializers.CharField()
+    fabrication_source = serializers.ChoiceField(
+        choices=("DERIVED", "MANUAL_LOCK", "DECLARED")
+    )
+    used_width_mm = serializers.CharField()
+    used_height_mm = serializers.CharField()
+    coherent = serializers.BooleanField()
+    breakdown = MeasurementBreakdownSerializer(many=True)
+    warnings = MeasurementWarningSerializer(many=True)
+
+
+class MountingRuleResponseSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    system_id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    code = serializers.ChoiceField(
+        choices=("EN_VANO", "PREMARCO", "SOBRE_VANO", "TRASLAPADO", "RENOVACION")
+    )
+    version = serializers.IntegerField()
+    label = serializers.CharField()
+    authority = serializers.DictField()
+    data_provenance = serializers.ChoiceField(
+        choices=("SEED_SYNTHETIC", "MANUAL", "IMPORT", "LEGACY_UNVERIFIED")
+    )
+    review_pending = serializers.BooleanField()
+
+
+class MountingRuleListResponseSerializer(serializers.Serializer):
+    items = MountingRuleResponseSerializer(many=True)
+
+
+class MeasurementResponseSerializer(serializers.Serializer):
+    state = serializers.ChoiceField(
+        choices=("CLIENT_DECLARED", "SITE_RECTIFIED", "CONFIRMED")
+    )
+    confirmed_at = serializers.DateTimeField(allow_null=True)
+    confirmed_by = serializers.UUIDField(allow_null=True)
+    vano = VanoRecordSerializer(allow_null=True)
+    mounting_rule = MountingRuleResponseSerializer(allow_null=True)
+    fabrication_lock = serializers.DictField(allow_null=True)
+    resolution = MeasurementResolutionSerializer(allow_null=True)
+
+
+class MeasurementResolveSerializer(StrictSerializer):
+    """Preview del desglose vano → fabricación: mismo motor que el guardado."""
+    system_id = serializers.UUIDField()
+    vano = VanoRecordSerializer(required=False, allow_null=True)
+    mounting_rule_id = serializers.UUIDField(required=False, allow_null=True)
+    fabrication_lock = FabricationLockSerializer(required=False, allow_null=True)
+    width_mm = DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1"))
+    height_mm = DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1"))
+
+
+class MeasurementResolveResponseSerializer(serializers.Serializer):
+    resolution = MeasurementResolutionSerializer()
+    mounting_rule = MountingRuleResponseSerializer(allow_null=True)
+
+
+class MeasurementConfirmSerializer(StrictSerializer):
+    confirmed = serializers.BooleanField()
 
 
 class PositionResponseSerializer(serializers.Serializer):
@@ -69,11 +227,33 @@ class PositionResponseSerializer(serializers.Serializer):
     location_tag = serializers.CharField(allow_null=True)
     quantity = serializers.IntegerField()
     typology = serializers.CharField()
+    is_option = serializers.BooleanField()
     price_net = serializers.CharField()
     discount_pct = serializers.CharField()
+    thermal_orientation = serializers.ChoiceField(
+        choices=("N", "OP", "S", "OGT", "ROOF"), allow_null=True
+    )
     design = PositionDesignSerializer()
     bom = EngineCalculateResponseSerializer()
+    measurement = MeasurementResponseSerializer()
     updated_at = serializers.DateTimeField()
+
+
+class ClientContactSerializer(StrictSerializer):
+    name = serializers.CharField(max_length=255)
+    role_label = serializers.CharField(
+        max_length=80, required=False, allow_blank=True
+    )
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    is_primary = serializers.BooleanField(required=False)
+
+
+class ClientAddressSerializer(StrictSerializer):
+    label = serializers.CharField(max_length=120)
+    address = serializers.CharField()
+    comuna = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    is_default = serializers.BooleanField(required=False)
 
 
 class ClientWriteSerializer(StrictSerializer):
@@ -84,11 +264,25 @@ class ClientWriteSerializer(StrictSerializer):
     address = serializers.CharField(required=False, allow_blank=True)
     giro = serializers.CharField(max_length=80, required=False, allow_blank=True)
     comuna = serializers.CharField(max_length=20, required=False, allow_blank=True)
-    notes = serializers.CharField(required=False, allow_blank=True)
+    kind = serializers.ChoiceField(
+        choices=(("PERSON", "Persona natural"), ("COMPANY", "Empresa")),
+        required=False,
+        default="COMPANY",
+    )
+    contacts = ClientContactSerializer(many=True, required=False)
+    addresses = ClientAddressSerializer(many=True, required=False)
 
 
 class ClientUpdateSerializer(ClientWriteSerializer):
     expected_updated_at = serializers.DateTimeField()
+
+
+class ClientNoteWriteSerializer(StrictSerializer):
+    body = serializers.CharField(allow_blank=False)
+
+
+class ClientMergeSerializer(StrictSerializer):
+    survivor_id = serializers.UUIDField()
 
 
 class ClientResponseSerializer(serializers.Serializer):
@@ -100,13 +294,125 @@ class ClientResponseSerializer(serializers.Serializer):
     address = serializers.CharField()
     giro = serializers.CharField(allow_null=True)
     comuna = serializers.CharField(allow_null=True)
-    notes = serializers.CharField()
+    kind = serializers.CharField()
     is_active = serializers.BooleanField()
+    merged_into = serializers.CharField(allow_null=True)
+    merged_at = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
 
 
+class ClientListItemSerializer(ClientResponseSerializer):
+    projects_count = serializers.IntegerField()
+    active_projects = serializers.IntegerField()
+    balance = serializers.CharField()
+
+
 class ClientListResponseSerializer(serializers.Serializer):
-    items = ClientResponseSerializer(many=True)
+    items = ClientListItemSerializer(many=True)
+
+
+class ClientContactResponseSerializer(ClientContactSerializer):
+    id = serializers.UUIDField()
+    updated_at = serializers.DateTimeField()
+
+
+class ClientAddressResponseSerializer(ClientAddressSerializer):
+    id = serializers.UUIDField()
+    updated_at = serializers.DateTimeField()
+
+
+class ClientNoteResponseSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    author_label = serializers.CharField()
+    body = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class ClientProjectItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    code = serializers.CharField()
+    name = serializers.CharField()
+    status = serializers.CharField()
+    delivery_address = serializers.CharField()
+    billed = serializers.CharField()
+    collected = serializers.CharField()
+    balance = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class ClientQuotationItemSerializer(serializers.Serializer):
+    project_id = serializers.UUIDField()
+    revision_code = serializers.CharField()
+    emitted_at = serializers.DateTimeField()
+    total_price_gross = serializers.CharField(allow_null=True)
+    currency = serializers.CharField()
+
+
+class ClientPaymentItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    project_id = serializers.UUIDField()
+    project_code = serializers.CharField()
+    kind = serializers.CharField()
+    amount = serializers.CharField()
+    method = serializers.CharField()
+    receipt_code = serializers.CharField(allow_null=True)
+    voided = serializers.BooleanField()
+    recorded_at = serializers.DateTimeField()
+
+
+class ClientDocumentItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    project_id = serializers.UUIDField()
+    project_code = serializers.CharField()
+    document_type = serializers.CharField()
+    format = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class ClientMergeItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    survivor_id = serializers.UUIDField()
+    merged_client_id = serializers.UUIDField()
+    actor_label = serializers.CharField()
+    detail = serializers.DictField()
+    created_at = serializers.DateTimeField()
+
+
+class ClientTotalsSerializer(serializers.Serializer):
+    billed = serializers.CharField()
+    collected = serializers.CharField()
+    balance = serializers.CharField()
+    currency = serializers.CharField()
+
+
+class ClientDetailResponseSerializer(serializers.Serializer):
+    client = ClientResponseSerializer()
+    contacts = ClientContactResponseSerializer(many=True)
+    addresses = ClientAddressResponseSerializer(many=True)
+    notes = ClientNoteResponseSerializer(many=True)
+    projects = ClientProjectItemSerializer(many=True)
+    quotations = ClientQuotationItemSerializer(many=True)
+    payments = ClientPaymentItemSerializer(many=True)
+    documents = ClientDocumentItemSerializer(many=True)
+    merges = ClientMergeItemSerializer(many=True)
+    totals = ClientTotalsSerializer()
+
+
+class ClientDuplicateClientSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    rut = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class ClientDuplicateGroupSerializer(serializers.Serializer):
+    rut = serializers.CharField()
+    clients = ClientDuplicateClientSerializer(many=True)
+
+
+class ClientDuplicatesResponseSerializer(serializers.Serializer):
+    items = ClientDuplicateGroupSerializer(many=True)
 
 
 class ProjectVersionResponseSerializer(serializers.Serializer):
@@ -154,6 +460,38 @@ class ProjectListResponseSerializer(serializers.Serializer):
     items = ProjectResponseSerializer(many=True)
 
 
+class QuotationApprovalSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    status = serializers.CharField()
+    expires_at = serializers.DateTimeField(allow_null=True)
+    view_count = serializers.IntegerField()
+    first_viewed_at = serializers.DateTimeField(allow_null=True)
+    last_viewed_at = serializers.DateTimeField(allow_null=True)
+    decided_by = serializers.CharField(allow_null=True)
+    decided_at = serializers.DateTimeField(allow_null=True)
+    decided_note = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField()
+
+
+class QuotationItemSerializer(serializers.Serializer):
+    project_id = serializers.UUIDField()
+    project_code = serializers.CharField()
+    project_name = serializers.CharField()
+    client_name = serializers.CharField()
+    project_status = serializers.CharField()
+    current_revision = serializers.CharField()
+    currency = serializers.CharField()
+    total_price_gross = serializers.CharField()
+    versions_count = serializers.IntegerField()
+    last_sealed_at = serializers.DateTimeField(allow_null=True)
+    approval = QuotationApprovalSerializer(allow_null=True)
+    quote_state = serializers.CharField()
+
+
+class QuotationListResponseSerializer(serializers.Serializer):
+    items = QuotationItemSerializer(many=True)
+
+
 class CloneProjectSerializer(StrictSerializer):
     name = serializers.CharField(max_length=255, required=False)
     expected_updated_at = serializers.DateTimeField()
@@ -170,6 +508,15 @@ class SuccessorRequestSerializer(StrictSerializer):
 
 
 class DeletePositionSerializer(StrictSerializer):
+    expected_updated_at = serializers.DateTimeField()
+
+
+class PositionMoveSerializer(StrictSerializer):
+    """Explicit reorder of the printed position order — `position_index` is
+    server-owned, so a PUT can never edit it directly; the move endpoint
+    shifts the whole run atomically under the position's optimistic lock."""
+
+    to_index = serializers.IntegerField(min_value=1)
     expected_updated_at = serializers.DateTimeField()
 
 
@@ -268,6 +615,9 @@ class ProjectInvoiceSerializer(serializers.Serializer):
     invoice_code = serializers.CharField()
     project_id = serializers.UUIDField()
     revision_code = serializers.CharField(allow_null=True)
+    total_net = serializers.CharField(allow_null=True, required=False)
+    total_tax = serializers.CharField(allow_null=True, required=False)
+    total_gross = serializers.CharField(allow_null=True, required=False)
     credit_note = ProjectCreditNoteSerializer(allow_null=True)
     dte = ProjectDteSerializer(allow_null=True, required=False)
     created_at = serializers.CharField()
@@ -322,8 +672,16 @@ class SiiCertificateSerializer(serializers.Serializer):
     created_at = serializers.CharField()
 
 
+class SiiIntegrationStateSerializer(serializers.Serializer):
+    adapter = serializers.ChoiceField(choices=("sii-ws", "mock", "none"))
+    certified = serializers.BooleanField()
+    certificate = serializers.BooleanField()
+    caf_available = serializers.BooleanField()
+
+
 class SiiCertificateStatusSerializer(serializers.Serializer):
     certificate = SiiCertificateSerializer(allow_null=True)
+    integration = SiiIntegrationStateSerializer()
 
 
 class SiiCertificateUploadSerializer(serializers.Serializer):
@@ -336,7 +694,9 @@ class SiiCertificateUploadSerializer(serializers.Serializer):
 class SiiEnvioSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     dte_id = serializers.UUIDField()
-    status = serializers.ChoiceField(choices=("PENDING", "ACCEPTED", "REJECTED"))
+    status = serializers.ChoiceField(
+        choices=("PENDING", "ACCEPTED", "OBSERVED", "REJECTED")
+    )
     track_id = serializers.CharField(allow_null=True)
     glosa = serializers.CharField(allow_null=True)
     sent_at = serializers.CharField()
@@ -354,9 +714,47 @@ class SiiEnvioAccessSerializer(SiiEnvioSerializer):
     signed_url = serializers.CharField()
 
 
+class CollectionQuotaSerializer(serializers.Serializer):
+    key = serializers.ChoiceField(choices=("ANTICIPO", "SALDO"))
+    amount = serializers.CharField()
+    covered = serializers.CharField()
+    due_at = serializers.CharField(allow_null=True)
+    due_basis = serializers.CharField()
+    pct = serializers.CharField()
+    pct_source = serializers.ChoiceField(choices=("terms", "default"))
+    state = serializers.ChoiceField(choices=("PENDING", "PAID", "OVERDUE"))
+
+
+class CollectionMovementSerializer(serializers.Serializer):
+    type = serializers.ChoiceField(
+        choices=("payment", "payment_void", "link", "invoice", "credit_note", "envio")
+    )
+    id = serializers.UUIDField()
+    kind = serializers.CharField(allow_null=True)
+    amount = serializers.CharField(allow_null=True)
+    method = serializers.CharField(allow_null=True)
+    voided = serializers.BooleanField()
+    at = serializers.CharField(allow_null=True)
+    actor = serializers.CharField(allow_null=True)
+    code = serializers.CharField(allow_null=True)
+    document_id = serializers.CharField(allow_null=True)
+    status = serializers.CharField(allow_null=True)
+
+
+class ReminderDraftSerializer(serializers.Serializer):
+    subject = serializers.CharField()
+    body = serializers.CharField()
+    model = serializers.CharField(required=False, allow_null=True)
+    created_at = serializers.CharField(required=False, allow_null=True)
+
+
 class PaymentsSummarySerializer(serializers.Serializer):
     payments = ProjectPaymentSerializer(many=True)
     invoices = ProjectInvoiceSerializer(many=True)
+    schedule = CollectionQuotaSerializer(many=True)
+    movements = CollectionMovementSerializer(many=True)
+    sii = SiiIntegrationStateSerializer()
+    reminder = ReminderDraftSerializer(allow_null=True)
     collected = serializers.CharField()
     quote_total_gross = serializers.CharField(allow_null=True)
     balance = serializers.CharField(allow_null=True)
@@ -393,6 +791,8 @@ class PaymentLinkSerializer(serializers.Serializer):
     environment = serializers.ChoiceField(choices=("sandbox", "production"))
     url = serializers.CharField(allow_null=True)
     project_payment_id = serializers.CharField(allow_null=True)
+    expires_at = serializers.CharField(allow_null=True)
+    expired = serializers.BooleanField(required=False, default=False)
     created_at = serializers.CharField()
     updated_at = serializers.CharField()
 
@@ -423,11 +823,40 @@ class PaymentIntegrationSerializer(StrictSerializer):
 
 class PaymentIntegrationStatusSerializer(serializers.Serializer):
     configured = serializers.BooleanField()
+    provider_mode = serializers.ChoiceField(
+        choices=("mock", "live"), required=False, allow_null=True
+    )
     api_url = serializers.CharField(required=False)
     api_key_preview = serializers.CharField(required=False)
     payer_return_url = serializers.CharField(required=False, allow_null=True)
     enabled = serializers.BooleanField(required=False)
     updated_at = serializers.CharField(required=False)
+
+
+class CollectionReminderPrepareSerializer(StrictSerializer):
+    operation_key = serializers.CharField(min_length=8, max_length=120)
+
+
+class CollectionReminderDraftResponseSerializer(serializers.Serializer):
+    subject = serializers.CharField()
+    body = serializers.CharField()
+    model = serializers.CharField()
+    audit_id = serializers.CharField()
+    credits_debited = serializers.IntegerField()
+    client_email = serializers.CharField(allow_null=True)
+    amount_due = serializers.CharField()
+    currency = serializers.CharField()
+
+
+class CollectionReminderSendSerializer(StrictSerializer):
+    subject = serializers.CharField(min_length=1, max_length=200)
+    body = serializers.CharField(min_length=1, max_length=4000)
+
+
+class CollectionReminderSendResponseSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=("QUEUED", "SENT", "FAILED", "SKIPPED"))
+    to = serializers.CharField()
+    mail_id = serializers.CharField(allow_null=True)
 
 
 class DesignAlternativesRequestSerializer(serializers.Serializer):
@@ -478,6 +907,10 @@ class DesignAssistResponseSerializer(serializers.Serializer):
     ops = serializers.ListField(child=serializers.DictField())
     rejected = serializers.ListField(child=serializers.DictField())
     notes = serializers.CharField(allow_null=True)
+    # IA2 §3 — pregunta tipada con opciones reales (chips en la UI).
+    clarify = serializers.DictField(allow_null=True, required=False)
+    # IA2 §4 — proyección estructural post-ops para la vista previa.
+    simulation = serializers.DictField(allow_null=True, required=False)
 
 
 class OrgBrandingSerializer(serializers.Serializer):
@@ -492,6 +925,16 @@ class OrgBrandingSerializer(serializers.Serializer):
     brand_email = serializers.CharField(allow_null=True, allow_blank=True)
     brand_logo_key = serializers.CharField(allow_null=True, allow_blank=True)
     brand_logo_sha256 = serializers.CharField(allow_null=True, allow_blank=True)
+    brand_color = serializers.CharField(allow_null=True, allow_blank=True)
+    doc_dekopen_credit = serializers.BooleanField()
+    vano_spread_tolerance_mm = serializers.DecimalField(
+        max_digits=6, decimal_places=2, coerce_to_string=True, allow_null=True
+    )
+    doc_paper_size = serializers.CharField()
+    doc_terms = serializers.DictField(child=serializers.CharField())
+    workshop_label_format = serializers.CharField()
+    remnant_alert_days = serializers.IntegerField()
+    doc_validity_days = serializers.IntegerField()
 
 
 class OrgBrandingWriteSerializer(StrictSerializer):
@@ -510,3 +953,382 @@ class OrgBrandingWriteSerializer(StrictSerializer):
     brand_email = serializers.CharField(
         allow_null=True, allow_blank=True, required=False, max_length=255
     )
+    brand_color = serializers.RegexField(
+        regex=r"^#[0-9A-Fa-f]{6}$",
+        allow_null=True,
+        allow_blank=True,
+        required=False,
+        max_length=7,
+    )
+    doc_dekopen_credit = serializers.BooleanField(required=False)
+    vano_spread_tolerance_mm = DecimalStringField(
+        max_digits=6,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        max_value=Decimal("100"),
+        required=False,
+        allow_null=True,
+    )
+    doc_paper_size = serializers.ChoiceField(
+        choices=(("LETTER", "Carta"), ("LEGAL", "Oficio"), ("A4", "A4")),
+        required=False,
+        allow_null=True,
+    )
+    workshop_label_format = serializers.ChoiceField(
+        choices=(
+            ("GRID", "Grilla A4/Carta"),
+            ("THERMAL_100X50", "Rollo térmico 100×50 mm"),
+        ),
+        required=False,
+        allow_null=True,
+    )
+    remnant_alert_days = serializers.IntegerField(
+        min_value=1, max_value=365, required=False
+    )
+    doc_terms = serializers.DictField(
+        child=serializers.CharField(allow_blank=True, max_length=4000),
+        required=False,
+        allow_null=True,
+    )
+    doc_validity_days = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=1,
+        max_value=365,
+    )
+
+
+# ---------------------------------------------------------------------------
+# P22 — ajustes por dominio.
+
+
+class OrgCompanySettingsSerializer(StrictSerializer):
+    name = serializers.CharField(max_length=255, required=False)
+    tax_id = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    commercial_name = serializers.CharField(
+        max_length=255, required=False, allow_blank=True
+    )
+    giro = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    brand_address = serializers.CharField(
+        max_length=255, required=False, allow_blank=True
+    )
+    brand_phone = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    brand_email = serializers.CharField(
+        max_length=255, required=False, allow_blank=True
+    )
+    brand_color = serializers.RegexField(
+        regex=r"^#[0-9A-Fa-f]{6}$", required=False, allow_null=True
+    )
+
+
+class OrgCommercialSettingsSerializer(StrictSerializer):
+    currency = serializers.ChoiceField(
+        choices=("CLP", "USD", "UF"), required=False
+    )
+    tax_rate_pct = DecimalStringField(
+        max_digits=6, decimal_places=4, required=False
+    )
+    default_margin_pct = DecimalStringField(
+        max_digits=6, decimal_places=4, required=False
+    )
+    margin_min_pct = DecimalStringField(
+        max_digits=6, decimal_places=4, required=False, allow_null=True
+    )
+    margin_max_pct = DecimalStringField(
+        max_digits=6, decimal_places=4, required=False, allow_null=True
+    )
+    discount_approval_threshold_pct = DecimalStringField(
+        max_digits=6,
+        decimal_places=4,
+        min_value=Decimal("0.0001"),
+        max_value=Decimal("1"),
+        required=False,
+    )
+    doc_validity_days = serializers.IntegerField(
+        required=False, min_value=1, max_value=365
+    )
+
+
+class OrgDocumentsSettingsSerializer(StrictSerializer):
+    doc_paper_size = serializers.ChoiceField(
+        choices=("LETTER", "LEGAL", "A4"), required=False
+    )
+    doc_terms = serializers.DictField(
+        child=serializers.CharField(allow_blank=True, max_length=4000),
+        required=False,
+        allow_null=True,
+    )
+    doc_dekopen_credit = serializers.BooleanField(required=False)
+
+
+class OrgProductionSettingsSerializer(StrictSerializer):
+    vano_spread_tolerance_mm = DecimalStringField(
+        max_digits=6,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        max_value=Decimal("100"),
+        required=False,
+        allow_null=True,
+    )
+    remnant_alert_days = serializers.IntegerField(
+        min_value=1, max_value=365, required=False
+    )
+    workshop_label_format = serializers.ChoiceField(
+        choices=("GRID", "THERMAL_100X50"), required=False
+    )
+
+
+class OrgSecuritySettingsSerializer(StrictSerializer):
+    require_totp = serializers.BooleanField()
+
+
+class OrgAnalyticsSettingsSerializer(StrictSerializer):
+    financial_roles = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=(
+                "OWNER",
+                "ESTIMATOR",
+                "WORKSHOP_MANAGER",
+                "INSTALLER",
+                "OPERATOR",
+            )
+        ),
+        required=False,
+        allow_empty=False,
+    )
+    hourly_rate_clp = DecimalStringField(
+        max_digits=14,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=Decimal("0"),
+    )
+
+
+class OrgInviteSerializer(StrictSerializer):
+    email = serializers.EmailField(max_length=255)
+    role = serializers.ChoiceField(
+        choices=("ESTIMATOR", "WORKSHOP_MANAGER", "OPERATOR", "INSTALLER")
+    )
+
+
+class OrgMemberUpdateSerializer(StrictSerializer):
+    role = serializers.ChoiceField(
+        choices=("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "OPERATOR", "INSTALLER"),
+        required=False,
+    )
+    is_active = serializers.BooleanField(required=False)
+
+
+class OrgSettingsResponseSerializer(serializers.Serializer):
+    company = serializers.DictField()
+    commercial = serializers.DictField()
+    documents = serializers.DictField()
+    production = serializers.DictField()
+    security = serializers.DictField()
+    analytics = serializers.DictField()
+
+
+class OrgMemberSerializer(serializers.Serializer):
+    membership_id = serializers.UUIDField()
+    user_id = serializers.UUIDField()
+    email = serializers.CharField()
+    role = serializers.CharField()
+    is_active = serializers.BooleanField()
+    totp_enabled = serializers.BooleanField()
+    created_at = serializers.DateTimeField()
+
+
+class OrgInvitationSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    email = serializers.CharField()
+    role = serializers.CharField()
+    status = serializers.CharField()
+    invited_label = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class OrgMembersResponseSerializer(serializers.Serializer):
+    members = OrgMemberSerializer(many=True)
+    invitations = OrgInvitationSerializer(many=True)
+
+
+class OrgNumberingItemSerializer(serializers.Serializer):
+    kind = serializers.CharField()
+    prefix = serializers.CharField()
+    next = serializers.IntegerField()
+    pattern = serializers.CharField()
+
+
+class OrgNumberingResponseSerializer(serializers.Serializer):
+    items = OrgNumberingItemSerializer(many=True)
+    read_only = serializers.BooleanField()
+
+
+class OrgIntegrationItemSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    name = serializers.CharField()
+    state = serializers.CharField()
+    detail = serializers.CharField()
+    activation = serializers.CharField()
+
+
+class OrgIntegrationsResponseSerializer(serializers.Serializer):
+    items = OrgIntegrationItemSerializer(many=True)
+    runbook = serializers.CharField()
+
+
+class OrgDocumentPreviewSerializer(StrictSerializer):
+    # Borrador libre de campos de marca/documentos — sólo las claves
+    # conocidas se mezclan con la marca real al renderizar la mini hoja.
+    commercial_name = serializers.CharField(required=False, allow_blank=True)
+    name = serializers.CharField(required=False, allow_blank=True)
+    tax_id = serializers.CharField(required=False, allow_blank=True)
+    giro = serializers.CharField(required=False, allow_blank=True)
+    brand_address = serializers.CharField(required=False, allow_blank=True)
+    brand_phone = serializers.CharField(required=False, allow_blank=True)
+    brand_email = serializers.CharField(required=False, allow_blank=True)
+    brand_color = serializers.CharField(required=False, allow_blank=True)
+    doc_paper_size = serializers.CharField(required=False, allow_blank=True)
+    doc_dekopen_credit = serializers.BooleanField(required=False)
+    doc_terms = serializers.DictField(
+        child=serializers.CharField(allow_blank=True, max_length=4000),
+        required=False,
+        allow_null=True,
+    )
+
+
+class OrgDocumentPreviewResponseSerializer(serializers.Serializer):
+    html = serializers.CharField()
+
+
+class OrgSectionResponseSerializer(serializers.Serializer):
+    """Carga de una sección guardada — la forma depende del dominio."""
+
+    pass
+
+
+# ─── P18 — desempeño térmico (OGUC 4.1.10) ─────────────────────────────────
+
+ORIENTATIONS = ("N", "OP", "S", "OGT", "ROOF")
+THERMAL_VERDICTS = ("COMPLIES", "FAILS", "INSUFFICIENT_DATA", "NO_REQUIREMENT")
+
+
+class ThermalMissingSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField(allow_null=True)
+
+
+class PaneThermalSerializer(serializers.Serializer):
+    bay_id = serializers.CharField()
+    leaf_id = serializers.CharField(allow_null=True)
+    article_sku = serializers.CharField(allow_null=True)
+    area_m2 = serializers.CharField()
+    perimeter_m = serializers.CharField()
+    ug_w_m2k = serializers.CharField(allow_null=True)
+    ug_authority = serializers.CharField(allow_null=True)
+    psi_w_m_k = serializers.CharField(allow_null=True)
+    spacer_code = serializers.CharField(allow_null=True)
+    psi_authority = serializers.CharField(allow_null=True)
+
+
+class FrameZoneThermalSerializer(serializers.Serializer):
+    member_group = serializers.CharField()
+    area_m2 = serializers.CharField()
+    uf_w_m2k = serializers.CharField(allow_null=True)
+    authority = serializers.CharField(allow_null=True)
+    source = serializers.CharField(allow_null=True)
+
+
+class UwComputationSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=("OK", "UNKNOWN"))
+    uw_w_m2k = serializers.CharField(allow_null=True)
+    ag_m2 = serializers.CharField()
+    af_m2 = serializers.CharField()
+    lg_m = serializers.CharField()
+    numerator_w_m_k = serializers.CharField(allow_null=True)
+    authority = serializers.CharField(allow_null=True)
+    panes = PaneThermalSerializer(many=True)
+    frame = FrameZoneThermalSerializer(many=True)
+    missing = ThermalMissingSerializer(many=True)
+
+
+class ResolvedClassesSerializer(serializers.Serializer):
+    air_class = serializers.IntegerField(allow_null=True)
+    water_class = serializers.CharField(allow_null=True)
+    wind_class = serializers.CharField(allow_null=True)
+    report_ref = serializers.CharField(allow_null=True)
+    laboratory = serializers.CharField(allow_null=True)
+    tested_on = serializers.CharField(allow_null=True)
+    tested_width_mm = serializers.CharField(allow_null=True)
+    tested_height_mm = serializers.CharField(allow_null=True)
+    authority = serializers.CharField(allow_null=True)
+    scope_exceeded = serializers.BooleanField()
+
+
+class ThermalCauseSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField(allow_null=True)
+
+
+class PositionThermalSerializer(serializers.Serializer):
+    verdict = serializers.ChoiceField(choices=THERMAL_VERDICTS)
+    uw = UwComputationSerializer()
+    classes = ResolvedClassesSerializer(allow_null=True)
+    causes = ThermalCauseSerializer(many=True)
+    air_class_required = serializers.IntegerField(allow_null=True)
+    roof_u_max = serializers.CharField(allow_null=True)
+    u_max = serializers.CharField(allow_null=True)
+    window_pct_max = serializers.IntegerField(allow_null=True)
+
+
+class ThermalPositionSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    position_index = serializers.IntegerField()
+    location_tag = serializers.CharField(allow_null=True)
+    quantity = serializers.IntegerField()
+    typology = serializers.CharField()
+    thermal_orientation = serializers.ChoiceField(
+        choices=ORIENTATIONS, allow_null=True
+    )
+    width_mm = serializers.CharField()
+    height_mm = serializers.CharField()
+    surface_m2 = serializers.CharField()
+    thermal = PositionThermalSerializer()
+
+
+class OrientationComplianceSerializer(serializers.Serializer):
+    orientation = serializers.ChoiceField(choices=("N", "OP", "S", "OGT"))
+    window_area_m2 = serializers.CharField()
+    wall_area_m2 = serializers.CharField(allow_null=True)
+    actual_pct = serializers.CharField(allow_null=True)
+    allowed_pct = serializers.IntegerField(allow_null=True)
+    verdict = serializers.ChoiceField(choices=THERMAL_VERDICTS)
+    causes = ThermalCauseSerializer(many=True)
+
+
+class ProjectThermalSerializer(serializers.Serializer):
+    project_id = serializers.UUIDField()
+    thermal_zone = serializers.ChoiceField(
+        choices=("A", "B", "C", "D", "E", "F", "G", "H", "I"), allow_null=True
+    )
+    thermal_use = serializers.ChoiceField(choices=("RESIDENTIAL", "EQUIPMENT"))
+    thermal_wall_areas = serializers.DictField(allow_null=True)
+    positions = ThermalPositionSerializer(many=True)
+    orientations = OrientationComplianceSerializer(many=True)
+    verdict = serializers.ChoiceField(choices=THERMAL_VERDICTS)
+
+
+class ThermalAlternativeSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=("GLASS", "SYSTEM"))
+    label = serializers.CharField()
+    glass_sku = serializers.CharField(required=False, allow_null=True)
+    system_id = serializers.UUIDField(required=False, allow_null=True)
+    uw_w_m2k = serializers.CharField(allow_null=True)
+    price_delta_net = serializers.CharField(allow_null=True)
+
+
+class ThermalAlternativesResponseSerializer(serializers.Serializer):
+    position_id = serializers.UUIDField()
+    current = PositionThermalSerializer()
+    alternatives = ThermalAlternativeSerializer(many=True)

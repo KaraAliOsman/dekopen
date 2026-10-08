@@ -137,6 +137,17 @@ describe("SHOT-05 transactional G1 editor", () => {
             code: "DEMO_60",
             name: "Sistema Demo 60mm PVC",
             is_demo: true,
+            system_family: "CASEMENT",
+            allowed_openings: [
+              "FIXED",
+              "TURN_LEFT",
+              "TURN_RIGHT",
+              "TILT_TURN_LEFT",
+              "TILT_TURN_RIGHT",
+              "AWNING",
+              "DOOR_ENTRY",
+              "DOOR_DOUBLE",
+            ],
             quote_ready: true,
             readiness_reasons: [],
           },
@@ -166,7 +177,7 @@ describe("SHOT-05 transactional G1 editor", () => {
     expect(screen.getByLabelText("Alto nominal (mm)")).toHaveValue("1000.00");
     expect(screen.getByText("FIXED")).toBeInTheDocument();
     expect(screen.getByTestId("canvas-glass-dimension")).toHaveTextContent("910 × 910 mm");
-    expect(screen.getByTestId("technical-frame")).toHaveTextContent("1006 mm");
+    expect(screen.getByTestId("technical-frame")).toHaveTextContent("1 006 mm");
     expect(screen.getByTestId("technical-reinforcement")).toHaveTextContent("970 mm");
     expect(screen.getByTestId("technical-glass")).toHaveTextContent("910 × 910 mm");
     expect(screen.getByTestId("technical-bead")).toHaveTextContent("919 mm");
@@ -231,6 +242,17 @@ describe("SHOT-05 transactional G1 editor", () => {
           code: "DEMO_60",
           name: "One",
           is_demo: true,
+          system_family: "CASEMENT",
+          allowed_openings: [
+            "FIXED",
+            "TURN_LEFT",
+            "TURN_RIGHT",
+            "TILT_TURN_LEFT",
+            "TILT_TURN_RIGHT",
+            "AWNING",
+            "DOOR_ENTRY",
+            "DOOR_DOUBLE",
+          ],
           quote_ready: true,
           readiness_reasons: [],
         },
@@ -239,6 +261,17 @@ describe("SHOT-05 transactional G1 editor", () => {
           code: "DEMO_60",
           name: "Two",
           is_demo: true,
+          system_family: "CASEMENT",
+          allowed_openings: [
+            "FIXED",
+            "TURN_LEFT",
+            "TURN_RIGHT",
+            "TILT_TURN_LEFT",
+            "TILT_TURN_RIGHT",
+            "AWNING",
+            "DOOR_ENTRY",
+            "DOOR_DOUBLE",
+          ],
           quote_ready: true,
           readiness_reasons: [],
         },

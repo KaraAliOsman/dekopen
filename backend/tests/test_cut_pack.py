@@ -150,6 +150,11 @@ def _install_db(monkeypatch, order_payload):
             return _order(order_payload)
         if "project_versions" in lowered:
             return _version()
+        if "tenancy_organizations" in lowered:
+            return {
+                "doc_paper_size": "LETTER",
+                "workshop_label_format": "GRID",
+            }
         raise AssertionError(lowered)
 
     monkeypatch.setattr("production.cut_pack.one", fake_one)

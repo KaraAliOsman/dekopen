@@ -37,11 +37,15 @@ BEGIN
           'subscriptions',
           'payments',
           'payment_events',
-          'credit_ledger'
+          'credit_ledger',
+          'glass_products',
+          'glass_product_surcharges',
+          'glass_safety_rules',
+          'glass_type_limits'
       ]);
 
-    IF business_table_count <> 22 THEN
-        RAISE EXCEPTION 'Expected 22 business tables, got %', business_table_count;
+    IF business_table_count <> 26 THEN
+        RAISE EXCEPTION 'Expected 26 business tables, got %', business_table_count;
     END IF;
 
     SELECT count(*)
@@ -71,12 +75,16 @@ BEGIN
           'subscriptions',
           'payments',
           'payment_events',
-          'credit_ledger'
+          'credit_ledger',
+          'glass_products',
+          'glass_product_surcharges',
+          'glass_safety_rules',
+          'glass_type_limits'
       ])
       AND catalog.relrowsecurity = TRUE;
 
-    IF rls_table_count <> 22 THEN
-        RAISE EXCEPTION 'Expected RLS on 22 business tables, got %', rls_table_count;
+    IF rls_table_count <> 26 THEN
+        RAISE EXCEPTION 'Expected RLS on 26 business tables, got %', rls_table_count;
     END IF;
 
     SELECT count(*)
@@ -119,9 +127,9 @@ BEGIN
     WHERE profile_system.code = 'DEMO_60'
       AND bead_rule.cut_add_mm = 9.00;
 
-    IF demo_glazing_rule_count <> 5 THEN
+    IF demo_glazing_rule_count <> 6 THEN
         RAISE EXCEPTION
-            'Expected five DEMO_60 glazing rules with cut_add_mm 9.00, got %',
+            'Expected six DEMO_60 glazing rules with cut_add_mm 9.00, got %',
             demo_glazing_rule_count;
     END IF;
 END;

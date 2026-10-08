@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>DEKOPEN Orb — identity mock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ------------------------------------------------------------------ */
+/* DEKOPEN orb design mock.                                             */
+/*                                                                      */
+/* Vocabulary:                                                          */
+/*   · eyes  — the life channel (pose, blink, gaze). Twin rounded       */
+/*     vertical slots, like a paired casement window: the fenestration  */
+/*     pun is deliberate and makes the face DEKOPEN's own.              */
+/*   · ring  — the semantics channel. A thin arc outside the sphere     */
+/*     carries status color only when the state needs it, exactly like  */
+/*     the aiws-state pills (accent = working, warning = waiting,       */
+/*     success, danger). Hidden when there's nothing to report.         */
+/*   · body  — one anthracite sphere everywhere. It IS the member-      */
+/*     anthracite material (#3f454b family): graphite, not glow.        */
+/*                                                                      */
+/* Token contract respected: no glow filters, no glassmorphism, status  */
+/* hues only on the ring — never on the face.                           */
+/* ------------------------------------------------------------------ */
+
+:root{
+  --font-sans:"IBM Plex Sans",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,monospace;
+}
+.lt,.dk{ /* mirrors frontend/src/styles/tokens.css */
+  --c-accent:#0f817a; --c-accent-strong:#0b6b66;
+  --c-warn:#9c5306;  --c-ok:#1e7a4c;  --c-bad:#b3372f;
+  --ink:#1f2a29; --mut:#55635f; --line:#d9dfde;
+  --canvas:#f5f6f6; --panel:#ffffff;
+  /* orb-specific */
+  --orb-hi:#4e5960;  /* sphere top light   (anthracite highlight band) */
+  --orb-mid:#262e34; /* sphere mid         (member-anthracite fill)    */
+  --orb-lo:#12171b;  /* sphere foot        (signature-ink, deepened)   */
+  --orb-edge:rgba(18,24,28,.55);      /* silhouette definition        */
+  --orb-spec-op:.5;                   /* specular strength            */
+  --orb-eye:#eaf3f1;                  /* frosted-lite eye fill        */
+}
+.dk{
+  --c-accent:#2aa69b; --c-accent-strong:#45beb1;
+  --c-warn:#e09543;  --c-ok:#4caf7f;  --c-bad:#e06154;
+  --ink:#edf2f1; --mut:#a4b6b3; --line:#323c40;
+  --canvas:#14181a; --panel:#1b2124;
+  --orb-hi:#5a666e;
+  --orb-mid:#272f35;
+  --orb-lo:#10151a;
+  --orb-edge:rgba(233,242,241,.16);
+  --orb-spec-op:.32;
+  --orb-eye:#eaf3f1;
+}
+
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-sans);background:#0e1113;color:#dfe7e5;}
+.pagehead{max-width:1180px;margin:0 auto;padding:34px 28px 8px;}
+.pagehead h1{font-size:20px;margin:0 0 6px;letter-spacing:.01em}
+.pagehead p{margin:0;color:#8fa09c;font-size:12.5px;max-width:72ch;line-height:1.55}
+.pagehead code{font-family:var(--font-mono);font-size:11px;color:#9fd8d1}
+
+.section{max-width:1180px;margin:26px auto;padding:0 28px;}
+.section h2{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#8fa09c;margin:0 0 12px;font-weight:600}
+
+/* two theme cards side by side */
+.themes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.themed{background:var(--canvas);border:1px solid #2a3236;border-radius:12px;padding:18px;overflow:hidden}
+.themed .tlabel{font-family:var(--font-mono);font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px}
+.themed .tlabel b{color:var(--ink)}
+
+/* hero grid: one cell per state */
+.herogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px}
+.cell{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 6px 12px;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.cell .nm{font-family:var(--font-mono);font-size:10px;color:var(--ink);font-weight:500}
+.cell .map{font-size:9.5px;color:var(--mut);letter-spacing:.02em;text-align:center;line-height:1.35}
+
+/* size matrix */
+.matrix{border-collapse:collapse;width:100%}
+.matrix th,.matrix td{padding:10px 8px;text-align:center;border-top:1px solid var(--line)}
+.matrix th{font-family:var(--font-mono);font-size:10px;color:var(--mut);font-weight:500}
+.matrix td:first-child,.matrix th:first-child{text-align:left;font-family:var(--font-mono);font-size:10.5px;color:var(--ink);white-space:nowrap}
+.sz{display:block;font-size:9.5px;color:var(--mut);font-family:var(--font-mono);margin-top:5px}
+
+/* context strip */
+.ctx{display:flex;flex-direction:column;gap:14px}
+.launcher{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);
+  background:var(--panel);display:grid;place-items:center;box-shadow:0 4px 16px rgb(0 0 0 / 14%)}
+.dockhead{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:8px 12px;width:340px}
+.dockhead .ttl{font-size:13px;font-weight:600;color:var(--ink);flex:1}
+.dockhead .pill{font-size:11px;color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:1px 8px}
+.msg{display:flex;gap:10px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;width:340px}
+.msg .bub{font-size:12.5px;color:var(--ink);line-height:1.5}
+.msg .bub small{display:block;color:var(--mut);font-size:10.5px;margin-top:4px}
+.empty{display:flex;flex-direction:column;align-items:center;gap:10px;background:var(--panel);
+  border:1px dashed var(--line);border-radius:12px;padding:28px;width:340px;text-align:center}
+.empty .h{font-size:13px;font-weight:600;color:var(--ink)}
+.empty .s{font-size:11.5px;color:var(--mut)}
+.approval{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--warn);
+  border-radius:10px;padding:10px 12px;width:340px}
+.approval .t{font-size:12px;color:var(--ink)}
+.approval .t small{display:block;color:var(--mut);font-size:10.5px}
+.ctxrow{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}
+.ctxitem{display:flex;flex-direction:column;gap:6px}
+.ctxitem .cap{font-family:var(--font-mono);font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.07em}
+
+/* ============================ ORB ================================== */
+
+.orb{display:block;overflow:visible}
+.orb__tilt{transform-box:fill-box;transform-origin:center}
+.orb__eyes{transform-box:fill-box;transform-origin:center;display:none}
+.orb__ring{fill:none;stroke-width:2;stroke-linecap:round;opacity:0;
+  transform-box:fill-box;transform-origin:center}
+.orb__body{stroke:var(--orb-edge);stroke-width:1}
+.orb__spec{fill:#fff;opacity:var(--orb-spec-op)}
+.orb__bounce{fill:var(--c-accent);opacity:.1}
+.orb__eye,.orb__eyes--worry rect,.orb__eyes--flat rect{fill:var(--orb-eye)}
+.orb__glint{fill:#fff;opacity:.85}
+.orb__eyes--joy path{fill:none;stroke:var(--orb-eye);stroke-width:1.9;stroke-linecap:round}
+.s0{stop-color:var(--orb-hi)} .s1{stop-color:var(--orb-mid)} .s2{stop-color:var(--orb-lo)}
+
+/* which eye-set is live per state */
+.is-idle .orb__eyes--open,.is-queued .orb__eyes--open,.is-thinking .orb__eyes--open,
+.is-working .orb__eyes--open,.is-waiting .orb__eyes--open{display:block}
+.is-success .orb__eyes--joy{display:block}
+.is-error .orb__eyes--worry{display:block}
+.is-canceled .orb__eyes--flat{display:block}
+
+/* small sizes: drop the inner-eye glints, keep silhouette + eyes clean */
+.orb--s .orb__glint{display:none}
+.orb--s .orb__bounce{display:none}
+
+/* ---- state animations ------------------------------------------- */
+.is-idle .orb__tilt{animation:orb-breathe 4.6s ease-in-out infinite}
+.is-idle .orb__eyes--open{animation:orb-blink 5.4s ease-in-out infinite}
+
+.is-queued .orb__tilt{animation:orb-breathe 6.4s ease-in-out infinite}
+.is-queued .orb__eyes--open{animation:orb-blink-lidded 7s ease-in-out infinite}
+
+.is-thinking .orb__tilt{animation:orb-breathe 3.6s ease-in-out infinite}
+.is-thinking .orb__eyes--open{animation:orb-scan 1.7s ease-in-out infinite}
+
+.is-working .orb__tilt{animation:orb-breathe 2.6s ease-in-out infinite}
+.is-working .orb__eyes--open{animation:orb-blink 6s ease-in-out infinite}
+.is-working .orb__ring{opacity:1;stroke:var(--c-accent);
+  stroke-dasharray:34 101;animation:orb-orbit 1.35s linear infinite}
+
+.is-waiting .orb__tilt{transform:translateY(-1px) rotate(-2.5deg)}
+.is-waiting .orb__eyes--open{animation:orb-waitlook 4.4s ease-in-out infinite}
+.is-waiting .orb__ring{opacity:1;stroke:var(--c-warn);
+  stroke-dasharray:30 105;stroke-dashoffset:15;transform:rotate(-90deg);
+  animation:orb-ringpulse 1.7s ease-in-out infinite}
+
+.is-success .orb__tilt{animation:orb-settle .55s cubic-bezier(.2,.9,.3,1.2) both,
+  orb-breathe 4.6s 1s ease-in-out infinite}
+.is-success .orb__ring{opacity:1;stroke:var(--c-ok);
+  stroke-dasharray:30 105;stroke-dashoffset:15;transform:rotate(-90deg)}
+
+.is-error .orb__tilt{animation:orb-shake .38s ease-out both}
+.is-error .orb__ring{opacity:1;stroke:var(--c-bad);
+  stroke-dasharray:30 105;stroke-dashoffset:15;transform:rotate(-90deg)}
+
+.is-canceled{opacity:.5}
+.is-canceled .orb__eyes--flat{display:block}
+
+/* ---- keyframes ---------------------------------------------------- */
+@keyframes orb-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.028)}}
+@keyframes orb-blink{0%,90%,100%{transform:scaleY(1)}94%{transform:scaleY(.1)}97%{transform:scaleY(1)}}
+@keyframes orb-blink-lidded{0%,84%,100%{transform:scaleY(.6)}88%{transform:scaleY(.12)}92%{transform:scaleY(.6)}}
+@keyframes orb-scan{0%,100%{transform:translateX(-2.4px) scaleX(.86)}50%{transform:translateX(2.4px) scaleX(.86)}}
+@keyframes orb-waitlook{
+  0%,72%,100%{transform:translateY(-2.4px) scaleY(1)}
+  76%{transform:translateY(-2.4px) scaleY(.12)}
+  80%{transform:translateY(-2.4px) scaleY(1)}
+  84%{transform:translateY(-2.4px) scaleY(.18)}
+  88%{transform:translateY(-2.4px) scaleY(1)}}
+@keyframes orb-orbit{to{transform:rotate(360deg)}}
+@keyframes orb-ringpulse{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes orb-settle{0%{transform:scale(.92)}55%{transform:scale(1.06)}100%{transform:scale(1)}}
+@keyframes orb-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-1.6px)}60%{transform:translateX(1.3px)}}
+
+@media (prefers-reduced-motion:reduce){
+  .orb *{animation:none !important}
+  .is-waiting .orb__eyes--open{transform:translateY(-2.4px)}
+}
+
+.note{max-width:1180px;margin:18px auto 60px;padding:0 28px;color:#8fa09c;font-size:11.5px;line-height:1.6}
+.note code{font-family:var(--font-mono);color:#9fd8d1}
+</style>
+</head>
+<body>
+
+<div class="pagehead">
+  <h1>DEKOPEN Orb — identity mock</h1>
+  <p>A refined anthracite sphere with twin casement-slot eyes. The eyes carry life
+  (breathe, blink, gaze); a thin outer arc carries job semantics in the same hues as
+  <code>.aiws-state</code> pills. No glow, no glass, no gradients-as-decoration — the
+  sphere is the member-anthracite material. All artwork is inline SVG driven by one
+  <code>is-*</code> class; CSS keyframes only, no JS animation, no SMIL.</p>
+</div>
+
+<div class="section">
+  <h2>States · 64px</h2>
+  <div class="themes">
+    <div class="themed lt"><div class="tlabel">light — <b>--theme-bg-canvas #f5f6f6</b></div><div class="herogrid" id="heroL"></div></div>
+    <div class="themed dk"><div class="tlabel">dark — <b>--theme-bg-canvas #14181a</b></div><div class="herogrid" id="heroD"></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Size scale — launcher 20 · header 28 · empty-state 64</h2>
+  <div class="themes">
+    <div class="themed lt"><div class="tlabel">light</div><table class="matrix" id="mxL"></table></div>
+    <div class="themed dk"><div class="tlabel">dark</div><table class="matrix" id="mxD"></table></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>In context</h2>
+  <div class="themes">
+    <div class="themed lt"><div class="tlabel">light</div><div class="ctx" id="ctxL"></div></div>
+    <div class="themed dk"><div class="tlabel">dark</div><div class="ctx" id="ctxD"></div></div>
+  </div>
+</div>
+
+<div class="note">
+  Reduce-motion honored: all animation is CSS behind <code>prefers-reduced-motion</code>,
+  states fall back to static poses. Ring arc length 34/101 (working, orbiting) and
+  30/105 centered top (waiting/success/error). Eyes read at 20px: at
+  <code>size &lt; 28</code> the inner glints and the teal bounce are dropped
+  (<code>orb--s</code> variant).
+</div>
+
+<!-- ============================ ORB TEMPLATE ======================= -->
+<!-- One SVG, themed entirely by CSS. In the React port each instance  -->
+<!-- gets a unique gradient id via useId().                            -->
+<template id="orbT">
+<svg class="orb" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true">
+  <defs>
+    <radialGradient id="orbBody" cx="38%" cy="28%" r="80%">
+      <stop class="s0" offset="0"/><stop class="s1" offset="55%"/><stop class="s2" offset="100%"/>
+    </radialGradient>
+  </defs>
+  <circle class="orb__ring" cx="24" cy="24" r="21.5"/>
+  <g class="orb__tilt">
+    <circle class="orb__body" cx="24" cy="24" r="17" fill="url(#orbBody)"/>
+    <ellipse class="orb__bounce" cx="29" cy="33" rx="6" ry="2.6" transform="rotate(-18 29 33)"/>
+    <ellipse class="orb__spec" cx="18" cy="15.5" rx="5.4" ry="3" transform="rotate(-26 18 15.5)"/>
+    <g class="orb__eyes orb__eyes--open">
+      <rect class="orb__eye" x="15.6" y="20" width="6" height="9.4" rx="3"/>
+      <rect class="orb__eye" x="26.4" y="20" width="6" height="9.4" rx="3"/>
+      <circle class="orb__glint" cx="17.8" cy="22.4" r="1"/>
+      <circle class="orb__glint" cx="28.6" cy="22.4" r="1"/>
+    </g>
+    <g class="orb__eyes orb__eyes--joy">
+      <path d="M15.8 26.6 Q18.6 22.2 21.4 26.6"/>
+      <path d="M26.6 26.6 Q29.4 22.2 32.2 26.6"/>
+    </g>
+    <g class="orb__eyes orb__eyes--worry">
+      <rect x="15.8" y="23.4" width="5.8" height="3.4" rx="1.7" transform="rotate(-14 18.7 25.1)"/>
+      <rect x="26.4" y="23.4" width="5.8" height="3.4" rx="1.7" transform="rotate(14 29.3 25.1)"/>
+    </g>
+    <g class="orb__eyes orb__eyes--flat">
+      <rect x="15.8" y="23.9" width="5.8" height="3" rx="1.5"/>
+      <rect x="26.4" y="23.9" width="5.8" height="3" rx="1.5"/>
+    </g>
+  </g>
+</svg>
+</template>
+
+<script>
+const STATES=[
+ ["idle","IDLE","resting"],
+ ["queued","QUEUED","lidded, slow breath"],
+ ["thinking","PLANNING","gaze scans"],
+ ["working","RUNNING","accent arc orbits"],
+ ["waiting","WAITING_FOR_USER / APPROVAL","eyes raised, warn arc"],
+ ["success","SUCCEEDED","joy eyes, ok arc"],
+ ["error","FAILED / FAILED_RETRYABLE","worry eyes, danger arc"],
+ ["canceled","CANCELED","dimmed"],
+];
+const tpl=document.getElementById('orbT');
+function orb(state,size){
+  const f=tpl.content.cloneNode(true);
+  const s=f.querySelector('svg');
+  s.classList.add('is-'+state);
+  if(size<28) s.classList.add('orb--s');
+  s.setAttribute('width',size); s.setAttribute('height',size);
+  return f;
+}
+for(const el of[document.getElementById('heroL'),document.getElementById('heroD')]){
+  for(const [st,job,note] of STATES){
+    const c=document.createElement('div');c.className='cell';
+    c.appendChild(orb(st,64));
+    const n=document.createElement('span');n.className='nm';n.textContent=st;c.appendChild(n);
+    const m=document.createElement('span');m.className='map';m.textContent=job+' — '+note;c.appendChild(m);
+    el.appendChild(c);
+  }
+}
+for(const el of[document.getElementById('mxL'),document.getElementById('mxD')]){
+  const head=document.createElement('tr');
+  head.innerHTML='<th>state</th><th>20</th><th>28</th><th>64</th>';
+  el.appendChild(head);
+  for(const [st,job] of STATES){
+    const tr=document.createElement('tr');
+    const th=document.createElement('td');th.innerHTML=st+'<span class="sz">'+job+'</span>';tr.appendChild(th);
+    for(const sz of[20,28,64]){
+      const td=document.createElement('td');td.appendChild(orb(st,sz));tr.appendChild(td);
+    }
+    el.appendChild(tr);
+  }
+}
+for(const el of[document.getElementById('ctxL'),document.getElementById('ctxD')]){
+  const row=document.createElement('div');row.className='ctxrow';
+
+  const i1=document.createElement('div');i1.className='ctxitem';
+  i1.innerHTML='<span class="cap">launcher · 20 idle</span>';
+  const lb=document.createElement('div');lb.className='launcher';lb.appendChild(orb('idle',20));
+  i1.appendChild(lb);row.appendChild(i1);
+
+  const i2=document.createElement('div');i2.className='ctxitem';
+  i2.innerHTML='<span class="cap">dock header · 28 working</span>';
+  const dh=document.createElement('div');dh.className='dockhead';
+  dh.appendChild(orb('working',28));
+  dh.insertAdjacentHTML('beforeend','<span class="ttl">Asistente DEKOPEN</span><span class="pill">proyecto</span>');
+  i2.appendChild(dh);row.appendChild(i2);
+
+  const i3=document.createElement('div');i3.className='ctxitem';
+  i3.innerHTML='<span class="cap">message avatar · 28 success</span>';
+  const ms=document.createElement('div');ms.className='msg';
+  ms.appendChild(orb('success',28));
+  ms.insertAdjacentHTML('beforeend','<p class="bub" style="margin:0">Plan de compras listo: 6 líneas sin cubrir, 2 proveedores elegibles.<small>mimo-v2.6-pro · 3 créditos</small></p>');
+  i3.appendChild(ms);row.appendChild(i3);
+
+  const i4=document.createElement('div');i4.className='ctxitem';
+  i4.innerHTML='<span class="cap">approval prompt · 28 waiting</span>';
+  const ap=document.createElement('div');ap.className='approval';
+  ap.appendChild(orb('waiting',28));
+  ap.insertAdjacentHTML('beforeend','<p class="t" style="margin:0">Aplicar 4 operaciones al vano 2<small>requiere confirmación humana</small></p>');
+  i4.appendChild(ap);row.appendChild(i4);
+
+  const i5=document.createElement('div');i5.className='ctxitem';
+  i5.innerHTML='<span class="cap">workspace empty-state · 64 waiting</span>';
+  const em=document.createElement('div');em.className='empty';
+  em.appendChild(orb('waiting',64));
+  em.insertAdjacentHTML('beforeend','<p class="h" style="margin:0">¿En qué trabajamos?</p><p class="s" style="margin:0">Describe la meta — yo consulto la evidencia del proyecto.</p>');
+  i5.appendChild(em);row.appendChild(i5);
+
+  el.appendChild(row);
+}
+</script>
+</body>
+</html>

@@ -3,6 +3,8 @@
 import json
 from datetime import datetime
 
+from django.db import connection
+from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,8 +12,9 @@ from rest_framework.views import APIView
 from rest_framework.parsers import FormParser
 from rest_framework.permissions import AllowAny
 
+from ai_gateway import invocations
 from ai_gateway.providers import ProviderError
-from authentication.errors import contract_error
+from authentication.errors import ContractAPIException, contract_error
 from engine_api.repository import SystemNotFound, UnsupportedCatalogContract
 from authentication.serializers import ACTIVE_ORGANIZATION_HEADER
 from billing.flow import FlowError
@@ -24,21 +27,49 @@ from projects import (
     design_alternatives,
     design_assist,
     invoices,
+    measurement,
     org_branding,
+    org_settings,
     payment_links,
     payments,
+    quotations,
     receipts,
+    reminders,
     service,
     sii,
     sii_envio,
 )
 from projects.serializers import (
+    ClientDetailResponseSerializer,
+    ClientDuplicatesResponseSerializer,
     ClientListResponseSerializer,
+    ClientMergeSerializer,
+    ClientNoteWriteSerializer,
     ClientResponseSerializer,
     ClientUpdateSerializer,
     ClientWriteSerializer,
+    CollectionReminderDraftResponseSerializer,
+    CollectionReminderPrepareSerializer,
+    CollectionReminderSendResponseSerializer,
+    CollectionReminderSendSerializer,
+    OrgAnalyticsSettingsSerializer,
     OrgBrandingSerializer,
     OrgBrandingWriteSerializer,
+    OrgCommercialSettingsSerializer,
+    OrgCompanySettingsSerializer,
+    OrgDocumentPreviewResponseSerializer,
+    OrgDocumentPreviewSerializer,
+    OrgDocumentsSettingsSerializer,
+    OrgIntegrationsResponseSerializer,
+    OrgInviteSerializer,
+    OrgInvitationSerializer,
+    OrgMemberUpdateSerializer,
+    OrgMembersResponseSerializer,
+    OrgNumberingResponseSerializer,
+    OrgProductionSettingsSerializer,
+    OrgSectionResponseSerializer,
+    OrgSecuritySettingsSerializer,
+    OrgSettingsResponseSerializer,
     PaymentIntegrationSerializer,
     PaymentIntegrationStatusSerializer,
     PaymentLinkCreateSerializer,
@@ -71,11 +102,18 @@ from projects.serializers import (
     DesignAlternativesResponseSerializer,
     DesignAssistRequestSerializer,
     DesignAssistResponseSerializer,
+    MeasurementConfirmSerializer,
+    MeasurementResolveResponseSerializer,
+    MeasurementResolveSerializer,
+    PositionMoveSerializer,
     PositionResponseSerializer,
     PositionUpdateSerializer,
     PositionWriteSerializer,
     ProjectListResponseSerializer,
+    ProjectThermalSerializer,
+    ThermalAlternativesResponseSerializer,
     ProjectResponseSerializer,
+    QuotationListResponseSerializer,
     ProjectUpdateSerializer,
     ProjectWriteSerializer,
     ResetPricingSerializer,
@@ -118,6 +156,21 @@ class ProjectsView(APIView):
         data = validate(ProjectWriteSerializer, request.data)
         with scope(request, WRITE_ROLES) as (token, _, org):
             return response(service.create_project(org, token.user_id, data), status=201)
+
+
+class QuotationsView(APIView):
+    """Lista transversal de cotizaciones: estado comercial real por
+    proyecto, incluyendo «vista por el cliente» del enlace vigente.
+    Comercial puro — el taller no cotiza (READ_ROLES menos WM)."""
+
+    @extend_schema(
+        operation_id="quotations_list",
+        responses={200: QuotationListResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, ("OWNER", "ESTIMATOR")) as (_, _, org):
+            return response(quotations.list_quotations(org))
 
 
 class ProjectView(APIView):
@@ -190,22 +243,29 @@ class ProjectSuccessorView(APIView):
     def post(self, request, project_id):
         with scope(request, WRITE_ROLES) as (_, _, org):
             data = validate(SuccessorRequestSerializer, request.data)
-            value = service.start_successor(
-                org, project_id, data["expected_current_revision"]
-            )
+            value = service.start_successor(org, project_id, data["expected_current_revision"])
         created = value.pop("successor_created")
         return response(value, status=201 if created else 200)
 
 
 class ProjectResetPricingView(APIView):
-    @extend_schema(operation_id="projects_reset_pricing", request=ResetPricingSerializer,
-                   responses={200: ProjectResponseSerializer, **ERRORS}, **SCHEMA)
+    @extend_schema(
+        operation_id="projects_reset_pricing",
+        request=ResetPricingSerializer,
+        responses={200: ProjectResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
     def post(self, request, project_id):
         data = validate(ResetPricingSerializer, request.data)
         with scope(request, WRITE_ROLES) as (_, _, org):
-            return response(service.reset_draft_pricing(
-                org, project_id, data["expected_operation_id"], data["reason"],
-            ))
+            return response(
+                service.reset_draft_pricing(
+                    org,
+                    project_id,
+                    data["expected_operation_id"],
+                    data["reason"],
+                )
+            )
 
 
 class PositionView(APIView):
@@ -255,6 +315,84 @@ class PositionView(APIView):
         return Response(status=204)
 
 
+class PositionMoveView(APIView):
+    """Explicit reorder — the estimator arranges the print order of the
+    quotation lines; the service rewrites the whole 1..N run atomically."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="positions_move",
+        request=PositionMoveSerializer,
+        responses={200: PositionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, position_id):
+        data = validate(PositionMoveSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(
+                service.move_position(
+                    org, position_id, data["to_index"], data["expected_updated_at"]
+                )
+            )
+
+
+class PositionMeasurementResolveView(APIView):
+    """Live vano→fabricación preview for the editor — engine resolves, nothing persists."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="positions_measurement_resolve",
+        request=MeasurementResolveSerializer,
+        responses={200: MeasurementResolveResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, project_id):
+        data = validate(MeasurementResolveSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(
+                measurement.resolve_measurement_preview(
+                    org,
+                    system_id=data["system_id"],
+                    vano_payload=data.get("vano"),
+                    mounting_rule_id=data.get("mounting_rule_id"),
+                    lock_payload=data.get("fabrication_lock"),
+                    position_width_mm=data["width_mm"],
+                    position_height_mm=data["height_mm"],
+                )
+            )
+
+
+class PositionMeasurementConfirmView(APIView):
+    """Explicit human confirmation of the fabrication measure — the
+    production gate evidence."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="positions_measurement_confirm",
+        request=MeasurementConfirmSerializer,
+        responses={200: PositionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, position_id):
+        data = validate(MeasurementConfirmSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (token, _, org):
+            existing = service.position_row(org, position_id)
+            return response(
+                service.position_public(
+                    measurement.confirm_measurement(
+                        org,
+                        existing["project_id"],
+                        position_id,
+                        token.user_id,
+                        confirmed=data["confirmed"],
+                    )
+                )
+            )
+
+
 class PositionDesignAssistView(APIView):
     parser_classes = [DecimalJSONParser]
 
@@ -266,41 +404,48 @@ class PositionDesignAssistView(APIView):
     )
     def post(self, request, position_id):
         data = validate(DesignAssistRequestSerializer, request.data)
-        with scope(request, WRITE_ROLES) as (token, _, org):
-            try:
-                position = service.position_row(org, position_id)
-                # Ops validate against the position's own catalog authority —
-                # the client's system_id is only the fallback for a position
-                # that doesn't declare one yet (review AI-11).
-                return response(
-                    design_assist.assist(
-                        org_id=org,
-                        user_id=token.user_id,
-                        position=position,
-                        product=data["product"],
-                        prompt=str(data["prompt"]),
-                        operation_key=str(data["operation_key"]),
-                        system_id=position.get("system_id") or data["system_id"],
+        try:
+            with scope(request, WRITE_ROLES) as (token, _, org):
+                try:
+                    position = service.position_row(org, position_id)
+                    # Ops validate against the position's own catalog authority —
+                    # the client's system_id is only the fallback for a position
+                    # that doesn't declare one yet (review AI-11).
+                    return response(
+                        design_assist.assist(
+                            org_id=org,
+                            user_id=token.user_id,
+                            position=position,
+                            product=data["product"],
+                            prompt=str(data["prompt"]),
+                            operation_key=str(data["operation_key"]),
+                            system_id=position.get("system_id") or data["system_id"],
+                        )
                     )
-                )
-            except ProviderError as error:
-                raise contract_error(
-                    503,
-                    error.code,
-                    "El proveedor de IA no está disponible en este momento.",
-                ) from None
-            except SystemNotFound as error:
-                raise contract_error(
-                    404,
-                    "system_not_found",
-                    "La serie no está disponible para este taller.",
-                ) from error
-            except UnsupportedCatalogContract as error:
-                raise contract_error(
-                    422,
-                    "technical_authority_required",
-                    "Revisa las compatibilidades del catálogo de esta serie.",
-                ) from error
+                except SystemNotFound as error:
+                    raise contract_error(
+                        404,
+                        "system_not_found",
+                        "La serie no está disponible para este taller.",
+                    ) from error
+                except UnsupportedCatalogContract as error:
+                    raise contract_error(
+                        422,
+                        "technical_authority_required",
+                        "Revisa las compatibilidades del catálogo de esta serie.",
+                    ) from error
+        except ProviderError as error:
+            # §IA3 — outside the scope so the failed call records AFTER the
+            # request transaction rolled back (entry rides error.invocation).
+            invocations.record_attached(error)
+            raise contract_error(
+                503,
+                error.code,
+                "El proveedor de IA no está disponible en este momento.",
+            ) from None
+        except ContractAPIException as error:
+            invocations.record_attached(error)
+            raise
 
 
 class PositionDesignAlternativesView(APIView):
@@ -318,39 +463,44 @@ class PositionDesignAlternativesView(APIView):
     )
     def post(self, request, position_id):
         data = validate(DesignAlternativesRequestSerializer, request.data)
-        with scope(request, WRITE_ROLES) as (token, _, org):
-            try:
-                return response(
-                    design_alternatives.alternatives(
-                        org_id=org,
-                        user_id=token.user_id,
-                        position=service.position_row(org, position_id),
-                        brief=str(data["brief"]),
-                        count=int(data.get("count") or 2),
-                        operation_key=str(data["operation_key"]),
-                        system_id=data["system_id"],
-                        width_mm=data.get("width_mm"),
-                        height_mm=data.get("height_mm"),
+        try:
+            with scope(request, WRITE_ROLES) as (token, _, org):
+                try:
+                    return response(
+                        design_alternatives.alternatives(
+                            org_id=org,
+                            user_id=token.user_id,
+                            position=service.position_row(org, position_id),
+                            brief=str(data["brief"]),
+                            count=int(data.get("count") or 2),
+                            operation_key=str(data["operation_key"]),
+                            system_id=data["system_id"],
+                            width_mm=data.get("width_mm"),
+                            height_mm=data.get("height_mm"),
+                        )
                     )
-                )
-            except ProviderError as error:
-                raise contract_error(
-                    503,
-                    error.code,
-                    "El proveedor de IA no está disponible en este momento.",
-                ) from None
-            except SystemNotFound as error:
-                raise contract_error(
-                    404,
-                    "system_not_found",
-                    "La serie no está disponible para este taller.",
-                ) from error
-            except UnsupportedCatalogContract as error:
-                raise contract_error(
-                    422,
-                    "technical_authority_required",
-                    "Revisa las compatibilidades del catálogo de esta serie.",
-                ) from error
+                except SystemNotFound as error:
+                    raise contract_error(
+                        404,
+                        "system_not_found",
+                        "La serie no está disponible para este taller.",
+                    ) from error
+                except UnsupportedCatalogContract as error:
+                    raise contract_error(
+                        422,
+                        "technical_authority_required",
+                        "Revisa las compatibilidades del catálogo de esta serie.",
+                    ) from error
+        except ProviderError as error:
+            invocations.record_attached(error)
+            raise contract_error(
+                503,
+                error.code,
+                "El proveedor de IA no está disponible en este momento.",
+            ) from None
+        except ContractAPIException as error:
+            invocations.record_attached(error)
+            raise
 
 
 class ProjectPaymentsView(APIView):
@@ -421,9 +571,7 @@ class ProjectPaymentLinkRecoverView(APIView):
     def post(self, request, project_id, link_id):
         with scope(request, WRITE_ROLES) as (_, _, org):
             try:
-                return response(
-                    payment_links.recover_link(org_id=org, link_id=link_id)
-                )
+                return response(payment_links.recover_link(org_id=org, link_id=link_id))
             except FlowError as error:
                 raise contract_error(
                     503, error.code, "El link requiere verificación del proveedor."
@@ -489,6 +637,64 @@ class FlowPaymentConfirmView(APIView):
         return response({"received": True})
 
 
+class ProjectCollectionReminderView(APIView):
+    """IA prepara el mensaje — jamás envía. El clic de enviar vive aparte."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="project_collection_reminder_prepare",
+        request=CollectionReminderPrepareSerializer,
+        responses={200: CollectionReminderDraftResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, project_id):
+        data = validate(CollectionReminderPrepareSerializer, request.data)
+        try:
+            with scope(request, WRITE_ROLES) as (token, _, org):
+                return response(
+                    reminders.draft_reminder(
+                        org_id=org,
+                        project_id=project_id,
+                        actor_id=token.user_id,
+                        operation_key=str(data["operation_key"]),
+                    )
+                )
+        except ProviderError as error:
+            invocations.record_attached(error)
+            raise contract_error(
+                503,
+                error.code,
+                "El proveedor de IA no está disponible en este momento.",
+            ) from None
+        except ContractAPIException as error:
+            invocations.record_attached(error)
+            raise
+
+
+class ProjectCollectionReminderSendView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="project_collection_reminder_send",
+        request=CollectionReminderSendSerializer,
+        responses={200: CollectionReminderSendResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, project_id):
+        data = validate(CollectionReminderSendSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (token, _, org):
+            return response(
+                reminders.send_reminder(
+                    org_id=org,
+                    project_id=project_id,
+                    actor_id=token.user_id,
+                    subject=str(data["subject"]),
+                    body=str(data["body"]),
+                )
+            )
+
+
 class OrganizationBrandingView(APIView):
     parser_classes = [DecimalJSONParser]
 
@@ -516,7 +722,12 @@ class OrganizationBrandingView(APIView):
 class OrganizationBrandingLogoView(APIView):
     @extend_schema(
         operation_id="organization_branding_logo_upload",
-        request={"multipart/form-data": {"type": "object", "properties": {"file": {"type": "string", "format": "binary"}}}},
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {"file": {"type": "string", "format": "binary"}},
+            }
+        },
         responses={200: OrgBrandingSerializer, **ERRORS},
         **SCHEMA,
     )
@@ -536,7 +747,9 @@ class OrganizationBrandingLogoView(APIView):
     def get(self, request):
         with scope(request, READ_ROLES) as (_, _, org):
             content, content_type = org_branding.logo_bytes(org_id=org)
-        return Response(
+        # HttpResponse, no DRF Response — el renderer JSON no sabe serializar
+        # bytes crudos y devuelve 500 en lugar de la imagen.
+        return HttpResponse(
             content,
             content_type=content_type,
             headers={"Cache-Control": "private, max-age=300"},
@@ -586,9 +799,7 @@ class ProjectPaymentReceiptView(APIView):
     def get(self, request, project_id, payment_id):
         with scope(request, READ_ROLES) as (_, _, org):
             return response(
-                receipts.receipt_access(
-                    org_id=org, project_id=project_id, payment_id=payment_id
-                )
+                receipts.receipt_access(org_id=org, project_id=project_id, payment_id=payment_id)
             )
 
 
@@ -605,9 +816,7 @@ class ProjectInvoicesView(APIView):
         with scope(request, WRITE_ROLES) as (token, _, org):
             project = service.project_row(org, project_id)
             return response(
-                invoices.issue_invoice(
-                    org_id=org, project=project, actor_id=token.user_id
-                ),
+                invoices.issue_invoice(org_id=org, project=project, actor_id=token.user_id),
                 status=201,
             )
 
@@ -623,9 +832,7 @@ class ProjectInvoiceAccessView(APIView):
     def get(self, request, project_id, invoice_id):
         with scope(request, READ_ROLES) as (_, _, org):
             return response(
-                invoices.invoice_access(
-                    org_id=org, project_id=project_id, invoice_id=invoice_id
-                )
+                invoices.invoice_access(org_id=org, project_id=project_id, invoice_id=invoice_id)
             )
 
 
@@ -704,9 +911,7 @@ class ProjectInvoiceDteView(APIView):
     def get(self, request, project_id, invoice_id):
         with scope(request, READ_ROLES) as (_, _, org):
             return response(
-                sii.dte_access(
-                    org_id=org, project_id=project_id, invoice_id=invoice_id
-                )
+                sii.dte_access(org_id=org, project_id=project_id, invoice_id=invoice_id)
             )
 
 
@@ -838,7 +1043,13 @@ class SiiCertificateView(APIView):
     def get(self, request):
         with scope(request, READ_ROLES) as (_, _, org):
             return response(
-                {"certificate": sii_envio.certificate_status(org_id=org)}
+                {
+                    "certificate": sii_envio.certificate_status(org_id=org),
+                    # La misma verdad que la leyenda de los PDF: adaptador,
+                    # certificado vigente y folios — «No conectado» se decide
+                    # con esto, no con la presencia del certificado solo.
+                    "integration": sii_envio.integration_state(org_id=org),
+                }
             )
 
     @extend_schema(
@@ -909,12 +1120,35 @@ class ClientsView(APIView):
 
     @extend_schema(
         operation_id="clients_list",
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                "q",
+                str,
+                description="Búsqueda por nombre o RUT (normalizado).",
+            ),
+            OpenApiParameter(
+                "filtro",
+                str,
+                enum=["activos", "saldo"],
+                description="activos = con proyectos activos; saldo = con saldo pendiente.",
+            ),
+        ],
+        tags=["projects"],
         responses={200: ClientListResponseSerializer, **ERRORS},
-        **SCHEMA,
     )
     def get(self, request):
         with scope(request, READ_ROLES) as (_, _, org):
-            return response({"items": clients.list_clients(org)})
+            query = request.query_params.get("q") or None
+            raw_filter = request.query_params.get("filtro")
+            filter_kind = {"activos": "active", "saldo": "balance"}.get(raw_filter)
+            return response(
+                {
+                    "items": clients.list_clients(
+                        org, query=query, filter_kind=filter_kind
+                    )
+                }
+            )
 
     @extend_schema(
         operation_id="clients_create",
@@ -933,12 +1167,12 @@ class ClientView(APIView):
 
     @extend_schema(
         operation_id="clients_retrieve",
-        responses={200: ClientResponseSerializer, **ERRORS},
+        responses={200: ClientDetailResponseSerializer, **ERRORS},
         **SCHEMA,
     )
     def get(self, request, client_id):
         with scope(request, READ_ROLES) as (_, _, org):
-            return response(clients.client_public(org, client_id))
+            return response(clients.client_detail(org, client_id))
 
     @extend_schema(
         operation_id="clients_update",
@@ -962,3 +1196,381 @@ class ClientView(APIView):
         with scope(request, WRITE_ROLES) as (_, _, org):
             clients.deactivate_client(org, client_id)
             return Response(status=204)
+
+
+class ClientNotesView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="clients_add_note",
+        request=ClientNoteWriteSerializer,
+        responses={201: ClientDetailResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, client_id):
+        data = validate(ClientNoteWriteSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (token, _, org):
+            clients.add_note(
+                org, client_id, token.user_id, token.email or "—", data["body"]
+            )
+            return response(clients.client_detail(org, client_id), status=201)
+
+
+class ClientDuplicatesView(APIView):
+    @extend_schema(
+        operation_id="clients_duplicates",
+        responses={200: ClientDuplicatesResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response({"items": clients.duplicates(org)})
+
+
+class ClientMergeView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="clients_merge",
+        request=ClientMergeSerializer,
+        responses={200: ClientDetailResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, client_id):
+        data = validate(ClientMergeSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (token, _, org):
+            return response(
+                clients.merge_clients(
+                    org,
+                    data["survivor_id"],
+                    client_id,
+                    token.user_id,
+                    token.email or "—",
+                )
+            )
+
+
+# ---------------------------------------------------------------------------
+# P22 — Ajustes por dominio.
+
+
+class OrganizationSettingsView(APIView):
+    @extend_schema(
+        operation_id="organization_settings_read",
+        responses={200: OrgSettingsResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(org_settings.settings_snapshot(org))
+
+
+class OrganizationCompanySettingsView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_settings_company_update",
+        request=OrgCompanySettingsSerializer,
+        responses={200: OrgSettingsResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgCompanySettingsSerializer, request.data, partial=True)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(org_settings.save_company(org, data))
+
+
+class OrganizationCommercialSettingsView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_settings_commercial_update",
+        request=OrgCommercialSettingsSerializer,
+        responses={200: OrgSectionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgCommercialSettingsSerializer, request.data, partial=True)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(org_settings.save_commercial(org, data))
+
+
+class OrganizationDocumentsSettingsView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_settings_documents_update",
+        request=OrgDocumentsSettingsSerializer,
+        responses={200: OrgSectionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgDocumentsSettingsSerializer, request.data, partial=True)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(org_settings.save_documents(org, data))
+
+
+class OrganizationProductionSettingsView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_settings_production_update",
+        request=OrgProductionSettingsSerializer,
+        responses={200: OrgSectionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgProductionSettingsSerializer, request.data, partial=True)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(org_settings.save_production(org, data))
+
+
+class OrganizationAnalyticsSettingsView(APIView):
+    """Quién ve montos/márgenes en Analítica y la tarifa horaria de mano de
+    obra — decisión del dueño (OWNER explícito, no WRITE_ROLES)."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_settings_analytics_update",
+        request=OrgAnalyticsSettingsSerializer,
+        responses={200: OrgSectionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgAnalyticsSettingsSerializer, request.data, partial=True)
+        with scope(request, ("OWNER",)) as (_, _, org):
+            return response(org_settings.save_analytics(org, data))
+
+
+class OrganizationSecurityView(APIView):
+    """El interruptor 2FA de la org es decisión del dueño — la plantilla
+    no lo mueve (OWNER explícito, no WRITE_ROLES)."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_security_update",
+        request=OrgSecuritySettingsSerializer,
+        responses={200: OrgSectionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgSecuritySettingsSerializer, request.data)
+        with scope(request, ("OWNER",)) as (_, _, org):
+            return response(org_settings.save_security(org, data))
+
+
+class OrganizationNumberingView(APIView):
+    @extend_schema(
+        operation_id="organization_numbering_read",
+        responses={200: OrgNumberingResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(org_settings.numbering(org))
+
+
+class OrganizationIntegrationsView(APIView):
+    @extend_schema(
+        operation_id="organization_integrations_read",
+        responses={200: OrgIntegrationsResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(org_settings.integrations(org))
+
+
+class OrganizationMembersView(APIView):
+    """Usuarios y roles: la membresía la administra el dueño; invitar usa el
+    correo como identificador (nunca un UUID visible)."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_members_list",
+        responses={200: OrgMembersResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, ("OWNER",)) as (_, _, org):
+            return response(org_settings.list_members(org))
+
+    @extend_schema(
+        operation_id="organization_members_invite",
+        request=OrgInviteSerializer,
+        responses={201: OrgInvitationSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request):
+        data = validate(OrgInviteSerializer, request.data)
+        with scope(request, ("OWNER",)) as (token, _, org):
+            return response(
+                org_settings.invite_member(
+                    org, data["email"], data["role"],
+                    token.user_id, token.email or "—",
+                ),
+                status=201,
+            )
+
+
+class OrganizationMemberView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_member_update",
+        request=OrgMemberUpdateSerializer,
+        responses={200: OrgMembersResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def patch(self, request, membership_id):
+        data = validate(OrgMemberUpdateSerializer, request.data, partial=True)
+        with scope(request, ("OWNER",)) as (token, _, org):
+            return response(
+                org_settings.update_member(org, membership_id, data, token.user_id)
+            )
+
+
+class OrganizationDocumentPreviewView(APIView):
+    """Vista previa real del papel con el borrador de marca/documentos —
+    responde el HTML del render DOC-01 (mini hoja), no una aproximación."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_document_preview",
+        request=OrgDocumentPreviewSerializer,
+        responses={200: OrgDocumentPreviewResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request):
+        data = validate(OrgDocumentPreviewSerializer, request.data, partial=True)
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(
+                {"html": org_settings.document_preview(org, data)}
+            )
+
+
+class ProjectThermalView(APIView):
+    """P18 — panel de cumplimiento térmico OGUC 4.1.10 del proyecto."""
+
+    @extend_schema(
+        operation_id="projects_thermal",
+        responses={200: ProjectThermalSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request, project_id):
+        from projects import thermal
+
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(thermal.project_thermal(org, project_id))
+
+
+class PositionThermalAlternativesView(APIView):
+    """P18 §8 — alternativa más barata que sí cumple para la posición."""
+
+    @extend_schema(
+        operation_id="position_thermal_alternatives",
+        responses={200: ThermalAlternativesResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request, position_id):
+        from projects import thermal
+
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(
+                thermal.thermal_alternatives(
+                    org_id=org,
+                    position_id=position_id,
+                    price_lookup=_thermal_price_lookup(org),
+                )
+            )
+
+
+def _thermal_price_lookup(org):
+    """Δ neto entre la posición guardada y un diseño candidato — la misma
+    composición honesta de §08-WC (position_cost + margen declarado);
+    devuelve None cuando la regla no permite un precio unitario honesto."""
+    from datetime import date
+    from decimal import Decimal as D
+
+    from authentication.rls import tx_aborted
+    from dekopen_engine.commercial import PricingError
+    from django.db import transaction
+    from django.db.utils import DatabaseError
+    from pricing.repository import PricingRepository, json_text, one
+    from pricing.service import _design_net_price, position_cost
+
+    try:
+        with transaction.atomic():  # savepoint: la negación RLS no aborta el resto
+            rules = one(
+                "SELECT * FROM public.pricing_rules WHERE org_id=%s",
+                [org],
+                "pricing_rules_not_found",
+            )
+    except (PricingError, DatabaseError):
+        # pricing_rules no es legible por todos los roles con lectura de
+        # proyectos (p. ej. ESTIMATOR bajo RLS). El §8 conserva las
+        # alternativas y declara Δ «Sin dato» en vez de tumbar la vista.
+        return lambda position, system_id, tree: None
+    organization = one(
+        "SELECT currency FROM public.tenancy_organizations WHERE id=%s",
+        [org],
+        "organization_not_found",
+    )
+    repo = PricingRepository(org, date.today(), organization["currency"], None)
+    calculation_rules = {
+        **rules,
+        "labor_rate_per_m2": repo.convert(rules["labor_rate_per_m2"], organization["currency"]),
+        "installation_rate_per_m2": repo.convert(
+            rules["installation_rate_per_m2"], organization["currency"]
+        ),
+    }
+
+    def lookup(position, system_id, tree):
+        pseudo = {
+            "system_id": system_id,
+            "parametric_tree": json_text(tree),
+            "width_mm": D(str(position["width_mm"])),
+            "height_mm": D(str(position["height_mm"])),
+            "color_interior": position["color_interior"],
+            "color_exterior": position["color_exterior"],
+        }
+        try:
+            before, before_area, _, before_formation = position_cost(
+                repo, position, calculation_rules
+            )
+            after, after_area, _, after_formation = position_cost(repo, pseudo, calculation_rules)
+            before_net = _design_net_price(
+                before,
+                before_area,
+                before_formation,
+                rules,
+                width=position["width_mm"],
+                height=position["height_mm"],
+                foil=position["color_interior"] != "WHITE" or position["color_exterior"] != "WHITE",
+            )
+            after_net = _design_net_price(
+                after,
+                after_area,
+                after_formation,
+                rules,
+                width=pseudo["width_mm"],
+                height=pseudo["height_mm"],
+                foil=pseudo["color_interior"] != "WHITE" or pseudo["color_exterior"] != "WHITE",
+            )
+            if before_net is None or after_net is None:
+                return None
+            return after_net - before_net
+        except Exception:  # noqa: BLE001 — sin precio honesto, «Sin dato»
+            return None
+        finally:
+            # position_cost deja el rol ambiente en pricing_backend; el
+            # contexto del endpoint corre como authenticated.
+            if not tx_aborted():
+                with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL ROLE authenticated")
+
+    return lookup

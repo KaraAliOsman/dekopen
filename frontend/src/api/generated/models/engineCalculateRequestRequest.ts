@@ -17,5 +17,11 @@ export interface EngineCalculateRequestRequest {
    * @maxLength 50
    */
   color: string;
+  /**
+   * @minLength 1
+   * @maxLength 50
+   * @nullable
+   */
+  color_exterior?: string | null;
   parametric_tree: unknown;
 }

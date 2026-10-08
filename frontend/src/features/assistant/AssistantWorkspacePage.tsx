@@ -17,20 +17,25 @@ import {
 import type { AiAgentStep } from "../../api/generated/models/aiAgentStep";
 import type { AiJob } from "../../api/generated/models/aiJob";
 import type { AiJobDetail } from "../../api/generated/models/aiJobDetail";
+import type { AiJobDetailCost } from "../../api/generated/models/aiJobDetailCost";
 import type { AiJobLive } from "../../api/generated/models/aiJobLive";
 import type { DesignOp } from "../commands/types";
 import { describeDesignOp, designAssistProduct, productFingerprint } from "../canvas/designOps";
 import type { ProductJson } from "../canvas/productEditing";
-import { useDesignOpsBridge } from "./assistantContext";
+import { useAssistantContext, useDesignOpsBridge } from "./assistantContext";
+import { useAssistantPresence } from "./useAssistantPresence";
 import { AiMetricsCard } from "./AiMetricsCard";
 import { ArtifactDetail, type Artifact } from "./ArtifactDetail";
 import { BatchOpsStep } from "./BatchOpsStep";
 import { BotFigure } from "./BotFigure";
+import { FailureCollapse } from "./FailureCollapse";
 import { Orb, orbStateFor } from "./Orb";
 import { STATE_LABELS } from "./states";
 import { SURFACE_LABELS } from "./surfaces";
 import { jobErrorKey } from "../jobs/jobError";
-import { t } from "../../i18n/es-CL";
+import { formatMoney, shortTechnicalId } from "../../format";
+import { t, type TranslationKey } from "../../i18n/es-CL";
+import { formatDate } from "../../format";
 
 /* ------------------------------------------------------------------ */
 /* §07-H — AI workspace: durable jobs with real state, a transcript     */
@@ -147,18 +152,43 @@ function relativeTime(iso: string | undefined): string {
   if (hours < 24) return t("aiws.hoursAgo").replace("{n}", String(hours));
   const days = Math.floor(hours / 24);
   if (days < 7) return t("aiws.daysAgo").replace("{n}", String(days));
-  return new Date(then).toLocaleDateString("es-CL", { day: "numeric", month: "short" });
+  return formatDate(then);
 }
 
-/** The worker reports numeric checkpoints on the job_runs row; the band
- * reads as a phase label so a live run shows what it is doing. */
+/** §IA3 — the worker names its own intermediate state on job_runs
+ * (context/model/proposal); the band prefers that honest label over the
+ * percent heuristic, which stays as the fallback for jobs that predate the
+ * phase channel. */
+const LIVE_PHASE_KEYS: Record<string, TranslationKey> = {
+  context: "aiws.live.context",
+  model: "aiws.live.model",
+  proposal: "aiws.live.proposal",
+};
+
 function livePhase(live: AiJobLive | null | undefined): string {
+  const phase = live && typeof live.phase === "string" ? live.phase : null;
+  if (phase !== null && phase in LIVE_PHASE_KEYS) {
+    return t(LIVE_PHASE_KEYS[phase] ?? "aiws.live.context");
+  }
   const progress = live && typeof live.progress === "number" ? (live.progress as number) : 0;
   if (progress < 15) return t("aiws.live.queued");
   if (progress < 40) return t("aiws.live.context");
   if (progress < 70) return t("aiws.live.consulting");
   if (progress < 90) return t("aiws.live.writing");
   return t("aiws.live.finishing");
+}
+
+/** Job spend line — the attributed provider cost of this run's rounds. */
+function jobCostLine(cost: AiJobDetailCost | undefined): string | null {
+  if (cost === null || cost === undefined || typeof cost !== "object") return null;
+  const credits = Number((cost as { credits?: unknown }).credits ?? 0);
+  const tokens = Number((cost as { tokens?: unknown }).tokens ?? 0);
+  const usd = (cost as { est_cost_usd?: unknown }).est_cost_usd;
+  if (!Number.isFinite(credits) || credits <= 0) return null;
+  return t("aiws.costLine")
+    .replace("{credits}", String(credits))
+    .replace("{tokens}", String(tokens))
+    .replace("{usd}", typeof usd === "string" ? ` · ≈ ${formatMoney(usd, "USD")}` : "");
 }
 
 const JOBS_PAGE_SIZE = 30;
@@ -201,7 +231,7 @@ function JobRail({
         </button>
       </div>
       {jobs.length === 0 ? (
-        <p className="aiws-empty">{t("aiws.jobsEmpty")}</p>
+        <p className="ui-empty-inline">{t("aiws.jobsEmpty")}</p>
       ) : (
         <ul className="aiws-joblist">
           {jobs.map((job) => (
@@ -507,7 +537,7 @@ function AgentTurnView({
                             {" "}
                             · {t("aiws.evidence")}:{" "}
                             {claim.evidence
-                              .map((ref) => turn.evidence_labels?.[ref] ?? `${ref.slice(0, 8)}…`)
+                              .map((ref) => turn.evidence_labels?.[ref] ?? shortTechnicalId(ref))
                               .join(", ")}
                           </small>
                         ) : null}
@@ -558,20 +588,12 @@ function ErrorTurnView({
     <div className="aiws-turn aiws-turn--error">
       <Orb state="error" size={28} />
       <div className="aiws-turn__body">
-        <p className="aiws-error__text">
-          {turn.code ? t(jobErrorKey(turn.code)) : t("jobs.fail.generic")}
-          {turn.code ? <code className="aiws-tool">{turn.code}</code> : null}
-        </p>
-        {job.state === "FAILED_RETRYABLE" ? (
-          <button
-            type="button"
-            className="ui-button ui-button--small"
-            disabled={retryBusy}
-            onClick={onRetry}
-          >
-            {t("aiws.retry")}
-          </button>
-        ) : null}
+        <FailureCollapse
+          message={turn.code ? t(jobErrorKey(turn.code)) : t("jobs.fail.generic")}
+          code={turn.code}
+          onRetry={job.state === "FAILED_RETRYABLE" ? onRetry : undefined}
+          retryBusy={retryBusy}
+        />
       </div>
     </div>
   );
@@ -583,6 +605,12 @@ export function AssistantWorkspacePage(): JSX.Element {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const orgId = auth.me?.active_organization?.id ?? null;
+  const { surface: presenceSurface, refs: presenceRefs } = useAssistantContext();
+  const presence = useAssistantPresence({
+    organizationId: orgId ?? null,
+    surface: presenceSurface,
+    refs: presenceRefs,
+  });
   const selectedId = searchParams.get("job");
   const artParam = searchParams.get("art");
   const [draft, setDraft] = useState("");
@@ -868,6 +896,7 @@ export function AssistantWorkspacePage(): JSX.Element {
                 {(job.state === "FAILED" || job.state === "FAILED_RETRYABLE") && job.error_code
                   ? ` · ${t(jobErrorKey(job.error_code))}`
                   : ""}
+                {jobCostLine(job.cost) !== null ? ` · ${jobCostLine(job.cost)}` : ""}
               </p>
             </div>
             <div className="aiws-head__actions">
@@ -921,7 +950,9 @@ export function AssistantWorkspacePage(): JSX.Element {
                 className="aiws-shelf__item"
                 onClick={() => setArtifact(item)}
               >
-                <Orb state="idle" size={16} />
+                {/* §P17 — la tarjeta de artefacto comunica el estado real
+                 * del trabajo que la produjo. */}
+                <Orb state={orbStateFor(job.state)} size={16} />
                 {item.title ?? artifactKindLabel(item.kind)}
               </button>
             ))}
@@ -931,13 +962,15 @@ export function AssistantWorkspacePage(): JSX.Element {
           {transcript.length === 0 && !job ? (
             <>
               <div className="aiws-hero">
-                <BotFigure size={120} />
+                {/* §P17 — el estado vacío también deriva su figura del
+                 * trabajo más reciente del contexto. */}
+                <BotFigure size={160} state={presence.orbState} welcome />
                 <div>
                   <h1 className="aiws-hero__title">{t("aiws.title")}</h1>
                   <AiMetricsCard organizationId={orgId ?? ""} />
                 </div>
               </div>
-              <p className="aiws-empty">{t("aiws.hint")}</p>
+              <p className="ui-empty-inline">{t("aiws.hint")}</p>
             </>
           ) : (
             transcript.map((turn, index) =>
@@ -983,6 +1016,7 @@ export function AssistantWorkspacePage(): JSX.Element {
           </p>
         ) : null}
         <form
+          noValidate
           className="aiws-composer"
           onSubmit={(event) => {
             event.preventDefault();
@@ -1066,14 +1100,14 @@ export function AssistantWorkspacePage(): JSX.Element {
               <p className="aiws-evidence">
                 {t("aiws.evidence")}:{" "}
                 {artifact.references
-                  .map((ref) => evidenceLabels[ref] ?? `${ref.slice(0, 8)}…`)
+                  .map((ref) => evidenceLabels[ref] ?? shortTechnicalId(ref))
                   .join(", ")}
               </p>
             ) : null}
             <ArtifactDetail artifact={artifact} />
           </div>
         ) : (
-          <p className="aiws-empty">{t("aiws.inspectorEmpty")}</p>
+          <p className="ui-empty-inline">{t("aiws.inspectorEmpty")}</p>
         )}
       </aside>
     </section>

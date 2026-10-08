@@ -16,7 +16,7 @@ from uuid import UUID
 from django.db import transaction
 
 from dekopen_engine.documentary_canonical import documentary_sha256_v1
-from documents.repository import DocumentaryError, documentary_backend, one, rows
+from documents.repository import DocumentaryError, documentary_backend, next_human_code, one, rows
 from pricing.repository import json_text
 
 
@@ -146,6 +146,37 @@ def list_stock(*, org_id: UUID) -> dict[str, object]:
     for item in items:
         item["spec_text"] = _spec_text(item.get("attributes"))
         item.pop("attributes", None)
+    # Reserva activa por OT: neto RESERVATION-RELEASE del libro por
+    # (item, orden). orders tiene grant SELECT propio — el join de códigos
+    # no cruza roles.
+    reservations = rows(
+        """
+        SELECT m.item_id, m.order_id, o.order_code,
+               SUM(CASE m.movement_type
+                     WHEN 'RESERVATION' THEN m.quantity
+                     WHEN 'RELEASE' THEN -m.quantity
+                     ELSE 0 END) AS qty
+        FROM public.inventory_movements m
+        LEFT JOIN public.orders o ON o.id = m.order_id AND o.org_id = m.org_id
+        WHERE m.org_id = %s AND m.order_id IS NOT NULL AND m.item_id IS NOT NULL
+        GROUP BY m.item_id, m.order_id, o.order_code
+        """,
+        [str(org_id)],
+    )
+    by_item: dict[str, list[dict[str, object]]] = {}
+    for row in reservations:
+        qty = Decimal(str(row["qty"]))
+        if qty <= 0:
+            continue
+        by_item.setdefault(str(row["item_id"]), []).append(
+            {
+                "order_id": str(row["order_id"]),
+                "order_code": row["order_code"] or "—",
+                "quantity": qty,
+            }
+        )
+    for item in items:
+        item["reserved_by"] = by_item.get(str(item["item_id"]), [])
     return {"items": items}
 
 
@@ -186,10 +217,16 @@ def list_movements(*, org_id: UUID, item_id: UUID | None, limit: int) -> dict[st
     parameters.append(limit)
     items = rows(
         f"""
-        SELECT m.id, m.item_id, m.movement_type::text, m.quantity, m.order_id,
-               m.order_line_id, m.lot_code, m.rack_location, m.note,
-               m.actor_id, m.actor_label, m.created_at
+        SELECT m.id, m.item_id, m.remnant_id, m.movement_type::text, m.quantity,
+               m.order_id, m.order_line_id, m.lot_code, m.rack_location, m.note,
+               m.actor_id, m.actor_label, m.created_at,
+               o.order_code, rc.receipt_code, rt.remnant_code, i.sku, i.name AS item_name
         FROM public.inventory_movements m
+        LEFT JOIN public.orders o ON o.id = m.order_id AND o.org_id = m.org_id
+        LEFT JOIN public.order_receipt_lines rl ON rl.id = m.receipt_line_id
+        LEFT JOIN public.order_receipts rc ON rc.id = rl.receipt_id
+        LEFT JOIN public.inventory_remnants rt ON rt.id = m.remnant_id
+        LEFT JOIN public.inventory_items i ON i.id = m.item_id
         WHERE {' AND '.join(clauses)}
         ORDER BY m.created_at DESC
         LIMIT %s
@@ -228,7 +265,8 @@ def order_receiving(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
         )
         receipts = rows(
             """
-            SELECT id, receipt_key, note, received_by, created_at
+            SELECT id, receipt_key, receipt_code, note, received_by, created_at,
+                   supplier_delivery_ref, supplier_delivery_date
             FROM public.order_receipts
             WHERE order_id = %s AND org_id = %s
             ORDER BY created_at
@@ -304,9 +342,17 @@ def receive_order(
     note: str | None,
     lines: list[dict[str, Any]],
     actor_label: str | None = None,
+    supplier_delivery_ref: str | None = None,
+    supplier_delivery_date: Any = None,
+    allow_over_receipt: bool = False,
 ) -> tuple[dict[str, object], bool]:
     """Record a physical receipt against a SENT/partial order. Idempotent per
-    (org, receipt_key): a replayed key returns the existing receipt."""
+    (org, receipt_key): a replayed key returns the existing receipt.
+
+    Over-receipt is real (a truck can bring more than ordered), but it is a
+    consequential human decision: any line whose usable total would exceed
+    the ordered quantity requires ``allow_over_receipt`` — the UI asks the
+    receiver to confirm before resubmitting."""
     with transaction.atomic(), documentary_backend():
         # Serialize retries on the same (org, receipt_key) pair so a concurrent
         # replay waits for the first transaction instead of racing the insert.
@@ -345,12 +391,44 @@ def receive_order(
                 [str(order_id), str(org_id)],
             )
         }
+        if not allow_over_receipt:
+            prior = {
+                str(row["order_line_id"]): Decimal(str(row["good_qty"]))
+                for row in rows(
+                    "SELECT rl.order_line_id, SUM(rl.received_qty - rl.damaged_qty) AS good_qty "
+                    "FROM public.order_receipt_lines rl "
+                    "JOIN public.order_receipts r ON r.id = rl.receipt_id "
+                    "WHERE r.order_id = %s AND r.org_id = %s "
+                    "GROUP BY rl.order_line_id",
+                    [str(order_id), str(org_id)],
+                )
+            }
+            over = [
+                str(entry["order_line_id"])
+                for entry in lines
+                if str(entry["order_line_id"]) in order_lines
+                and prior.get(str(entry["order_line_id"]), Decimal("0"))
+                + Decimal(str(entry["received_qty"]))
+                - Decimal(str(entry["damaged_qty"]))
+                > Decimal(str(order_lines[str(entry["order_line_id"])]["quantity"]))
+            ]
+            if over:
+                raise DocumentaryError(
+                    "receipt_over_received",
+                    extra={"order_line_ids": over},
+                )
+        # Folio REC- bajo el lock de la clave idempotente: la función
+        # serializa por org con su propio advisory lock, tomado siempre
+        # después del de receipt_key (orden de locks consistente).
         receipt = one(
             """
-            INSERT INTO public.order_receipts(org_id, order_id, receipt_key, note, received_by)
-            VALUES (%s, %s, %s, %s, %s) RETURNING id
+            INSERT INTO public.order_receipts(org_id, order_id, receipt_key, receipt_code, note, received_by,
+                supplier_delivery_ref, supplier_delivery_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id, receipt_code
             """,
-            [str(org_id), str(order_id), receipt_key, note, str(actor_id)],
+            [str(org_id), str(order_id), receipt_key,
+             next_human_code(org_id, "order_receipts"), note, str(actor_id),
+             supplier_delivery_ref, supplier_delivery_date],
         )
         receipt_id = receipt["id"]
         for entry in lines:

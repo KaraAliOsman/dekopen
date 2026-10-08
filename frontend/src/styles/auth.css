@@ -1,0 +1,185 @@
+.auth-screen {
+  align-items: center;
+  background: var(--theme-bg-canvas);
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-32);
+}
+
+.auth-card {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  display: grid;
+  gap: var(--space-16);
+  max-width: 28rem;
+  padding: var(--space-32);
+  width: 100%;
+}
+
+.auth-card form {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.auth-card input {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  padding: var(--space-12);
+}
+
+.auth-sheet__masthead .brand-os {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.auth-card__header {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.auth-card__header h1 {
+  font-size: var(--text-title);
+  margin: 0;
+}
+
+.auth-hint {
+  color: var(--theme-text-secondary);
+  margin: 0;
+}
+
+.auth-form {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.auth-notice {
+  border-radius: var(--r-1);
+  font-size: 0.75rem;
+  margin: 0;
+  padding: var(--space-8) var(--space-12);
+}
+
+.auth-notice--ok {
+  background: var(--theme-success-soft);
+  color: var(--ok-ink);
+}
+
+.auth-notice--error {
+  background: var(--theme-danger-soft);
+  color: var(--danger-ink);
+}
+
+.auth-qr {
+  align-self: center;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  max-width: 10rem;
+}
+
+.org-option {
+  align-items: center;
+  display: flex;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  text-align: left;
+  width: 100%;
+}
+
+.org-option:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.org-option__glyph {
+  align-items: center;
+  background: var(--theme-accent-soft);
+  border-radius: var(--r-1);
+  color: var(--info-ink);
+  display: inline-flex;
+  font-weight: 600;
+  height: 2rem;
+  justify-content: center;
+  width: 2rem;
+}
+
+.org-option__meta {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.org-option__sub {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+}
+
+/* ——— Onboarding ——— */
+.onboarding {
+  display: grid;
+  gap: var(--space-16);
+  margin: 0 auto;
+  max-width: 46rem;
+  padding: var(--space-32) var(--space-16);
+}
+
+.onboarding-head {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.onboarding-head h1 {
+  font-size: var(--text-display);
+  margin: 0;
+}
+
+.onboarding-sub {
+  color: var(--theme-text-secondary);
+  margin: 0;
+}
+
+/* P25 — hoja técnica: la tarjeta de acceso es papel sobre la mesa, con el
+ * marco de inglete de las láminas y la marca en el rótulo. Una acción por
+ * hoja; a 390 px el papel ocupa el ancho con aire de la mesa alrededor. */
+.auth-sheet {
+  background: var(--theme-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  box-shadow: none;
+  position: relative;
+}
+
+/* Inglete — el filete interior paralelo al borde del papel. */
+.auth-sheet::before {
+  border: 1px solid var(--theme-border-subtle);
+  content: "";
+  inset: var(--space-6);
+  pointer-events: none;
+  position: absolute;
+}
+
+.auth-sheet__masthead {
+  align-items: baseline;
+  border-bottom: 1px solid var(--theme-border-subtle);
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 var(--space-16);
+  padding-bottom: var(--space-12);
+}
+
+.auth-sheet > * {
+  position: relative;
+}
+
+@media (max-width: 420px) {
+  .auth-screen {
+    padding: var(--space-16);
+  }
+
+  .auth-card {
+    padding: var(--space-24) var(--space-16);
+  }
+}

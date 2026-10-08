@@ -29,6 +29,10 @@ EVIDENCE_TABLES = {
     "glass_purchase_mappings",
     "fitting_purchase_mappings",
     "catalog_imports",
+    # P18 thermal authorities — evidence attests declared Uf/Ψg/classes.
+    "glazing_spacers",
+    "system_frame_uf",
+    "system_performance_tests",
 }
 
 # How each authority row reaches its system_id (for scoping an evidence list
@@ -37,10 +41,13 @@ EVIDENCE_TABLES = {
 _SYSTEM_KEY = {
     table: "system_id"
     for table in EVIDENCE_TABLES
-    if table not in ("profile_systems", "catalog_imports")
+    if table not in ("profile_systems", "catalog_imports", "glazing_spacers")
 }
 _SYSTEM_KEY["profile_systems"] = "id"
 _SYSTEM_KEY["catalog_imports"] = "system_id"
+# glazing_spacers is a shared registry without system_id: its evidence is
+# declared per row (scope GLOBAL/ORG) and never listed under a system.
+_SYSTEM_KEY["glazing_spacers"] = "id"
 
 _UNITS = ("mm", "mm2", "m", "kg", "kg/m", "kg/m2",
           "unit", "set", "percent", "currency", "text")
@@ -192,11 +199,13 @@ def stamp_import_evidence(*, org_id: UUID, actor_id: UUID, import_id: UUID,
         return
     with catalog_backend():
         for params in inserts:
+            # RETURNING id keeps this inside rows() (SELECT-only helper):
+            # without it cursor.description is None and the INSERT crashes.
             rows(
                 "INSERT INTO public.catalog_parameter_evidence ("
                 "org_id, authority_table, row_id, field_name, value_text,"
                 " unit, scope, applicability, source_document, declared_by)"
                 " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-                " ON CONFLICT DO NOTHING",
+                " ON CONFLICT DO NOTHING RETURNING id",
                 params,
             )

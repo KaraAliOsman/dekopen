@@ -1,0 +1,3061 @@
+{
+  "provider": "MOCK",
+  "cases": [
+    {
+      "id": "E01",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "divide la ventana en dos hojas iguales",
+      "expected": "2 bahías separadas por un montante con eje en 750 mm. Aperturas: las que tenían (FIXED) o una aclaración.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 1,
+        "tokens_prompt": 983,
+        "tokens_completion": 10,
+        "provider_errors": [],
+        "elapsed_ms": 2
+      },
+      "outcome": {
+        "ops_proposed": [
+          {
+            "op": "split_bay",
+            "module": "m1",
+            "bay": "m1",
+            "axis": "V",
+            "offset_mm": "750.00",
+            "mullion_sku": "POSTE-V-60",
+            "new_divider": "added_d1",
+            "new_bay": "added_b1"
+          }
+        ],
+        "ops_accepted": [
+          {
+            "op": "split_bay",
+            "module": "m1",
+            "bay": "m1",
+            "axis": "V",
+            "offset_mm": "750.00",
+            "mullion_sku": "POSTE-V-60",
+            "new_divider": "added_d1",
+            "new_bay": "added_b1"
+          }
+        ],
+        "rejected": [],
+        "notes": "dos hojas iguales",
+        "model": "MOCK (eval)",
+        "clarify": null,
+        "simulation": {
+          "modules": [
+            {
+              "ref": "m1",
+              "width_mm": "1500.00",
+              "height_mm": "1200.00",
+              "bays": [
+                {
+                  "ref": "m1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                },
+                {
+                  "ref": "added_b1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                }
+              ],
+              "splits": [
+                {
+                  "ref": "added_d1",
+                  "type": "SPLIT_V",
+                  "offset_mm": "750.00",
+                  "mullion_profile_sku": "POSTE-V-60"
+                }
+              ]
+            }
+          ],
+          "couplings": []
+        }
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 1,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1500.00",
+                "height_mm": "1200.00",
+                "tree": {
+                  "id": "m1-sv1",
+                  "type": "SPLIT_V",
+                  "split_offset_mm": "750.00",
+                  "mullion_profile_sku": "POSTE-V-60",
+                  "unit_kind": null,
+                  "children": [
+                    {
+                      "id": "m1",
+                      "type": "BAY",
+                      "opening_type": "FIXED",
+                      "glass_thickness_mm": "24.00",
+                      "glass_spec": "4-16-4 Float Incoloro",
+                      "glass_article_sku": "VIDRIO-BASE"
+                    },
+                    {
+                      "id": "m1-b1",
+                      "type": "BAY",
+                      "opening_type": "FIXED",
+                      "glass_thickness_mm": "24.00",
+                      "glass_spec": "4-16-4 Float Incoloro",
+                      "glass_article_sku": "VIDRIO-BASE"
+                    }
+                  ]
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": true
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "product.splits",
+            "ok": true,
+            "detail": "splits=[{'type': 'SPLIT_V', 'offset_mm': Decimal('750.00'), 'mullion_sku': 'POSTE-V-60'}]"
+          },
+          {
+            "check": "product.bays_count",
+            "ok": true,
+            "detail": "bays=2"
+          },
+          {
+            "check": "product.every_bay",
+            "ok": true,
+            "detail": "bays=[{'opening_type': 'FIXED', 'glass_article_sku': 'VIDRIO-BASE', 'glass_spec': '4-16-4 Float Incoloro', 'glass_thickness_mm': Decimal('24.00'), 'panel_article_sku': None, 'door_handedness': None, 'handle_height_mm': None, 'sliding_preset': None, 'sliding_primary_index': None}, {'opening_type': 'FIXED', 'glass_article_sku': 'VIDRIO-BASE', 'glass_spec': '4-16-4 Float Incoloro', 'glass_thickness_mm': Decimal('24.00'), 'panel_article_sku': None, 'door_handedness': None, 'handle_height_mm': None, 'sliding_preset': None, 'sliding_primary_index': None}]"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "la izquierda fija y la derecha oscilobatiente con la manilla a la derecha",
+      "expected": "2 bahías: izquierda FIXED, derecha TILT_TURN_LEFT.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 987,
+        "tokens_completion": 27,
+        "provider_errors": [],
+        "elapsed_ms": 0
+      },
+      "outcome": {
+        "ops_proposed": [
+          {
+            "op": "split_bay",
+            "module": "m1",
+            "bay": "m1",
+            "axis": "V",
+            "offset_mm": "750.00",
+            "mullion_sku": "POSTE-V-60",
+            "new_divider": "added_d1",
+            "new_bay": "added_b1"
+          },
+          {
+            "op": "set_opening",
+            "module": "m1",
+            "bay": "m1",
+            "opening": "FIXED"
+          },
+          {
+            "op": "set_opening",
+            "module": "m1",
+            "bay": "added_b1",
+            "opening": "TILT_TURN_LEFT"
+          }
+        ],
+        "ops_accepted": [
+          {
+            "op": "split_bay",
+            "module": "m1",
+            "bay": "m1",
+            "axis": "V",
+            "offset_mm": "750.00",
+            "mullion_sku": "POSTE-V-60",
+            "new_divider": "added_d1",
+            "new_bay": "added_b1"
+          },
+          {
+            "op": "set_opening",
+            "module": "m1",
+            "bay": "m1",
+            "opening": "FIXED"
+          },
+          {
+            "op": "set_opening",
+            "module": "m1",
+            "bay": "added_b1",
+            "opening": "TILT_TURN_LEFT"
+          }
+        ],
+        "rejected": [],
+        "notes": "dos hojas: fija izquierda, oscilobatiente derecha",
+        "model": "MOCK (eval)",
+        "clarify": null,
+        "simulation": {
+          "modules": [
+            {
+              "ref": "m1",
+              "width_mm": "1500.00",
+              "height_mm": "1200.00",
+              "bays": [
+                {
+                  "ref": "m1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                },
+                {
+                  "ref": "added_b1",
+                  "opening_type": "TILT_TURN_LEFT",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                }
+              ],
+              "splits": [
+                {
+                  "ref": "added_d1",
+                  "type": "SPLIT_V",
+                  "offset_mm": "750.00",
+                  "mullion_profile_sku": "POSTE-V-60"
+                }
+              ]
+            }
+          ],
+          "couplings": []
+        }
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 3,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1500.00",
+                "height_mm": "1200.00",
+                "tree": {
+                  "id": "m1-sv1",
+                  "type": "SPLIT_V",
+                  "split_offset_mm": "750.00",
+                  "mullion_profile_sku": "POSTE-V-60",
+                  "unit_kind": null,
+                  "children": [
+                    {
+                      "id": "m1",
+                      "type": "BAY",
+                      "opening_type": "FIXED",
+                      "glass_thickness_mm": "24.00",
+                      "glass_spec": "4-16-4 Float Incoloro",
+                      "glass_article_sku": "VIDRIO-BASE",
+                      "opening": null,
+                      "leaves": null,
+                      "handle_model_sku": null,
+                      "handle_color_sku": null,
+                      "hardware_option_skus": null,
+                      "sliding_layout": null
+                    },
+                    {
+                      "id": "m1-b1",
+                      "type": "BAY",
+                      "opening_type": "TILT_TURN_LEFT",
+                      "glass_thickness_mm": "24.00",
+                      "glass_spec": "4-16-4 Float Incoloro",
+                      "glass_article_sku": "VIDRIO-BASE",
+                      "opening": null,
+                      "leaves": null,
+                      "handle_model_sku": null,
+                      "handle_color_sku": null,
+                      "hardware_option_skus": null,
+                      "sliding_layout": null
+                    }
+                  ]
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": true
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "product.bays",
+            "ok": true,
+            "detail": "openings=['FIXED', 'TILT_TURN_LEFT']"
+          },
+          {
+            "check": "product.bays_count",
+            "ok": true,
+            "detail": "bays=2"
+          },
+          {
+            "check": "product.splits",
+            "ok": true,
+            "detail": "splits=[{'type': 'SPLIT_V', 'offset_mm': Decimal('750.00'), 'mullion_sku': 'POSTE-V-60'}]"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "hazla de 1,8 metros de ancho por 1350 de alto",
+      "expected": "1800 × 1350.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 984,
+        "tokens_completion": 17,
+        "provider_errors": [],
+        "elapsed_ms": 0
+      },
+      "outcome": {
+        "ops_proposed": [
+          {
+            "op": "set_total_width",
+            "width_mm": "1800"
+          },
+          {
+            "op": "set_height",
+            "height_mm": "1350"
+          }
+        ],
+        "ops_accepted": [
+          {
+            "op": "set_total_width",
+            "width_mm": "1800"
+          },
+          {
+            "op": "set_height",
+            "height_mm": "1350"
+          }
+        ],
+        "rejected": [],
+        "notes": "ancho total 1,8 m; alto 1350 mm",
+        "model": "MOCK (eval)",
+        "clarify": null,
+        "simulation": {
+          "modules": [
+            {
+              "ref": "m1",
+              "width_mm": "1800.000",
+              "height_mm": "1350",
+              "bays": [
+                {
+                  "ref": "m1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                }
+              ],
+              "splits": []
+            }
+          ],
+          "couplings": []
+        }
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 2,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1800.00",
+                "height_mm": "1350.00",
+                "tree": {
+                  "id": "m1",
+                  "type": "BAY",
+                  "opening_type": "FIXED",
+                  "glass_thickness_mm": "24.00",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_article_sku": "VIDRIO-BASE"
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": true
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "product.total_width_mm",
+            "ok": true,
+            "detail": "total=1800.00"
+          },
+          {
+            "check": "product.height_mm",
+            "ok": true,
+            "detail": "height=1350.00"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "agrega un travesaño a 400 mm desde arriba para una banderola fija",
+      "expected": "Travesaño horizontal; bahía superior de 400 mm de alto, FIXED.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 987,
+        "tokens_completion": 12,
+        "provider_errors": [],
+        "elapsed_ms": 0
+      },
+      "outcome": {
+        "ops_proposed": [
+          {
+            "op": "split_bay",
+            "module": "m1",
+            "bay": "m1",
+            "axis": "H",
+            "offset_mm": "400",
+            "mullion_sku": "POSTE-H-60",
+            "new_divider": "added_d1",
+            "new_bay": "added_b1"
+          }
+        ],
+        "ops_accepted": [
+          {
+            "op": "split_bay",
+            "module": "m1",
+            "bay": "m1",
+            "axis": "H",
+            "offset_mm": "400",
+            "mullion_sku": "POSTE-H-60",
+            "new_divider": "added_d1",
+            "new_bay": "added_b1"
+          }
+        ],
+        "rejected": [],
+        "notes": "travesaño",
+        "model": "MOCK (eval)",
+        "clarify": null,
+        "simulation": {
+          "modules": [
+            {
+              "ref": "m1",
+              "width_mm": "1500.00",
+              "height_mm": "1200.00",
+              "bays": [
+                {
+                  "ref": "m1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                },
+                {
+                  "ref": "added_b1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                }
+              ],
+              "splits": [
+                {
+                  "ref": "added_d1",
+                  "type": "SPLIT_H",
+                  "offset_mm": "400",
+                  "mullion_profile_sku": "POSTE-H-60"
+                }
+              ]
+            }
+          ],
+          "couplings": []
+        }
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 1,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1500.00",
+                "height_mm": "1200.00",
+                "tree": {
+                  "id": "m1-sh1",
+                  "type": "SPLIT_H",
+                  "split_offset_mm": "400.00",
+                  "mullion_profile_sku": "POSTE-H-60",
+                  "unit_kind": null,
+                  "children": [
+                    {
+                      "id": "m1",
+                      "type": "BAY",
+                      "opening_type": "FIXED",
+                      "glass_thickness_mm": "24.00",
+                      "glass_spec": "4-16-4 Float Incoloro",
+                      "glass_article_sku": "VIDRIO-BASE"
+                    },
+                    {
+                      "id": "m1-b1",
+                      "type": "BAY",
+                      "opening_type": "FIXED",
+                      "glass_thickness_mm": "24.00",
+                      "glass_spec": "4-16-4 Float Incoloro",
+                      "glass_article_sku": "VIDRIO-BASE"
+                    }
+                  ]
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": true
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "product.splits",
+            "ok": true,
+            "detail": "splits=[{'type': 'SPLIT_H', 'offset_mm': Decimal('400.00'), 'mullion_sku': 'POSTE-H-60'}]"
+          },
+          {
+            "check": "product.every_bay",
+            "ok": true,
+            "detail": "bays=[{'opening_type': 'FIXED', 'glass_article_sku': 'VIDRIO-BASE', 'glass_spec': '4-16-4 Float Incoloro', 'glass_thickness_mm': Decimal('24.00'), 'panel_article_sku': None, 'door_handedness': None, 'handle_height_mm': None, 'sliding_preset': None, 'sliding_primary_index': None}, {'opening_type': 'FIXED', 'glass_article_sku': 'VIDRIO-BASE', 'glass_spec': '4-16-4 Float Incoloro', 'glass_thickness_mm': Decimal('24.00'), 'panel_article_sku': None, 'door_handedness': None, 'handle_height_mm': None, 'sliding_preset': None, 'sliding_primary_index': None}]"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "cambia el vidrio a termopanel 4-12-4",
+      "expected": "Vidrio = el SKU del catálogo con composición 4-12-4, o la lista de opciones disponibles si no existe (nunca un SKU inventado).",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 983,
+        "tokens_completion": 13,
+        "provider_errors": [],
+        "elapsed_ms": 1
+      },
+      "outcome": {
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "rejected": [],
+        "notes": "ese vidrio no está disponible en el catálogo; opciones: VIDRIO-BASE (4 Float Incoloro)",
+        "model": "MOCK (eval)",
+        "clarify": null,
+        "simulation": {
+          "modules": [
+            {
+              "ref": "m1",
+              "width_mm": "1500.00",
+              "height_mm": "1200.00",
+              "bays": [
+                {
+                  "ref": "m1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                }
+              ],
+              "splits": []
+            }
+          ],
+          "couplings": []
+        }
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1500.00",
+                "height_mm": "1200.00",
+                "tree": {
+                  "id": "m1",
+                  "type": "BAY",
+                  "opening_type": "FIXED",
+                  "glass_thickness_mm": "24.00",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_article_sku": "VIDRIO-BASE"
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "product.unchanged",
+            "ok": true,
+            "detail": "producto sin cambios"
+          },
+          {
+            "check": "behavior.no_ops_accepted",
+            "ok": true,
+            "detail": "accepted=0"
+          },
+          {
+            "check": "behavior.text_matches_any",
+            "ok": true,
+            "detail": "texto=ese vidrio no está disponible en el catálogo; opciones: VIDRIO-BASE (4 Float Incoloro)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "pon vidrio laminado 4+4",
+      "expected": "Sin operación; responde que no está disponible y lista las alternativas reales.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 981,
+        "tokens_completion": 13,
+        "provider_errors": [],
+        "elapsed_ms": 0
+      },
+      "outcome": {
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "rejected": [],
+        "notes": "ese vidrio no está disponible en el catálogo; opciones: VIDRIO-BASE (4 Float Incoloro)",
+        "model": "MOCK (eval)",
+        "clarify": null,
+        "simulation": {
+          "modules": [
+            {
+              "ref": "m1",
+              "width_mm": "1500.00",
+              "height_mm": "1200.00",
+              "bays": [
+                {
+                  "ref": "m1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                }
+              ],
+              "splits": []
+            }
+          ],
+          "couplings": []
+        }
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1500.00",
+                "height_mm": "1200.00",
+                "tree": {
+                  "id": "m1",
+                  "type": "BAY",
+                  "opening_type": "FIXED",
+                  "glass_thickness_mm": "24.00",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_article_sku": "VIDRIO-BASE"
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "product.unchanged",
+            "ok": true,
+            "detail": "producto sin cambios"
+          },
+          {
+            "check": "behavior.no_ops_accepted",
+            "ok": true,
+            "detail": "accepted=0"
+          },
+          {
+            "check": "behavior.text_matches_any",
+            "ok": true,
+            "detail": "texto=ese vidrio no está disponible en el catálogo; opciones: VIDRIO-BASE (4 Float Incoloro)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "conviértela en corredera de dos hojas",
+      "expected": "set_system a la serie corredera del catálogo, o explica la incompatibilidad y propone sistema compatible.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 2,
+        "tokens_prompt": 983,
+        "tokens_completion": 23,
+        "provider_errors": [],
+        "elapsed_ms": 2
+      },
+      "outcome": {
+        "ops_proposed": [
+          {
+            "op": "split_bay",
+            "module": "m1",
+            "bay": "m1",
+            "axis": "V",
+            "offset_mm": "750.00",
+            "mullion_sku": "POSTE-V-60",
+            "new_divider": "added_d1",
+            "new_bay": "added_b1"
+          },
+          {
+            "op": "set_system",
+            "scope": "position",
+            "system_id": "832f6489-c595-56f2-93b3-dc49225c099a"
+          }
+        ],
+        "ops_accepted": [
+          {
+            "op": "split_bay",
+            "module": "m1",
+            "bay": "m1",
+            "axis": "V",
+            "offset_mm": "750.00",
+            "mullion_sku": "POSTE-V-60",
+            "new_divider": "added_d1",
+            "new_bay": "added_b1"
+          },
+          {
+            "op": "set_system",
+            "scope": "position",
+            "system_id": "832f6489-c595-56f2-93b3-dc49225c099a"
+          }
+        ],
+        "rejected": [],
+        "notes": "dos hojas iguales; sistema DEMO_CORREDERA_60",
+        "model": "MOCK (eval)",
+        "clarify": null,
+        "simulation": {
+          "modules": [
+            {
+              "ref": "m1",
+              "width_mm": "1500.00",
+              "height_mm": "1200.00",
+              "bays": [
+                {
+                  "ref": "m1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                },
+                {
+                  "ref": "added_b1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                }
+              ],
+              "splits": [
+                {
+                  "ref": "added_d1",
+                  "type": "SPLIT_V",
+                  "offset_mm": "750.00",
+                  "mullion_profile_sku": "POSTE-V-60"
+                }
+              ]
+            }
+          ],
+          "couplings": []
+        }
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 1,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1500.00",
+                "height_mm": "1200.00",
+                "tree": {
+                  "id": "m1-sv1",
+                  "type": "SPLIT_V",
+                  "split_offset_mm": "750.00",
+                  "mullion_profile_sku": "POSTE-V-60",
+                  "unit_kind": null,
+                  "children": [
+                    {
+                      "id": "m1",
+                      "type": "BAY",
+                      "opening_type": "FIXED",
+                      "glass_thickness_mm": "24.00",
+                      "glass_spec": "4-16-4 Float Incoloro",
+                      "glass_article_sku": "VIDRIO-BASE"
+                    },
+                    {
+                      "id": "m1-b1",
+                      "type": "BAY",
+                      "opening_type": "FIXED",
+                      "glass_thickness_mm": "24.00",
+                      "glass_spec": "4-16-4 Float Incoloro",
+                      "glass_article_sku": "VIDRIO-BASE"
+                    }
+                  ]
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": true
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.ops_any",
+            "ok": true,
+            "detail": "accepted=[{'op': 'split_bay', 'module': 'm1', 'bay': 'm1', 'axis': 'V', 'offset_mm': '750.00', 'mullion_sku': 'POSTE-V-60', 'new_divider': 'added_d1', 'new_bay': 'added_b1'}, {'op': 'set_system', 'scope': 'position', 'system_id': '832f6489-c595-56f2-93b3-dc49225c099a'}]"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "manilla a 1050 del piso",
+      "expected": "Pide aclaración (altura de instalación o elevación objetivo) — con opciones tipadas — o fija la manilla a 1050 mm directamente.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 981,
+        "tokens_completion": 38,
+        "provider_errors": [],
+        "elapsed_ms": 0
+      },
+      "outcome": {
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "rejected": [],
+        "notes": "aclaración sobre la altura de la manilla",
+        "model": "MOCK (eval)",
+        "clarify": {
+          "question": "¿1050 mm es la altura de instalación o el punto donde debe quedar la manilla?",
+          "options": [
+            {
+              "value": "instalacion",
+              "label": "Altura de instalación"
+            },
+            {
+              "value": "elevacion",
+              "label": "Altura final sobre el piso"
+            }
+          ]
+        },
+        "simulation": {
+          "modules": [
+            {
+              "ref": "m1",
+              "width_mm": "1500.00",
+              "height_mm": "1200.00",
+              "bays": [
+                {
+                  "ref": "m1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                }
+              ],
+              "splits": []
+            }
+          ],
+          "couplings": []
+        }
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1500.00",
+                "height_mm": "1200.00",
+                "tree": {
+                  "id": "m1",
+                  "type": "BAY",
+                  "opening_type": "FIXED",
+                  "glass_thickness_mm": "24.00",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_article_sku": "VIDRIO-BASE"
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.clarify_options",
+            "ok": true,
+            "detail": "clarify={'question': '¿1050 mm es la altura de instalación o el punto donde debe quedar la manilla?', 'options': [{'value': 'instalacion', 'label': 'Altura de instalación'}, {'value': 'elevacion', 'label': 'Altura final sobre el piso'}]}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "view": "editor",
+      "via": "agent",
+      "surface": "position",
+      "prompt": "¿cuánto pesa la hoja derecha?",
+      "expected": "18,750 kg — la cifra del BOM persistido, citada vía calculate_position; o 'sin dato' con la causa.",
+      "metrics": {
+        "provider_calls": 2,
+        "rounds": 2,
+        "latency_ms": 2,
+        "tokens_prompt": 3348,
+        "tokens_completion": 106,
+        "provider_errors": [],
+        "elapsed_ms": 4
+      },
+      "outcome": {
+        "audit_id": "eval-10",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "La hoja derecha pesa 18.750 kg según el BOM persistido.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "5700e30f-d1fa-5fa6-8a3c-6d6f68e72fdc",
+              "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+            ]
+          }
+        ],
+        "references": [
+          "5700e30f-d1fa-5fa6-8a3c-6d6f68e72fdc",
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [],
+        "queries": [
+          {
+            "surface": "position",
+            "tool": "get_position",
+            "status": "ok"
+          },
+          {
+            "surface": "tool",
+            "tool": "calculate_position",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5": "CASA_LOMAS",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "SUCCEEDED",
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1500.00",
+                "height_mm": "1200.00",
+                "tree": {
+                  "id": "s1",
+                  "type": "SPLIT_V",
+                  "split_offset_mm": "750.00",
+                  "mullion_profile_sku": "POSTE-V-60",
+                  "children": [
+                    {
+                      "id": "b1",
+                      "type": "BAY",
+                      "opening_type": "FIXED",
+                      "glass_thickness_mm": "24.00",
+                      "glass_spec": "4-16-4 Float Incoloro",
+                      "glass_article_sku": "VIDRIO-BASE"
+                    },
+                    {
+                      "id": "b2",
+                      "type": "BAY",
+                      "opening_type": "TILT_TURN_LEFT",
+                      "glass_thickness_mm": "24.00",
+                      "glass_spec": "4-16-4 Float Incoloro",
+                      "glass_article_sku": "VIDRIO-BASE"
+                    }
+                  ]
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.queries_include_tool",
+            "ok": true,
+            "detail": "tools=['calculate_position']"
+          },
+          {
+            "check": "behavior.text_matches_any",
+            "ok": true,
+            "detail": "texto=La hoja derecha pesa 18.750 kg según el BOM persistido."
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "view": "editor",
+      "via": "agent",
+      "surface": "position",
+      "prompt": "¿por qué no puedo guardar?",
+      "expected": "Lista exactamente los bloqueos que devuelve la validación del motor (o declara que no hay bloqueos registrados, que es la lista exacta).",
+      "metrics": {
+        "provider_calls": 2,
+        "rounds": 2,
+        "latency_ms": 0,
+        "tokens_prompt": 3231,
+        "tokens_completion": 108,
+        "provider_errors": [],
+        "elapsed_ms": 3
+      },
+      "outcome": {
+        "audit_id": "eval-12",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "El motor no reporta bloqueos para la posición — la validación viene limpia.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "5700e30f-d1fa-5fa6-8a3c-6d6f68e72fdc",
+              "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+            ]
+          }
+        ],
+        "references": [
+          "5700e30f-d1fa-5fa6-8a3c-6d6f68e72fdc",
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [],
+        "queries": [
+          {
+            "surface": "position",
+            "tool": "get_position",
+            "status": "ok"
+          },
+          {
+            "surface": "tool",
+            "tool": "validate_position",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5": "CASA_LOMAS",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "SUCCEEDED",
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1500.00",
+                "height_mm": "1200.00",
+                "tree": {
+                  "id": "m1",
+                  "type": "BAY",
+                  "opening_type": "FIXED",
+                  "glass_thickness_mm": "24.00",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_article_sku": "VIDRIO-BASE"
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.queries_include_tool",
+            "ok": true,
+            "detail": "tools=['validate_position']"
+          },
+          {
+            "check": "behavior.reply_nonempty",
+            "ok": true,
+            "detail": "reply vacío"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E11",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "aser la bentana 20 cm mas ancha",
+      "expected": "Ancho + 200 mm (1700 mm total).",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 2,
+        "tokens_prompt": 982,
+        "tokens_completion": 10,
+        "provider_errors": [],
+        "elapsed_ms": 2
+      },
+      "outcome": {
+        "ops_proposed": [
+          {
+            "op": "set_total_width",
+            "width_mm": "1700"
+          }
+        ],
+        "ops_accepted": [
+          {
+            "op": "set_total_width",
+            "width_mm": "1700"
+          }
+        ],
+        "rejected": [],
+        "notes": "ancho 1700 mm",
+        "model": "MOCK (eval)",
+        "clarify": null,
+        "simulation": {
+          "modules": [
+            {
+              "ref": "m1",
+              "width_mm": "1700.000000000000000000000000",
+              "height_mm": "1200.00",
+              "bays": [
+                {
+                  "ref": "m1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                }
+              ],
+              "splits": []
+            }
+          ],
+          "couplings": []
+        }
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 1,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1700.00",
+                "height_mm": "1200.00",
+                "tree": {
+                  "id": "m1",
+                  "type": "BAY",
+                  "opening_type": "FIXED",
+                  "glass_thickness_mm": "24.00",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_article_sku": "VIDRIO-BASE"
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": true
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "product.total_width_mm",
+            "ok": true,
+            "detail": "total=1700.00"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E12",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "pon la manilla al otro lado",
+      "expected": "TILT_TURN_RIGHT.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 983,
+        "tokens_completion": 8,
+        "provider_errors": [],
+        "elapsed_ms": 0
+      },
+      "outcome": {
+        "ops_proposed": [
+          {
+            "op": "flip_handing",
+            "module": "m1"
+          }
+        ],
+        "ops_accepted": [
+          {
+            "op": "flip_handing",
+            "module": "m1"
+          }
+        ],
+        "rejected": [],
+        "notes": "manilla al otro lado",
+        "model": "MOCK (eval)",
+        "clarify": null,
+        "simulation": {
+          "modules": [
+            {
+              "ref": "m1",
+              "width_mm": "1500.00",
+              "height_mm": "1200.00",
+              "bays": [
+                {
+                  "ref": "m1",
+                  "opening_type": "TILT_TURN_RIGHT",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                }
+              ],
+              "splits": []
+            }
+          ],
+          "couplings": []
+        }
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 1,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1500.00",
+                "height_mm": "1200.00",
+                "tree": {
+                  "id": "m1",
+                  "type": "BAY",
+                  "opening_type": "TILT_TURN_RIGHT",
+                  "glass_thickness_mm": "24.00",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_article_sku": "VIDRIO-BASE"
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": true
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "product.every_bay",
+            "ok": true,
+            "detail": "bays=[{'opening_type': 'TILT_TURN_RIGHT', 'glass_article_sku': 'VIDRIO-BASE', 'glass_spec': '4-16-4 Float Incoloro', 'glass_thickness_mm': Decimal('24.00'), 'panel_article_sku': None, 'door_handedness': None, 'handle_height_mm': None, 'sliding_preset': None, 'sliding_primary_index': None}]"
+          },
+          {
+            "check": "product.bays_count",
+            "ok": true,
+            "detail": "bays=1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E13",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "tres hojas: fija al centro y abatibles a los lados",
+      "expected": "3 bahías: TURN_LEFT · FIXED · TURN_RIGHT (bisagras en las jambas exteriores y manillas hacia el centro), anchos iguales salvo instrucción.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 984,
+        "tokens_completion": 26,
+        "provider_errors": [],
+        "elapsed_ms": 3
+      },
+      "outcome": {
+        "ops_proposed": [
+          {
+            "op": "split_bay",
+            "module": "m1",
+            "bay": "m1",
+            "axis": "V",
+            "offset_mm": "520.00",
+            "mullion_sku": "POSTE-V-60",
+            "new_divider": "added_d1",
+            "new_bay": "added_b1"
+          },
+          {
+            "op": "split_bay",
+            "module": "m1",
+            "bay": "added_b1",
+            "axis": "V",
+            "offset_mm": "445.00",
+            "mullion_sku": "POSTE-V-60",
+            "new_divider": "added_d2",
+            "new_bay": "added_b2"
+          },
+          {
+            "op": "set_opening",
+            "module": "m1",
+            "bay": "m1",
+            "opening": "TURN_LEFT"
+          },
+          {
+            "op": "set_opening",
+            "module": "m1",
+            "bay": "added_b2",
+            "opening": "TURN_RIGHT"
+          }
+        ],
+        "ops_accepted": [
+          {
+            "op": "split_bay",
+            "module": "m1",
+            "bay": "m1",
+            "axis": "V",
+            "offset_mm": "520.00",
+            "mullion_sku": "POSTE-V-60",
+            "new_divider": "added_d1",
+            "new_bay": "added_b1"
+          },
+          {
+            "op": "split_bay",
+            "module": "m1",
+            "bay": "added_b1",
+            "axis": "V",
+            "offset_mm": "445.00",
+            "mullion_sku": "POSTE-V-60",
+            "new_divider": "added_d2",
+            "new_bay": "added_b2"
+          },
+          {
+            "op": "set_opening",
+            "module": "m1",
+            "bay": "m1",
+            "opening": "TURN_LEFT"
+          },
+          {
+            "op": "set_opening",
+            "module": "m1",
+            "bay": "added_b2",
+            "opening": "TURN_RIGHT"
+          }
+        ],
+        "rejected": [],
+        "notes": "fija al centro, abatibles espejo",
+        "model": "MOCK (eval)",
+        "clarify": null,
+        "simulation": {
+          "modules": [
+            {
+              "ref": "m1",
+              "width_mm": "1500.00",
+              "height_mm": "1200.00",
+              "bays": [
+                {
+                  "ref": "m1",
+                  "opening_type": "TURN_LEFT",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                },
+                {
+                  "ref": "added_b1",
+                  "opening_type": "FIXED",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                },
+                {
+                  "ref": "added_b2",
+                  "opening_type": "TURN_RIGHT",
+                  "glass_article_sku": "VIDRIO-BASE",
+                  "glass_spec": "4-16-4 Float Incoloro",
+                  "glass_thickness_mm": "24.00",
+                  "panel_article_sku": null,
+                  "handle_height_mm": null,
+                  "door_handedness": null
+                }
+              ],
+              "splits": [
+                {
+                  "ref": "added_d1",
+                  "type": "SPLIT_V",
+                  "offset_mm": "520.00",
+                  "mullion_profile_sku": "POSTE-V-60"
+                },
+                {
+                  "ref": "added_d2",
+                  "type": "SPLIT_V",
+                  "offset_mm": "445.00",
+                  "mullion_profile_sku": "POSTE-V-60"
+                }
+              ]
+            }
+          ],
+          "couplings": []
+        }
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 4,
+        "product_after": {
+          "version": "product-v2",
+          "assembly": {
+            "modules": [
+              {
+                "id": "m1",
+                "width_mm": "1500.00",
+                "height_mm": "1200.00",
+                "tree": {
+                  "id": "m1-sv1",
+                  "type": "SPLIT_V",
+                  "split_offset_mm": "520.00",
+                  "mullion_profile_sku": "POSTE-V-60",
+                  "unit_kind": null,
+                  "children": [
+                    {
+                      "id": "m1",
+                      "type": "BAY",
+                      "opening_type": "TURN_LEFT",
+                      "glass_thickness_mm": "24.00",
+                      "glass_spec": "4-16-4 Float Incoloro",
+                      "glass_article_sku": "VIDRIO-BASE",
+                      "opening": null,
+                      "leaves": null,
+                      "handle_model_sku": null,
+                      "handle_color_sku": null,
+                      "hardware_option_skus": null,
+                      "sliding_layout": null
+                    },
+                    {
+                      "id": "m1-sv2",
+                      "type": "SPLIT_V",
+                      "split_offset_mm": "445.00",
+                      "mullion_profile_sku": "POSTE-V-60",
+                      "unit_kind": null,
+                      "children": [
+                        {
+                          "id": "m1-b1",
+                          "type": "BAY",
+                          "opening_type": "FIXED",
+                          "glass_thickness_mm": "24.00",
+                          "glass_spec": "4-16-4 Float Incoloro",
+                          "glass_article_sku": "VIDRIO-BASE"
+                        },
+                        {
+                          "id": "m1-b1-b1",
+                          "type": "BAY",
+                          "opening_type": "TURN_RIGHT",
+                          "glass_thickness_mm": "24.00",
+                          "glass_spec": "4-16-4 Float Incoloro",
+                          "glass_article_sku": "VIDRIO-BASE",
+                          "opening": null,
+                          "leaves": null,
+                          "handle_model_sku": null,
+                          "handle_color_sku": null,
+                          "hardware_option_skus": null,
+                          "sliding_layout": null
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "couplings": []
+          }
+        },
+        "product_changed": true
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "product.bays",
+            "ok": true,
+            "detail": "openings=['TURN_LEFT', 'FIXED', 'TURN_RIGHT']"
+          },
+          {
+            "check": "product.bays_count",
+            "ok": true,
+            "detail": "bays=3"
+          }
+        ]
+      }
+    },
+    {
+      "id": "F01",
+      "view": "produccion",
+      "via": "agent",
+      "surface": "production",
+      "prompt": "¿qué OT están bloqueadas y por qué?",
+      "expected": "Lista exacta del backend (OT-0009 con material faltante / estación pendiente).",
+      "metrics": {
+        "provider_calls": 2,
+        "rounds": 2,
+        "latency_ms": 0,
+        "tokens_prompt": 3275,
+        "tokens_completion": 140,
+        "provider_errors": [],
+        "elapsed_ms": 4
+      },
+      "outcome": {
+        "audit_id": "eval-17",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "La OT-0009 está IN_PRODUCTION por material faltante; pendiente: Armado, Instalación de vidrio, Control de calidad, Despacho. La OT-0012 está IN_PRODUCTION.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "ece5b290-fc64-513f-adef-cd126e9a278e",
+              "1e29dd4a-242b-5875-bd8d-0d960372fc04"
+            ]
+          }
+        ],
+        "references": [
+          "ece5b290-fc64-513f-adef-cd126e9a278e",
+          "1e29dd4a-242b-5875-bd8d-0d960372fc04"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [],
+        "queries": [
+          {
+            "surface": "production",
+            "tool": "get_production_state",
+            "status": "ok"
+          },
+          {
+            "surface": "work_order",
+            "tool": "get_work_order",
+            "status": "ok"
+          },
+          {
+            "surface": "work_order",
+            "tool": "get_work_order",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "ece5b290-fc64-513f-adef-cd126e9a278e": "OT-0009",
+          "1e29dd4a-242b-5875-bd8d-0d960372fc04": "OT-0012",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "SUCCEEDED",
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.queries_include_surface",
+            "ok": true,
+            "detail": "queries=[{'surface': 'production', 'tool': 'get_production_state', 'status': 'ok'}, {'surface': 'work_order', 'tool': 'get_work_order', 'status': 'ok'}, {'surface': 'work_order', 'tool': 'get_work_order', 'status': 'ok'}]"
+          },
+          {
+            "check": "behavior.text_mentions_all",
+            "ok": true,
+            "detail": "faltan=[]"
+          },
+          {
+            "check": "behavior.text_matches_any",
+            "ok": true,
+            "detail": "texto=La OT-0009 está IN_PRODUCTION por material faltante; pendiente: Armado, Instalación de vidrio, Control de calidad, Despacho. La OT-0012 está IN_PRODUCTION."
+          }
+        ]
+      }
+    },
+    {
+      "id": "F02",
+      "view": "produccion",
+      "via": "agent",
+      "surface": "work_order",
+      "prompt": "¿cuántas barras de marco usa la OT-0009?",
+      "expected": "Número igual al del plan de corte, o 'sin dato' con la causa (la proyección no expone barras).",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 1575,
+        "tokens_completion": 52,
+        "provider_errors": [],
+        "elapsed_ms": 1
+      },
+      "outcome": {
+        "audit_id": "eval-18",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "La proyección de la orden no dispone del plan de corte — las barras de marco no constan aquí; el dato vive en el expediente CNC de la OT.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "ece5b290-fc64-513f-adef-cd126e9a278e",
+              "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c"
+            ]
+          }
+        ],
+        "references": [
+          "ece5b290-fc64-513f-adef-cd126e9a278e",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [],
+        "queries": [
+          {
+            "surface": "work_order",
+            "tool": "get_work_order",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "ece5b290-fc64-513f-adef-cd126e9a278e": "OT-0009",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "SUCCEEDED",
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.sin_dato",
+            "ok": true,
+            "detail": "admite sin dato"
+          },
+          {
+            "check": "behavior.reply_nonempty",
+            "ok": true,
+            "detail": "reply vacío"
+          }
+        ]
+      }
+    },
+    {
+      "id": "F03",
+      "view": "compras",
+      "via": "agent",
+      "surface": "purchase_plan",
+      "prompt": "prepara la compra de lo que falta",
+      "expected": "Artefacto de plan de compra con líneas y proveedor de la lista real; nada enviado.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 1609,
+        "tokens_completion": 138,
+        "provider_errors": [],
+        "elapsed_ms": 3
+      },
+      "outcome": {
+        "audit_id": "eval-19",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "Preparé el plan de compras: 2 líneas sin cobertura agrupadas por tipo de pedido, con los proveedores elegibles del contexto.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "716c9545-8d2a-54f4-a0be-7f0cbbf7abab",
+              "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+            ]
+          }
+        ],
+        "references": [
+          "716c9545-8d2a-54f4-a0be-7f0cbbf7abab",
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+        ],
+        "questions": [],
+        "artifacts": [
+          {
+            "kind": "purchase_plan",
+            "title": "Plan de compras",
+            "payload": {
+              "groups": [
+                {
+                  "order_type": "SUPPLIER_PROFILES",
+                  "lines": [
+                    {
+                      "requirement_key": "perfiles/marco",
+                      "sku": "MARCO-60",
+                      "quantity": "42.000",
+                      "unit": "barra",
+                      "project_code": "CASA_LOMAS"
+                    }
+                  ],
+                  "suppliers": [
+                    "Perfilados Andina Ltda."
+                  ]
+                },
+                {
+                  "order_type": "SUPPLIER_GLASS",
+                  "lines": [
+                    {
+                      "requirement_key": "vidrio/dvh",
+                      "sku": "VIDRIO-BASE",
+                      "quantity": "18.000",
+                      "unit": "unidad",
+                      "project_code": "CASA_LOMAS"
+                    }
+                  ],
+                  "suppliers": [
+                    "Cristales del Sur S.A."
+                  ]
+                }
+              ]
+            },
+            "references": [],
+            "tool": "prepare_purchase_plan"
+          }
+        ],
+        "steps": [],
+        "queries": [
+          {
+            "surface": "purchase_plan",
+            "tool": "get_purchasing_state",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "716c9545-8d2a-54f4-a0be-7f0cbbf7abab": "MARCO-60",
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5": "MARCO-60",
+          "585e0d96-503f-5f82-bb04-cacf06363349": "MARCO-60",
+          "2ac47b78-865d-5834-93f5-2c5e04a45269": "VIDRIO-BASE",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "SUCCEEDED",
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.artifact",
+            "ok": true,
+            "detail": "artifacts=[{'kind': 'purchase_plan', 'title': 'Plan de compras', 'payload': {'groups': [{'order_type': 'SUPPLIER_PROFILES', 'lines': [{'requirement_key': 'perfiles/marco', 'sku': 'MARCO-60', 'quantity': '42.000', 'unit': 'barra', 'project_code': 'CASA_LOMAS'}], 'suppliers': ['Perfilados Andina Ltda.']}, {'order_type': 'SUPPLIER_GLASS', 'lines': [{'requirement_key': 'vidrio/dvh', 'sku': 'VIDRIO-BASE', 'quantity': '18.000', 'unit': 'unidad', 'project_code': 'CASA_LOMAS'}], 'suppliers': ['Cristales del Sur S.A.']}]}, 'references': [], 'tool': 'prepare_purchase_plan'}]"
+          }
+        ]
+      }
+    },
+    {
+      "id": "G01",
+      "view": "general",
+      "via": "agent",
+      "surface": "dashboard",
+      "prompt": "dame un precio aproximado de una ventana de 2 × 2 sin crearla",
+      "expected": "No inventa; ofrece crear un borrador y calcularlo con el motor.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 1526,
+        "tokens_completion": 63,
+        "provider_errors": [],
+        "elapsed_ms": 3
+      },
+      "outcome": {
+        "audit_id": "eval-20",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "No dispone de un cálculo del motor para una ventana suelta — el precio solo es real si lo calcula el motor. Puedo crear un borrador de posición y calcularlo ahí si quieres.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+              "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c"
+            ]
+          }
+        ],
+        "references": [
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [],
+        "queries": [
+          {
+            "surface": "dashboard",
+            "tool": "get_dashboard",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5": "CASA_LOMAS",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "SUCCEEDED",
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.artifact",
+            "ok": false,
+            "detail": "artifacts=[]"
+          },
+          {
+            "check": "behavior.artifact",
+            "ok": false,
+            "detail": "artifacts=[]"
+          },
+          {
+            "check": "behavior.steps_kinds_contain",
+            "ok": false,
+            "detail": "kinds=[]"
+          },
+          {
+            "check": "behavior.asks_clarification",
+            "ok": false,
+            "detail": "questions=[] clarify=None"
+          },
+          {
+            "check": "behavior.sin_dato",
+            "ok": true,
+            "detail": "admite sin dato"
+          }
+        ]
+      }
+    },
+    {
+      "id": "G02",
+      "view": "general",
+      "via": "ask",
+      "surface": "dashboard",
+      "prompt": "¿qué diferencia hay entre oscilobatiente y abatible?",
+      "expected": "Explicación correcta, sin números inventados.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 66,
+        "tokens_completion": 37,
+        "provider_errors": [],
+        "elapsed_ms": 19
+      },
+      "outcome": {
+        "audit_id": "eval-21",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "answer": "La diferencia: una hoja abatible gira sobre bisagras laterales y se abre completa (ventilación total); la oscilobatiente combina dos movimientos — abatible desde el costado y proyectante basculante desde arriba — así ventila de noche sin abrir del todo.",
+        "actions": [],
+        "warnings": [],
+        "reply": "La diferencia: una hoja abatible gira sobre bisagras laterales y se abre completa (ventilación total); la oscilobatiente combina dos movimientos — abatible desde el costado y proyectante basculante desde arriba — así ventila de noche sin abrir del todo.",
+        "ops_proposed": [],
+        "ops_accepted": []
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.text_mentions_all",
+            "ok": true,
+            "detail": "faltan=[]"
+          },
+          {
+            "check": "behavior.reply_nonempty",
+            "ok": true,
+            "detail": "reply vacío"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J01",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "cambia el vidrio de todas las ventanas del segundo piso a VIDRIO-BASE",
+      "expected": "Lote solo sobre las posiciones cuya ubicación indica 2º piso ('Estar segundo piso'). Si la ubicación no lo permite, aclaración.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 1,
+        "tokens_prompt": 1771,
+        "tokens_completion": 79,
+        "provider_errors": [],
+        "elapsed_ms": 2
+      },
+      "outcome": {
+        "audit_id": "eval-22",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "Revisé el contexto de Ventanas del Sur SpA para “cambia el vidrio de todas las ventanas del segundo piso a VIDRIO-BASE”. Respuesta determinista del proveedor MOCK.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+              "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+            ]
+          }
+        ],
+        "references": [
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+          "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [
+          {
+            "kind": "batch_ops",
+            "tool": "preview_commands",
+            "items": [
+              {
+                "position_id": "59eaf19a-11e6-58ee-a4a3-cf2875a3e380",
+                "index": 6,
+                "location": "Estar segundo piso",
+                "typology": "SLIDING_2L",
+                "ops": [
+                  {
+                    "op": "set_glass",
+                    "module": "m1",
+                    "sku": "VIDRIO-BASE"
+                  }
+                ]
+              }
+            ],
+            "label": "vidrio VIDRIO-BASE en 1 posición(es)"
+          }
+        ],
+        "queries": [
+          {
+            "surface": "project",
+            "tool": "get_project",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5": "CASA_LOMAS",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "WAITING_FOR_APPROVAL",
+        "ops_proposed": [
+          {
+            "op": "set_glass",
+            "module": "m1",
+            "sku": "VIDRIO-BASE"
+          }
+        ],
+        "ops_accepted": [],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "batch_results": {
+          "59eaf19a-11e6-58ee-a4a3-cf2875a3e380": {
+            "product_after": {
+              "version": "product-v2",
+              "assembly": {
+                "modules": [
+                  {
+                    "id": "m1",
+                    "width_mm": "1800.00",
+                    "height_mm": "1200.00",
+                    "tree": {
+                      "id": "m1",
+                      "type": "BAY",
+                      "opening_type": "SLIDING_2L",
+                      "glass_thickness_mm": "24.00",
+                      "glass_spec": "4-16-4 Float Incoloro",
+                      "glass_article_sku": "VIDRIO-BASE",
+                      "sliding_layout": {
+                        "preset": "SLIDING_2L",
+                        "primary_index": 0,
+                        "overlap_mm": "60"
+                      }
+                    }
+                  }
+                ],
+                "couplings": []
+              }
+            },
+            "changed": false
+          }
+        }
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.batch",
+            "ok": true,
+            "detail": "covered=['59eaf19a-11e6-58ee-a4a3-cf2875a3e380'] allowed=['59eaf19a-11e6-58ee-a4a3-cf2875a3e380'] ops_each=ok product_each=ok"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J02",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "crea una corredera de 2 hojas de 1600 × 1100 para la cocina",
+      "expected": "add_position con las medidas declaradas (y la serie corredera o la aclaración por sistema), o la aclaración tipada.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 1770,
+        "tokens_completion": 74,
+        "provider_errors": [],
+        "elapsed_ms": 1
+      },
+      "outcome": {
+        "audit_id": "eval-23",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "Revisé el contexto de Ventanas del Sur SpA para “crea una corredera de 2 hojas de 1600 × 1100 para la cocina”. Respuesta determinista del proveedor MOCK.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+              "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+            ]
+          }
+        ],
+        "references": [
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+          "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [
+          {
+            "kind": "ops",
+            "tool": "preview_commands",
+            "ops": [
+              {
+                "op": "add_position",
+                "scope": "project",
+                "width_mm": "1600",
+                "height_mm": "1100",
+                "location": "Cocina",
+                "opening": "SLIDING_2L"
+              }
+            ],
+            "label": "crear posición"
+          }
+        ],
+        "queries": [
+          {
+            "surface": "project",
+            "tool": "get_project",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5": "CASA_LOMAS",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "WAITING_FOR_APPROVAL",
+        "ops_proposed": [
+          {
+            "op": "add_position",
+            "scope": "project",
+            "width_mm": "1600",
+            "height_mm": "1100",
+            "location": "Cocina",
+            "opening": "SLIDING_2L"
+          }
+        ],
+        "ops_accepted": [
+          {
+            "op": "add_position",
+            "scope": "project",
+            "width_mm": "1600",
+            "height_mm": "1100",
+            "location": "Cocina",
+            "opening": "SLIDING_2L"
+          }
+        ],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.ops_any",
+            "ok": true,
+            "detail": "accepted=[{'op': 'add_position', 'scope': 'project', 'width_mm': '1600', 'height_mm': '1100', 'location': 'Cocina', 'opening': 'SLIDING_2L'}]"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J03",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "duplica la posición 3 cuatro veces para los dormitorios",
+      "expected": "duplicate_position sobre la posición de índice 3 (o quantity +4 vía update_position), o la aclaración.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 1770,
+        "tokens_completion": 72,
+        "provider_errors": [],
+        "elapsed_ms": 2
+      },
+      "outcome": {
+        "audit_id": "eval-24",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "Revisé el contexto de Ventanas del Sur SpA para “duplica la posición 3 cuatro veces para los dormitorios”. Respuesta determinista del proveedor MOCK.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+              "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+            ]
+          }
+        ],
+        "references": [
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+          "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [
+          {
+            "kind": "ops",
+            "tool": "preview_commands",
+            "ops": [
+              {
+                "op": "duplicate_position",
+                "scope": "project",
+                "position_id": "32b1f2ee-d1df-50bc-abee-c37ea71819e3",
+                "count": 4
+              }
+            ],
+            "label": "duplicar posición"
+          }
+        ],
+        "queries": [
+          {
+            "surface": "project",
+            "tool": "get_project",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5": "CASA_LOMAS",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "WAITING_FOR_APPROVAL",
+        "ops_proposed": [
+          {
+            "op": "duplicate_position",
+            "scope": "project",
+            "position_id": "32b1f2ee-d1df-50bc-abee-c37ea71819e3",
+            "count": 4
+          }
+        ],
+        "ops_accepted": [
+          {
+            "op": "duplicate_position",
+            "scope": "project",
+            "position_id": "32b1f2ee-d1df-50bc-abee-c37ea71819e3",
+            "count": 4
+          }
+        ],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.ops_any",
+            "ok": true,
+            "detail": "accepted=[{'op': 'duplicate_position', 'scope': 'project', 'position_id': '32b1f2ee-d1df-50bc-abee-c37ea71819e3', 'count': 4}]"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J04",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "¿cuál es la posición más cara y por qué?",
+      "expected": "La posición 3 (Living, 2400×1500 — la mayor área) identificada con price_project; cifras citadas de la herramienta.",
+      "metrics": {
+        "provider_calls": 2,
+        "rounds": 2,
+        "latency_ms": 0,
+        "tokens_prompt": 3839,
+        "tokens_completion": 106,
+        "provider_errors": [],
+        "elapsed_ms": 3
+      },
+      "outcome": {
+        "audit_id": "eval-26",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "La posición más cara es la 3 (Living): $537.000 CLP.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+              "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+            ]
+          }
+        ],
+        "references": [
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+          "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [],
+        "queries": [
+          {
+            "surface": "project",
+            "tool": "get_project",
+            "status": "ok"
+          },
+          {
+            "surface": "tool",
+            "tool": "price_project",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5": "CASA_LOMAS",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "SUCCEEDED",
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.queries_include_tool",
+            "ok": true,
+            "detail": "tools=['price_project']"
+          },
+          {
+            "check": "behavior.text_matches_any",
+            "ok": true,
+            "detail": "texto=La posición más cara es la 3 (Living): $537.000 CLP."
+          }
+        ]
+      }
+    },
+    {
+      "id": "J05",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "baja el precio un 5 %",
+      "expected": "Propuesta que requiere aprobación si cae bajo la banda; no se aplica sola.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 1765,
+        "tokens_completion": 64,
+        "provider_errors": [],
+        "elapsed_ms": 1
+      },
+      "outcome": {
+        "audit_id": "eval-27",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "Los descuentos no se aplican desde el asistente — en Precios puedes emitir una revisión con la banda correspondiente.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+              "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+            ]
+          }
+        ],
+        "references": [
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+          "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [
+          {
+            "kind": "navigate",
+            "tool": "navigate",
+            "path": "/projects/fd515745-3b5b-540e-aa5d-455d0d7067b5/pricing",
+            "label": "Precios del proyecto"
+          }
+        ],
+        "queries": [
+          {
+            "surface": "project",
+            "tool": "get_project",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5": "CASA_LOMAS",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "SUCCEEDED",
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.prepare_action",
+            "ok": false,
+            "detail": "steps=[{'kind': 'navigate', 'tool': 'navigate', 'path': '/projects/fd515745-3b5b-540e-aa5d-455d0d7067b5/pricing', 'label': 'Precios del proyecto'}]"
+          },
+          {
+            "check": "behavior.steps_kinds_contain",
+            "ok": true,
+            "detail": "kinds=['navigate']"
+          },
+          {
+            "check": "behavior.steps_kinds_absent",
+            "ok": true,
+            "detail": "kinds=['navigate']"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J06",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "emite la cotización",
+      "expected": "Tarjeta de preparación con un deep link; nada emitido.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 1782,
+        "tokens_completion": 69,
+        "provider_errors": [],
+        "elapsed_ms": 1
+      },
+      "outcome": {
+        "audit_id": "eval-28",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "Revisé el contexto de Ventanas del Sur SpA para “emite la cotización”. Respuesta determinista del proveedor MOCK.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+              "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+            ]
+          }
+        ],
+        "references": [
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+          "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [
+          {
+            "kind": "prepare",
+            "tool": "emit_revision",
+            "action": "emit_revision",
+            "path": "/projects/fd515745-3b5b-540e-aa5d-455d0d7067b5/pricing",
+            "label": "Preparar emisión de la revisión"
+          }
+        ],
+        "queries": [
+          {
+            "surface": "project",
+            "tool": "get_project",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5": "CASA_LOMAS",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "WAITING_FOR_APPROVAL",
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.prepare_action",
+            "ok": true,
+            "detail": "steps=[{'kind': 'prepare', 'tool': 'emit_revision', 'action': 'emit_revision', 'path': '/projects/fd515745-3b5b-540e-aa5d-455d0d7067b5/pricing', 'label': 'Preparar emisión de la revisión'}]"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J07",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "¿qué falta para emitir?",
+      "expected": "Exactamente los faltantes del backend — vía get_blockers: precio aplicado existe, falta expediente documental completo.",
+      "metrics": {
+        "provider_calls": 2,
+        "rounds": 2,
+        "latency_ms": 0,
+        "tokens_prompt": 3600,
+        "tokens_completion": 122,
+        "provider_errors": [],
+        "elapsed_ms": 2
+      },
+      "outcome": {
+        "audit_id": "eval-30",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "Falta para emitir: documental_incompleta.",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+              "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+            ]
+          }
+        ],
+        "references": [
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+          "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [],
+        "queries": [
+          {
+            "surface": "project",
+            "tool": "get_project",
+            "status": "ok"
+          },
+          {
+            "surface": "tool",
+            "tool": "get_blockers",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5": "CASA_LOMAS",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "SUCCEEDED",
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.queries_include_tool",
+            "ok": true,
+            "detail": "tools=['get_blockers']"
+          },
+          {
+            "check": "behavior.text_matches_any",
+            "ok": false,
+            "detail": "texto=Falta para emitir: documental_incompleta."
+          },
+          {
+            "check": "behavior.text_matches_any",
+            "ok": false,
+            "detail": "texto=Falta para emitir: documental_incompleta."
+          },
+          {
+            "check": "behavior.reply_nonempty",
+            "ok": true,
+            "detail": "reply vacío"
+          },
+          {
+            "check": "behavior.sin_dato",
+            "ok": false,
+            "detail": "no lo admite"
+          },
+          {
+            "check": "behavior.asks_clarification",
+            "ok": true,
+            "detail": "questions=[] clarify=None"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J08",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "compara la REV-A con la REV-B",
+      "expected": "Δ precio por posición vía explain_price_delta (autoridad aplicada vs costo actual) o un artefacto de comparación con las diferencias reales.",
+      "metrics": {
+        "provider_calls": 2,
+        "rounds": 2,
+        "latency_ms": 0,
+        "tokens_prompt": 3832,
+        "tokens_completion": 109,
+        "provider_errors": [],
+        "elapsed_ms": 3
+      },
+      "outcome": {
+        "audit_id": "eval-32",
+        "model": "MOCK (eval)",
+        "credits_debited": 0,
+        "reply": "El delta contra la autoridad aplicada cubre 12 posición(es) (has_applied=True).",
+        "plan": [
+          {
+            "label": "Revisar el contexto del producto"
+          }
+        ],
+        "claims": [
+          {
+            "text": "La organización activa es Ventanas del Sur SpA.",
+            "evidence": [
+              "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+              "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+            ]
+          }
+        ],
+        "references": [
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5",
+          "1521b922-71a7-5409-aeaf-e3f120a44b3f"
+        ],
+        "questions": [],
+        "artifacts": [],
+        "steps": [],
+        "queries": [
+          {
+            "surface": "project",
+            "tool": "get_project",
+            "status": "ok"
+          },
+          {
+            "surface": "tool",
+            "tool": "explain_price_delta",
+            "status": "ok"
+          }
+        ],
+        "warnings": [],
+        "rejected": [],
+        "clarify": null,
+        "evidence_labels": {
+          "fd515745-3b5b-540e-aa5d-455d0d7067b5": "CASA_LOMAS",
+          "e24e588c-e7d6-541a-b53d-bbc6c0bfc73c": "Ventanas del Sur SpA"
+        },
+        "state": "SUCCEEDED",
+        "ops_proposed": [],
+        "ops_accepted": [],
+        "dropped_ungrounded": 0
+      },
+      "error": null,
+      "sandbox": {
+        "applied": 0,
+        "product_after": null,
+        "product_changed": false,
+        "note": "sin ops aceptadas"
+      },
+      "verdict": {
+        "pass": true,
+        "failure": null,
+        "failure_detail": null,
+        "checks": [
+          {
+            "check": "behavior.queries_include_tool",
+            "ok": true,
+            "detail": "tools=['explain_price_delta']"
+          },
+          {
+            "check": "behavior.reply_nonempty",
+            "ok": true,
+            "detail": "reply vacío"
+          }
+        ]
+      }
+    }
+  ],
+  "total": 26,
+  "passed": 26,
+  "meta": {
+    "harness": "ai_gateway.evals",
+    "tag": "",
+    "provider": "MOCK",
+    "model": "MOCK (eval)"
+  },
+  "summary": {
+    "total": 26,
+    "passed": 26,
+    "rate": 1.0,
+    "by_view": {
+      "editor": {
+        "total": 13,
+        "passed": 13
+      },
+      "produccion": {
+        "total": 2,
+        "passed": 2
+      },
+      "compras": {
+        "total": 1,
+        "passed": 1
+      },
+      "general": {
+        "total": 2,
+        "passed": 2
+      },
+      "proyecto": {
+        "total": 8,
+        "passed": 8
+      }
+    },
+    "by_failure": {}
+  }
+}

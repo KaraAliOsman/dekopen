@@ -67,8 +67,8 @@ def test_horizontal_mullion_uses_parent_clear_width_and_article_gap(
 
     assert len(mullion) == 1
     assert mullion[0].length_mm == Decimal("880.00")
-    assert len(reinforcement) == 1
-    assert reinforcement[0].length_mm == Decimal("870.00")
+    # 880 mm stays bare under the declared white-member rule (steel ≥ 1000 mm).
+    assert reinforcement == []
 
 
 def test_child_dimensions_cannot_become_a_second_authority(

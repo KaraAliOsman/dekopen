@@ -139,6 +139,7 @@ function expectResetCanvas(): void {
       nominalWidthMm: "1000.00",
       nominalHeightMm: "1000.00",
       color: "WHITE",
+      colorExterior: "",
       parametricTree: {
         id: "g1",
         type: "BAY",

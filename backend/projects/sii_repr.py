@@ -9,6 +9,7 @@ itself) followed by the untouched sealed document body, stored with its own
 hash on the project_dtes row.
 """
 
+import re
 from html import escape
 from io import BytesIO
 
@@ -62,8 +63,13 @@ def _fields(dte_xml: bytes) -> dict:
     def text(node, tag):
         return (_find(node, tag).text or "") if _find(node, tag) is not None else ""
 
+    ted_xml = ElementTree.tostring(ted, encoding="unicode")
+    # El CAF sube pretty-printed; el whitespace entre tags no es parte del
+    # contenido del timbre y quitarlo es lo que permite que un TED real quepa
+    # en el tope absoluto del PDF417 (928 palabras-código).
+    ted_xml = re.sub(r">\s+<", "><", ted_xml).strip()
     return {
-        "ted_xml": ElementTree.tostring(ted, encoding="unicode"),
+        "ted_xml": ted_xml,
         "tipo": int(text(iddoc, "TipoDTE") or "0"),
         "folio": text(iddoc, "Folio").strip(),
         "fecha": text(iddoc, "FchEmis").strip(),
@@ -75,9 +81,27 @@ def _fields(dte_xml: bytes) -> dict:
 
 
 def _cover_html(f: dict) -> str:
-    svg_root = pdf417gen.render_svg(
-        pdf417gen.encode(f["ted_xml"], columns=6), scale=3, ratio=3
-    ).getroot()
+    # Un TED real (DD con el CAF embebido + FRMT ≈ 1000–1600 caracteres) excede
+    # el tope de 90 filas del PDF417 con pocas columnas: se escala el ancho
+    # proporcional al payload (el estándar permite hasta 30 columnas) y, si el
+    # volumen total se acerca al techo de 928 palabras-código, se degrada el
+    # nivel de redundancia — si aún así no cabe, el error sube honesto, jamás
+    # se imprime un timbre recortado o inventado.
+    columns = max(6, min(30, -(-len(f["ted_xml"]) // 75)))
+    codes = None
+    for candidate, security in (
+        (columns, 5), (columns, 2), (30, 2), (30, 0)
+    ):
+        try:
+            codes = pdf417gen.encode(
+                f["ted_xml"], columns=candidate, security_level=security
+            )
+            break
+        except ValueError:
+            continue
+    if codes is None:
+        codes = pdf417gen.encode(f["ted_xml"], columns=30, security_level=0)
+    svg_root = pdf417gen.render_svg(codes, scale=3, ratio=3).getroot()
     barcode = ElementTree.tostring(svg_root, encoding="unicode")
     tipo_name = _DTE_NAME.get(f["tipo"], f"DTE {f['tipo']}")
     esc = {k: escape(str(v)) for k, v in f.items() if k != "ted_xml"}

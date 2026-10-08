@@ -366,7 +366,7 @@ def test_agent_ops_step_validated_through_design_contract(monkeypatch):
     validated_ops = [{"op": "set_module_width", "module": "m1", "width_mm": 1400}]
     dropped = [{"op": "set_module_width", "reason": "ancho_no_declarado"}]
 
-    monkeypatch.setattr(agent.design_assist, "_summary", lambda p: summary)
+    monkeypatch.setattr(agent.design_assist, "_summary", lambda p, **_kw: summary)
     monkeypatch.setattr(
         agent.projects_service, "position_row", lambda *a, **k: {"system_id": system_id}
     )
@@ -379,7 +379,7 @@ def test_agent_ops_step_validated_through_design_contract(monkeypatch):
     monkeypatch.setattr(
         agent.design_assist,
         "_validate_ops",
-        lambda ops, s, c, d: (validated_ops, dropped),
+        lambda ops, s, c, d, **_kw: (validated_ops, dropped, None),
     )
     result = agent.act(
         org_id=uuid4(),
@@ -392,7 +392,13 @@ def test_agent_ops_step_validated_through_design_contract(monkeypatch):
         operation_key="goal-9",
     )
     assert result["steps"] == [
-        {"kind": "ops", "tool": "preview_commands", "ops": validated_ops, "label": "Ajustar ancho"}
+        {
+            "kind": "ops",
+            "tool": "preview_commands",
+            "ops": validated_ops,
+            "simulation": None,
+            "label": "Ajustar ancho",
+        }
     ]
     assert result["rejected"] == dropped
     # The provider sees the live product wire — without it the model has no
@@ -1022,7 +1028,7 @@ def test_agent_batch_ops_expands_wildcard_per_position(monkeypatch):
     )
     validated: list[list] = []
 
-    def fake_summary(product):
+    def fake_summary(product, **_kw):
         return {
             "modules": [
                 {"ref": m["id"], "index": i, "width_mm": m["width_mm"], "height_mm": m["height_mm"]}
@@ -1031,9 +1037,9 @@ def test_agent_batch_ops_expands_wildcard_per_position(monkeypatch):
             "couplings": [],
         }
 
-    def fake_validate(ops, summary, catalog, declared):
+    def fake_validate(ops, summary, catalog, declared, **_kw):
         validated.append(ops)
-        return ops, []
+        return ops, [], None
 
     monkeypatch.setattr(agent.design_assist, "_summary", fake_summary)
     monkeypatch.setattr(agent.design_assist, "_validate_ops", fake_validate)

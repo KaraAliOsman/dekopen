@@ -5,6 +5,8 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { PortalPositionColorExteriorDetail } from "./portalPositionColorExteriorDetail";
+import type { PortalPositionColorInteriorDetail } from "./portalPositionColorInteriorDetail";
 
 export interface PortalPosition {
   id: string;
@@ -16,12 +18,17 @@ export interface PortalPosition {
   typology: string | null;
   /** @nullable */
   location_tag: string | null;
+  is_option?: boolean;
   width_mm: string;
   height_mm: string;
   /** @nullable */
   color_interior: string | null;
   /** @nullable */
   color_exterior: string | null;
+  /** @nullable */
+  color_interior_detail: PortalPositionColorInteriorDetail;
+  /** @nullable */
+  color_exterior_detail: PortalPositionColorExteriorDetail;
   glass_specs: string[];
   /** @nullable */
   finish: string | null;

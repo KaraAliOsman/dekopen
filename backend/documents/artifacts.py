@@ -108,7 +108,17 @@ def _order_snapshot(order_id: UUID, project_version_id: UUID, org_id: UUID) -> t
 def generate_artifact(
     *, org_id: UUID, actor_id: UUID, role: str, project_version_id: UUID,
     order_id: UUID | None, document_type: str, file_format: str,
+    render_context: dict | None = None,
 ) -> tuple[dict[str, object], bool]:
+    """Slot-idempotent artifact generation.
+
+    ``render_context`` carries live, non-sealed display values (today only
+    ``approval_url`` on DOC-01 — the acceptance QR encodes the document
+    channel approval minted by the share that produced the file). The
+    stored artifact is immutable evidence: an occupied slot is returned
+    as-is even when a render_context arrives — the QR the document
+    carries belongs to the share that generated it, and re-shares rotate
+    only the email-channel links."""
     _require_document_role(document_type, role)
     if document_type in _REVISION_DOCUMENTS:
         if order_id is not None or file_format != "PDF":
@@ -122,6 +132,8 @@ def generate_artifact(
         scope_id = order_id
     else:
         raise DocumentaryError("document_type_invalid")
+    if render_context and document_type != "DOC-01":
+        raise DocumentaryError("document_scope_mismatch")
 
     slot = f"{scope_id}:{document_type}:{file_format}"
     storage: SupabaseDocumentStorage | None = None
@@ -154,6 +166,9 @@ def generate_artifact(
             if existing:
                 if len(existing) != 1:
                     raise DocumentaryError("artifact_slot_ambiguous")
+                # Immutable evidence: the sealed document of record wins
+                # over any re-render request — re-shares rotate the email
+                # link, never the stored PDF.
                 return _metadata(existing[0]), False
             identifier = (
                 str(version["snapshot_sha256"])
@@ -161,7 +176,9 @@ def generate_artifact(
             )
             if file_format == "PDF":
                 content, media_type = render_pdf_document(
-                    document_type, frozen, pdf_identifier=identifier
+                    document_type, frozen,
+                    pdf_identifier=identifier,
+                    render_context=render_context,
                 )
                 extension = "pdf"
             else:
@@ -186,7 +203,7 @@ def generate_artifact(
                  document_type, file_format, version["bom_hash"], version["snapshot_sha256"],
                  object_key, content_hash, media_type, len(content), actor_id],
             )
-            return _metadata(artifact), True
+        return _metadata(artifact), True
     except Exception:
         if storage is not None and object_key is not None:
             _delete_unreferenced_object(

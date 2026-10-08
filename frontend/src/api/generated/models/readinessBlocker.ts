@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { ReadinessTarget } from "./readinessTarget";
 
 export interface ReadinessBlocker {
   code: string;
@@ -12,4 +13,5 @@ export interface ReadinessBlocker {
   affected: string;
   why: string;
   action: string;
+  targets?: ReadinessTarget[];
 }

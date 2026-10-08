@@ -6,7 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { SiiCertificate } from "./siiCertificate";
+import type { SiiIntegrationState } from "./siiIntegrationState";
 
 export interface SiiCertificateStatus {
   certificate: SiiCertificate | null;
+  integration: SiiIntegrationState;
 }

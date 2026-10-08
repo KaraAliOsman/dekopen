@@ -1,0 +1,113 @@
+{
+  "id": "casement-right",
+  "name": "Abatible derecha",
+  "box": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 1200
+  },
+  "input": {
+    "kind": "leaves",
+    "unit": "WINDOW",
+    "leaves": [
+      {
+        "movement": "TURN",
+        "hinge_side": "RIGHT",
+        "direction": "INWARD",
+        "leaf_role": "SINGLE",
+        "handle_mm": 1050,
+        "slot": null,
+        "axis_offset_mm": null
+      }
+    ]
+  },
+  "views": {
+    "interior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "tri",
+              "hinge": "RIGHT",
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "handle",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": "left",
+              "at_mm": "1050"
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 640 144 L 160 508.8 L 640 1056",
+              "dash": null
+            },
+            {
+              "d": "M 17 150 H 35 M 26 141 V 159",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    },
+    "exterior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "tri",
+              "hinge": "RIGHT",
+              "apex_at": "0.4",
+              "dash": true,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "handle",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": "left",
+              "at_mm": "1050"
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 640 144 L 160 508.8 L 640 1056",
+              "dash": "6 3"
+            },
+            {
+              "d": "M 17 150 H 35 M 26 141 V 159",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

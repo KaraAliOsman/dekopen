@@ -1,0 +1,175 @@
+/* Clients workspace — master list + detail. */
+.clients-desk {
+  align-items: start;
+  display: grid;
+  gap: var(--space-16);
+  grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+}
+
+.clients-list {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  padding: var(--space-12);
+}
+
+.clients-list > ul {
+  display: grid;
+  gap: var(--space-4);
+  list-style: none;
+  margin: var(--space-8) 0 0;
+  padding: 0;
+}
+
+.clients-row {
+  align-items: start;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-1);
+  color: var(--theme-text-primary);
+  cursor: pointer;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-8);
+  text-align: left;
+  width: 100%;
+}
+
+.clients-row:hover {
+  border-color: var(--theme-border-subtle);
+}
+
+.clients-row.is-active {
+  background: var(--theme-surface-raised);
+  border-color: var(--theme-accent);
+}
+
+.clients-row-name {
+  font-weight: 600;
+}
+
+.clients-row-meta {
+  color: var(--theme-text-secondary);
+  font-size: 0.75rem;
+}
+
+.clients-empty {
+  align-items: center;
+  color: var(--theme-text-secondary);
+  display: flex;
+  gap: var(--space-8);
+  padding: var(--space-12);
+}
+
+.clients-empty__cta {
+  background: transparent;
+  border: 1px solid var(--theme-accent);
+  border-radius: var(--radius-sm);
+  color: var(--theme-accent-ink);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.18rem var(--space-8);
+}
+
+.clients-detail {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  padding: var(--space-16) var(--space-16);
+}
+
+.clients-detail-head {
+  align-items: start;
+  display: flex;
+  gap: var(--space-16);
+  justify-content: space-between;
+}
+
+.clients-detail-head h2 {
+  margin: 0;
+}
+
+.clients-detail-meta {
+  color: var(--theme-text-secondary);
+  margin: var(--space-4) 0 0;
+}
+
+.clients-detail-actions {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.clients-facts {
+  display: grid;
+  gap: var(--space-8);
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  margin: var(--space-16) 0;
+}
+
+.clients-facts dt {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.clients-facts dd {
+  margin: var(--space-2) 0 0;
+  white-space: pre-wrap;
+}
+
+.clients-projects {
+  list-style: none;
+  margin: var(--space-8) 0 0;
+  padding: 0;
+}
+
+.clients-project-row {
+  align-items: center;
+  color: var(--theme-text-primary);
+  display: grid;
+  gap: var(--space-12);
+  grid-template-columns: auto minmax(8rem, 1fr) auto auto;
+  padding: var(--space-8) 0;
+  text-decoration: none;
+}
+
+.clients-project-row + li {
+  border-top: 1px solid var(--theme-border-subtle);
+}
+
+.clients-project-row time {
+  color: var(--theme-text-secondary);
+  font-size: 0.75rem;
+}
+
+/* Filas de contactos y direcciones de obra en el formulario: se envuelven en
+ * lugar de desbordar en anchos medios (un input mínimo por celda). */
+.clients-subrow {
+  display: grid;
+  gap: var(--space-8);
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  margin: var(--space-8) 0;
+}
+
+.clients-subrow > input {
+  min-width: 0;
+  width: 100%;
+}
+
+.clients-inline-check {
+  align-items: center;
+  display: flex;
+  gap: var(--space-4);
+}
+
+.clients-subrow .ui-button {
+  justify-self: start;
+}
+
+@media (max-width: 900px) {
+  .clients-desk {
+    grid-template-columns: 1fr;
+  }
+}

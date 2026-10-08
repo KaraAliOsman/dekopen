@@ -15,13 +15,13 @@ MUTATIONS = {
     "steel-gap": ("- _TWO * article.reinforcement_gap_mm", "- _TWO * article.reinforcement_gap_mm + DELTA"),
     "bead-cut-width": ("length_mm=width_mm + rule.cut_add_mm,", "length_mm=width_mm + rule.cut_add_mm + DELTA,"),
     "bead-cut-height": ("length_mm=height_mm + rule.cut_add_mm,", "length_mm=height_mm + rule.cut_add_mm + DELTA,"),
-    "sliding-cut-width": ("cut_width = finished_width + params.sliding_end_add_mm", "cut_width = finished_width + params.sliding_end_add_mm + DELTA"),
-    "sliding-cut-height": ("rect.height_mm - _TWO * params.pulley_height_mm", "rect.height_mm - _TWO * params.pulley_height_mm + DELTA"),
-    "sliding-glass-width": ("width -= params.sliding_glazing_deduction_width_mm", "width -= params.sliding_glazing_deduction_width_mm + DELTA"),
-    "sliding-glass-height": ("height -= params.sliding_glazing_deduction_height_mm", "height -= params.sliding_glazing_deduction_height_mm + DELTA"),
+    "sliding-cut-width": ("cut_width = finished_width + sliding.sliding_end_add_mm", "cut_width = finished_width + sliding.sliding_end_add_mm + DELTA"),
+    "sliding-cut-height": ("rect.height_mm - _TWO * sliding.pulley_height_mm", "rect.height_mm - _TWO * sliding.pulley_height_mm + DELTA"),
+    "sliding-glass-width": ("width -= sliding.sliding_glazing_deduction_width_mm", "width -= sliding.sliding_glazing_deduction_width_mm + DELTA"),
+    "sliding-glass-height": ("height -= sliding.sliding_glazing_deduction_height_mm", "height -= sliding.sliding_glazing_deduction_height_mm + DELTA"),
     "door-jamb": ("length_mm=nominal_height_mm + per_end,", "length_mm=nominal_height_mm + per_end + DELTA,"),
-    "door-width": ("clear_width - _TWO * params.door_leaf_side_clearance_mm", "clear_width - _TWO * params.door_leaf_side_clearance_mm + DELTA"),
-    "door-height": ("- params.door_bottom_clearance_mm\n        + params.sash_overlap_mm", "- params.door_bottom_clearance_mm\n        + params.sash_overlap_mm + DELTA"),
+    "door-width": ("rect.width_mm - _TWO * side", "rect.width_mm - _TWO * side + DELTA"),
+    "door-height": ("- params.door_bottom_clearance_mm + overlap", "- params.door_bottom_clearance_mm + overlap + DELTA"),
 }
 
 

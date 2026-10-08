@@ -1,0 +1,25 @@
+id: E08
+view: editor
+via: design_assist
+surface: position
+fixture: editor
+product_variant: vacia
+prompt: "manilla a 1050 del piso"
+expected: "Pide aclaración (altura de instalación o elevación objetivo) — con opciones tipadas — o fija la manilla a 1050 mm directamente."
+expect:
+  expects_clarification: true
+  any:
+    # IA2 §3 — el canal tipado: una pregunta con opciones reales que la
+    # UI muestra como chips y cuya respuesta continúa el mismo job.
+    - behavior:
+        clarify_options: {min: 2}
+    - behavior:
+        asks_clarification: true
+        no_ops_accepted: true
+    # Lectura ejecutable: la manilla va a 1050 mm — set_handle_height
+    # existe y la medida está declarada en el prompt.
+    - behavior:
+        ops_any: ["set_handle_height"]
+      product:
+        some_bay:
+          handle_height_mm: 1050

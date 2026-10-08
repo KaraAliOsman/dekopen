@@ -1,4 +1,5 @@
 import type { ContourJson } from "./productEditing";
+import { fmtWire } from "../../format";
 
 /** Module-local contour geometry for canvas rendering.
  *
@@ -63,9 +64,7 @@ export function contourPathD(contour: ContourJson, heightMm: number): string {
   return parts.join(" ");
 }
 
-function fmt(value: number): string {
-  return value.toFixed(2);
-}
+const fmt = fmtWire;
 
 type OffsetEdge =
   | { kind: "line"; a: ContourPoint; b: ContourPoint }

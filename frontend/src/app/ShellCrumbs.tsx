@@ -17,8 +17,14 @@ export function useProjectName(id: string | null): string | null {
   const override = useSyncExternalStore(projectNameSubscribe, () =>
     id && orgId ? projectNameCached(orgId, id) : null,
   );
-  const project = useProject(override === null ? id : null);
-  return override ?? project.data?.name ?? null;
+  // Always fetch — the code travels with the name even when a rename
+  // override bypasses the cached row.
+  const project = useProject(id);
+  const name = override ?? project.data?.name ?? null;
+  const code = project.data?.code ?? null;
+  // Human code + name: «P-000012 Edificio Prat», never a bare UUID/name.
+  if (code !== null && name !== null) return `${code} ${name}`;
+  return name ?? code;
 }
 
 /** Rail → entity → leaf. The first crumb is the rail destination the user
@@ -35,6 +41,9 @@ export function crumbsFor(
   if (section === "dashboard") return [{ label: t("crumb.dashboard") }];
   if (section === "production") return [{ label: t("crumb.production") }];
   if (section === "purchasing") return [{ label: t("crumb.purchasing") }];
+  if (section === "quotations") return [{ label: t("crumb.quotations") }];
+  if (section === "deliveries") return [{ label: t("crumb.deliveries") }];
+  if (section === "inventory") return [{ label: t("crumb.inventory") }];
   if (section === "clients") {
     const head: Crumb = { label: t("crumb.clients") };
     if (second !== undefined)
@@ -88,7 +97,7 @@ export function crumbsFor(
       return [head, { label: entity, to: `/projects/${second}` }, { label: t("crumb.pricing") }];
     return [head, { label: entity, to: `/projects/${second}` }, { label: leaf ?? third }];
   }
-  return [{ label: t("crumb.dashboard"), to: "/dashboard" }];
+  return [{ label: t("crumb.home"), to: "/dashboard" }];
 }
 
 export function ShellCrumbs({ leaf }: { leaf: string | null }): JSX.Element {

@@ -26,6 +26,7 @@ from documents.renderers import render_payment_receipt
 from documents.storage import SupabaseDocumentStorage
 from pricing.repository import one, rows
 from projects import org_branding
+from projects.sii_envio import integration_state
 
 SIGNED_URL_TTL_SECONDS = 600
 
@@ -90,6 +91,7 @@ def issue_receipt(
         "receipt_code": receipt_code,
         "organization": org_branding.branding_for_snapshot(org_id=org_id),
         "issued_at": timezone.now().isoformat(),
+        "tributary": integration_state(org_id=org_id),
         "project": {
             "code": project["code"],
             "name": project["name"],

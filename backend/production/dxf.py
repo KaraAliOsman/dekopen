@@ -1,10 +1,12 @@
-"""Minimal DXF (AC1015, millimetres) writer for machine handoff geometry.
+"""Minimal DXF (AC1027, millimetres) writer for machine handoff geometry.
 
 No ezdxf dependency: the nesting layouts are axis-aligned rectangles plus
 labels, so a deterministic hand-rolled writer keeps the export reproducible
 and reviewable. Sheet files carry the sheet outline plus one closed
 LWPOLYLINE per placed piece with a TEXT label; the bars file lays each
 stock bar out as a horizontal strip with cut marks at cumulative positions.
+AC1027+ stores text as UTF-8 — Spanish piece names ("Juntaquillo", "Ñ",
+"·R") go out verbatim so the machine file reads like the printed pack.
 """
 
 from __future__ import annotations
@@ -27,13 +29,10 @@ def _pairs(*items: object) -> str:
     return "\n".join(str(item) for item in items) + "\n"
 
 
-def _ascii(text: str) -> str:
-    """AC1015 predates UTF-8 — labels go out ASCII-only so strict CAM
-    importers never see mojibake (e.g. '·' arriving as 'Â·')."""
-    return (
-        text.replace("·", "-").replace("⟳", "(rot)")
-        .encode("ascii", "replace").decode("ascii")
-    )
+def _dxf_text(text: str) -> str:
+    """AC1027 speaks UTF-8 natively — only the rotation glyph is traded for
+    an ASCII hint (CAD stroke fonts don't carry U+27F3)."""
+    return text.replace("⟳", "(rot)")
 
 
 def _lwpoly(layer: str, points: Iterable[tuple[Decimal, Decimal]]) -> str:
@@ -65,14 +64,15 @@ def _text(layer: str, x: Decimal, y: Decimal, height: Decimal, content: str) -> 
     return _pairs(
         "0", "TEXT", "100", "AcDbEntity", "8", layer, "100", "AcDbText",
         "10", _fmt(x), "20", _fmt(y), "30", "0",
-        "40", _fmt(height), "1", _ascii(content), "7", "STANDARD",
+        "40", _fmt(height), "1", _dxf_text(content), "7", "STANDARD",
     )
 
 
 def _dxf(entities: str, extmax_x: Decimal, extmax_y: Decimal) -> str:
     header = _pairs(
         "0", "SECTION", "2", "HEADER",
-        "9", "$ACADVER", "1", "AC1015",
+        "9", "$ACADVER", "1", "AC1027",
+        "9", "$DWGCODEPAGE", "3", "UTF-8",
         "9", "$INSUNITS", "70", "4",
         "9", "$EXTMIN", "10", "0", "20", "0", "30", "0",
         "9", "$EXTMAX", "10", _fmt(extmax_x), "20", _fmt(extmax_y), "30", "0",
@@ -107,18 +107,23 @@ def _dxf(entities: str, extmax_x: Decimal, extmax_y: Decimal) -> str:
 
 def _placement_code(piece: dict, codes: dict[str, str] | None) -> str:
     """Printed piece identity: the member/infill code when the caller
-    resolved one, else a short id — never the raw 64-hex hash wall."""
+    resolved one — already unit-scoped (``P01-U01-M01``) so it matches the
+    pack and the CSV row for row — else a short id, never the raw
+    64-hex hash wall."""
     piece_id = str(piece.get("piece_id") or "?")
-    code = piece_id if len(piece_id) <= 12 else piece_id[:10]
-    if codes:
-        code = codes.get(str(piece.get("piece_id") or ""), code)
-    if piece.get("unit_index") is not None:
+    resolved = (codes or {}).get(piece_id)
+    code = resolved or (piece_id if len(piece_id) <= 12 else piece_id[:10])
+    # -U{unit} only when the code itself does not carry the unit scope —
+    # resolved human codes (P01-U02-M03) already do; a bare fallback id does not.
+    if piece.get("unit_index") is not None and "-U" not in code:
         code += f"-U{piece['unit_index']}"
     return code
 
 
 def _sheet_entities(
-    sheet: dict, codes: dict[str, str] | None
+    sheet: dict,
+    codes: dict[str, str] | None,
+    instance: dict[tuple[object, object], str] | None = None,
 ) -> tuple[str, Decimal, Decimal]:
     width = Decimal(str(sheet.get("sheet_width_mm") or 0))
     height = Decimal(str(sheet.get("sheet_height_mm") or 0))
@@ -129,7 +134,12 @@ def _sheet_entities(
         w = Decimal(str(placement.get("width_mm") or 0))
         h = Decimal(str(placement.get("height_mm") or 0))
         entities += _rect("CUT", x, y, w, h)
-        piece = _placement_code(placement, codes)
+        piece = (
+            (instance or {}).get(
+                (sheet.get("sheet_index"), placement.get("sequence"))
+            )
+            or _placement_code(placement, codes)
+        )
         entities += _text(
             "LABEL", x + _LABEL_HEIGHT, y + h / 2, _SHEET_LABEL_HEIGHT,
             f"{piece} {w}x{h}",
@@ -138,7 +148,9 @@ def _sheet_entities(
 
 
 def _bars_entities(
-    bars: list[dict], codes: dict[str, str] | None
+    bars: list[dict],
+    codes: dict[str, str] | None,
+    instance: dict[tuple[object, object], str] | None = None,
 ) -> tuple[str, Decimal]:
     entities = ""
     max_x = Decimal(0)
@@ -174,7 +186,12 @@ def _bars_entities(
             angles = "/".join(
                 str(a) for a in (cut.get("angle_left"), cut.get("angle_right")) if a
             )
-            piece = _placement_code(cut, codes)
+            piece = (
+                (instance or {}).get(
+                    (bar.get("bar_index"), cut.get("sequence"))
+                )
+                or _placement_code(cut, codes)
+            )
             label = f"{piece} {length}"
             if angles:
                 label += f" {angles}"
@@ -187,21 +204,28 @@ def _bars_entities(
 
 
 def dxf_files(
-    optimization: dict, codes: dict[str, str] | None = None
+    optimization: dict,
+    codes: dict[str, str] | None = None,
+    bar_instance: dict[tuple[object, object], str] | None = None,
+    sheet_instance: dict[tuple[object, object], str] | None = None,
 ) -> dict[str, str]:
     """Deterministic machine files: one ``sheet_<n>.dxf`` per nested sheet and
     a single ``bars.dxf`` when the bar plan exists. ``codes`` optionally
     maps piece_id → workshop piece code (M-xx/I-xx) so labels match the
-    printed packs instead of carrying raw hash prefixes."""
+    printed packs instead of carrying raw hash prefixes. ``bar_instance``
+    and ``sheet_instance`` carry the per-instance codes the pack assigned
+    ((bar_index, sequence) / (sheet_index, sequence) → ``P01-U01-M01``):
+    two identical cuts in different bars get different printed codes, the
+    same ones the CSV row and the peel-off label carry."""
     files: dict[str, str] = {}
     for sheet in sorted(
         optimization.get("sheets") or [], key=lambda s: int(s.get("sheet_index") or 0)
     ):
-        entities, width, height = _sheet_entities(sheet, codes)
+        entities, width, height = _sheet_entities(sheet, codes, sheet_instance)
         files[f"sheet_{sheet.get('sheet_index')}.dxf"] = _dxf(entities, width, height)
     bars = (optimization.get("bars") or {}).get("workshop_cut_plan") or []
     if bars:
-        entities, max_x = _bars_entities(bars, codes)
+        entities, max_x = _bars_entities(bars, codes, bar_instance)
         row_count = len(bars)
         files["bars.dxf"] = _dxf(
             entities,

@@ -93,7 +93,7 @@ def project(
 ) -> tuple[GeometryComputation, ManufacturingFactsV1]:
     computation = compute_geometry(node, params)
     assert computation.manufacturing_trace is not None
-    openings = sorted({leaf.opening_type.value for leaf in computation.manufacturing_trace.leaves})
+    openings = sorted({leaf.opening_type for leaf in computation.manufacturing_trace.leaves})
     intents = [
         HandleIntentV1(
             bay_id=leaf.bay_id,
@@ -180,10 +180,12 @@ def test_repetition_changes_identity_but_not_authoritative_dimensions(
     assert first.model_dump() == project(core_node("G6"), demo_60_params, repetition=1)[1].model_dump()
 
 
-def test_sliding_and_steel_authority_fail_closed(demo_60_params: SystemParams) -> None:
+def test_sliding_and_steel_authority_fail_closed(
+    demo_60_params: SystemParams, demo_corredera_60_params: SystemParams,
+) -> None:
     missing_sliding = placement(sliding_leaf_offsets={})
     with pytest.raises(ManufacturingAuthorityError, match="sliding leaf"):
-        project(core_node("G5"), demo_60_params, placement_policy=missing_sliding)
+        project(core_node("G5"), demo_corredera_60_params, placement_policy=missing_sliding)
     computation = compute_geometry(core_node("G6"), demo_60_params)
     assert computation.manufacturing_trace is not None
     with pytest.raises(ManufacturingAuthorityError, match="cut authority"):
@@ -203,7 +205,7 @@ def test_sliding_and_steel_authority_fail_closed(demo_60_params: SystemParams) -
         )
 
 
-def test_overlapping_handle_rules_fail_closed(demo_60_params: SystemParams) -> None:
+def test_overlapping_handle_rules_fail_closed(demo_corredera_60_params: SystemParams) -> None:
     rule: dict[str, object] = {
         "opening_type": BayOpeningType.SLIDING_2L,
         "handle_domain_slot": "PRIMARY",
@@ -218,13 +220,13 @@ def test_overlapping_handle_rules_fail_closed(demo_60_params: SystemParams) -> N
         "slots": [rule, {**rule, "leaf_slot": "L1"}],
     })
     with pytest.raises(ManufacturingAuthorityError, match="ambiguous"):
-        project(core_node("G5"), demo_60_params, handle_policy=wildcard_plus_specific)
+        project(core_node("G5"), demo_corredera_60_params, handle_policy=wildcard_plus_specific)
     duplicated = HandleRequirementPolicyV1.model_validate({
         "policy_id": "HANDLE-DUPLICATED-V1", "version": 1,
         "slots": [{**rule, "leaf_slot": "L1"}, {**rule, "leaf_slot": "L1"}],
     })
     with pytest.raises(ManufacturingAuthorityError, match="ambiguous"):
-        project(core_node("G5"), demo_60_params, handle_policy=duplicated)
+        project(core_node("G5"), demo_corredera_60_params, handle_policy=duplicated)
 
 
 def test_legacy_handle_height_needs_explicit_confirmation(

@@ -1,0 +1,80 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* ============================================================
+ * Sistema v2 — primitivas nuevas (P01). Cada bloque acompaña a su
+ * componente en ui/. La gramática se repite: 1 px de borde, radio ≤4 px,
+ * números en Mono, unidades tenues, el color nunca va solo.
+ * ============================================================ */
+
+/* ---------- formatos de dominio ---------- */
+.fmt-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.fmt-unit {
+  color: var(--text-muted);
+  /* 0.85em de la unidad subordinada, pero nunca bajo el piso §3.1 de 11 px —
+     en contextos de 12 px el em solo caía a 10,6 px. */
+  font-size: max(0.85em, 11px);
+  margin-left: var(--space-2);
+  white-space: nowrap;
+}
+.fmt-code {
+  align-items: center;
+  background: none;
+  border: 0;
+  cursor: copy;
+  display: inline-flex;
+  font-family: var(--font-mono);
+  font-size: inherit;
+  gap: var(--space-4);
+  padding: 0;
+  text-decoration: underline dotted var(--border-strong);
+  text-underline-offset: 3px;
+}
+.fmt-code:hover {
+  color: var(--interactive);
+}
+.fmt-code-hint {
+  color: var(--text-muted);
+  font-size: var(--type-micro);
+  margin-left: var(--space-6);
+}
+
+/* ---------- chip de estado (etiqueta + tono + icono) ---------- */
+.ui-chip {
+  gap: var(--space-6);
+}
+.ui-chip__icon {
+  flex: none;
+  height: 0.75rem;
+  width: 0.75rem;
+}
+.ui-icon {
+  display: inline-block;
+  flex: none;
+  vertical-align: middle;
+}
+.ui-open-glyph {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* ---------- valor desconocido ---------- */
+.ui-unknown {
+  align-items: baseline;
+  display: inline-flex;
+  gap: var(--space-6);
+}
+.ui-unknown__label {
+  color: var(--text-muted);
+  font-size: var(--type-dense);
+}
+.ui-unknown__cause {
+  /* La causa es contenido, no adorno: --text-faint queda bajo AA. */
+  color: var(--text-muted);
+  font-size: var(--type-micro);
+}
+.ui-unknown__action {
+  font-size: var(--type-micro);
+}

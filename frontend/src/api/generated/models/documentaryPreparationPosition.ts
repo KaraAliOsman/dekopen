@@ -42,4 +42,5 @@ export interface DocumentaryPreparationPosition {
   polishing_suggestions: GlassPolishing[];
   production_ready: boolean;
   documentary_ready: boolean;
+  inspector_blocked: boolean;
 }

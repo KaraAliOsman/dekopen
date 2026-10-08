@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { fmtWire } from "../../format";
 
 import type { Solid3D } from "./Product3DScene";
 
@@ -22,7 +23,7 @@ function drawGrain(axis: "u" | "v"): THREE.Texture {
       const at = Math.random() * 256;
       const wave = 4 + Math.random() * 14;
       const alpha = 0.1 + Math.random() * 0.16;
-      ctx.strokeStyle = `rgba(52, 34, 16, ${alpha.toFixed(3)})`;
+      ctx.strokeStyle = `rgba(52, 34, 16, ${fmtWire(alpha, 3)})`;
       ctx.lineWidth = 0.9 + Math.random() * 3.2;
       ctx.beginPath();
       if (axis === "u") {
@@ -131,8 +132,42 @@ function grainAxis(solid: Solid3D): "u" | "v" {
   return "v";
 }
 
-export function solidMaterial(solid: Solid3D, mode: MaterialMode): SolidMaterial {
+/** Member-family surfaces a picked finish can recolor — detail surfaces
+ * (gasket, handle, track, steel) keep their own material even on a foiled
+ * window. Matches the stamp pass in buildScene3D. */
+const TINTABLE_SURFACES: ReadonlySet<string> = new Set([
+  "frame",
+  "sash",
+  "mullion",
+  "bead",
+  "coupler",
+  "threshold",
+]);
+
+export type SolidFace = "exterior" | "interior";
+
+export function solidMaterial(
+  solid: Solid3D,
+  mode: MaterialMode,
+  face: SolidFace = "exterior",
+): SolidMaterial {
   const commercial = mode === "commercial";
+  const material = baseMaterial(solid, commercial);
+  // A declared finish overrides the member-material token: the picked
+  // catalog hex is the authoritative swatch, the grain its texture.
+  const tint = face === "interior" ? (solid.tintInterior ?? solid.tint) : solid.tint;
+  const texture = face === "interior" ? (solid.textureInterior ?? solid.texture) : solid.texture;
+  if (tint && TINTABLE_SURFACES.has(solid.surface)) {
+    material.colorToken = "";
+    material.colorFallback = tint;
+  }
+  if (texture === "WOOD_GRAIN" && TINTABLE_SURFACES.has(solid.surface)) {
+    material.grain = grainAxis(solid);
+  }
+  return material;
+}
+
+function baseMaterial(solid: Solid3D, commercial: boolean): SolidMaterial {
   switch (solid.surface) {
     case "glass":
       return {
@@ -250,6 +285,19 @@ export function solidMaterial(solid: Solid3D, mode: MaterialMode): SolidMaterial
         glass: false,
         detail: false,
       };
+    case "wall":
+      // The Vano context — plain plaster: matte, neutral, never tinted
+      // (the wall is not part of the product model).
+      return {
+        colorToken: "--model3d-wall",
+        colorFallback: "rgb(215,211,200)",
+        roughness: 0.9,
+        metalness: 0,
+        transparent: false,
+        opacity: 1,
+        glass: false,
+        detail: false,
+      };
     default: {
       const response = MEMBER_RESPONSE[solid.material] ?? MEMBER_RESPONSE_DEFAULT;
       return {
@@ -261,8 +309,10 @@ export function solidMaterial(solid: Solid3D, mode: MaterialMode): SolidMaterial
         opacity: 1,
         glass: false,
         detail: false,
-        // Foil is a wood-toned skin over PVC — grain runs along the member.
-        grain: solid.material === "PVC_FOIL" ? grainAxis(solid) : undefined,
+        // Foil reads as grain only when the catalog declares the texture —
+        // a bare foil swatch stays flat and the scene reports it
+        // aproximado (finish_convention), never a simulated laminate.
+        grain: undefined,
       };
     }
   }

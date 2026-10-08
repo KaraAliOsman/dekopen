@@ -1,17 +1,35 @@
-import type { IntentNode, Opening, SlidingLayout, SplitType } from "./intentEditing";
-import { SLIDING_PRESETS } from "./intentEditing";
+import type {
+  IntentNode,
+  Opening,
+  OpeningChoice,
+  SlidingLayout,
+  SpecOptionId,
+  SplitType,
+} from "./intentEditing";
 import {
+  OPTION_SPECS,
+  OPTION_SPEC_KEY,
+  SPEC_KEY_TO_OPTION,
+  SLIDING_PRESETS,
+} from "./intentEditing";
+import {
+  changeOpening,
   findNode,
+  flipBay,
   intentBays,
   moveDivision,
   parentSplitOf,
+  primaryOpeningKey,
   removeDivision,
+  replaceNode,
+  resolvedSlidingLayout,
   splitBay,
   updateBay,
   walkIntent,
 } from "./intentEditing";
 import type { MemberGeometry } from "./members";
 import type { CouplingKind, GraphEdge } from "./assemblyGraph";
+import { fmtWire } from "../../format";
 import {
   alreadyJoined,
   chainEnd,
@@ -20,6 +38,10 @@ import {
   resolveCouplings,
   usedEdges,
 } from "./assemblyGraph";
+
+/** Serializa un mm calculado en el cliente para el contrato del motor
+ * (mismo formato "0.00" que usa el resto del modulo). */
+const mmStr = fmtWire;
 
 /** Compositional product model (product-v2) — modules joined by couplings.
  *
@@ -89,12 +111,26 @@ export type ProductModuleJson = {
   frameless?: FramelessSpecJson;
 };
 
+/** D06: mirrors dekopen_engine.models.ExtraSelection — a chosen accessory. */
+export type ExtraSelectionJson = {
+  sku: string;
+  /** Sides the extra applies to (ensanche / tapajunta); empty = default. */
+  sides?: string[];
+  /** Unit count override for counted extras (mosquitero, aireador). */
+  qty?: number;
+  /** SILL-only fin depth per side. */
+  vuelo_left_mm?: string;
+  vuelo_right_mm?: string;
+};
+
 export type ProductJson = {
   version: "product-v2";
   assembly: {
     modules: ProductModuleJson[];
     couplings: CouplingJson[];
   };
+  /** D06: accessory selections evaluated into sublines/cuts by the engine. */
+  extras?: ExtraSelectionJson[];
 };
 
 export function isProductModel(value: unknown): value is ProductJson {
@@ -124,9 +160,9 @@ export function makeTrapezoidModule(
     contour: {
       vertices: [
         { x_mm: "0", y_mm: "0" },
-        { x_mm: w.toFixed(2), y_mm: "0" },
-        { x_mm: (w - offsetRightMm).toFixed(2), y_mm: h.toFixed(2) },
-        { x_mm: offsetLeftMm.toFixed(2), y_mm: h.toFixed(2) },
+        { x_mm: mmStr(w), y_mm: "0" },
+        { x_mm: mmStr(w - offsetRightMm), y_mm: mmStr(h) },
+        { x_mm: mmStr(offsetLeftMm), y_mm: mmStr(h) },
       ],
       bulges: [null, null, null, null],
     },
@@ -150,11 +186,11 @@ export function makeArchModule(
     contour: {
       vertices: [
         { x_mm: "0", y_mm: "0" },
-        { x_mm: w.toFixed(2), y_mm: "0" },
-        { x_mm: w.toFixed(2), y_mm: h.toFixed(2) },
-        { x_mm: "0", y_mm: h.toFixed(2) },
+        { x_mm: mmStr(w), y_mm: "0" },
+        { x_mm: mmStr(w), y_mm: mmStr(h) },
+        { x_mm: "0", y_mm: mmStr(h) },
       ],
-      bulges: [null, null, riseMm.toFixed(2), null],
+      bulges: [null, null, mmStr(riseMm), null],
     },
     tree,
   };
@@ -206,6 +242,10 @@ export function makeBowProduct(options: {
   heightMm: number;
   angleDeg: number;
   opening?: Opening;
+  /** P06 — opening per module slot (index 0..moduleCount-1); entries
+   * missing or null fall back to `opening`. A canonical bow opens its
+   * lateral panes and keeps the center fixed. */
+  moduleOpenings?: (Opening | null)[];
   glassThicknessMm?: string;
   glassSpec?: string;
   glassArticleSku?: string | null;
@@ -216,6 +256,7 @@ export function makeBowProduct(options: {
     heightMm,
     angleDeg,
     opening = "FIXED",
+    moduleOpenings = [],
     glassThicknessMm = "4.00",
     glassSpec = "4",
     glassArticleSku = null,
@@ -229,14 +270,20 @@ export function makeBowProduct(options: {
     remaining -= width;
     modules.push({
       id: `m${index}`,
-      width_mm: width.toFixed(2),
-      height_mm: heightMm.toFixed(2),
-      tree: makeBayTree(`m${index}`, opening, glassThicknessMm, glassSpec, glassArticleSku),
+      width_mm: mmStr(width),
+      height_mm: mmStr(heightMm),
+      tree: makeBayTree(
+        `m${index}`,
+        moduleOpenings[index - 1] ?? opening,
+        glassThicknessMm,
+        glassSpec,
+        glassArticleSku,
+      ),
     });
     if (index > 1) {
       couplings.push({
         id: `c${index - 1}`,
-        angle_deg: angleDeg.toFixed(1),
+        angle_deg: fmtWire(angleDeg, 1),
         coupler_profile_sku: null,
       });
     }
@@ -325,14 +372,64 @@ export interface ElevationLayoutMm {
   columns: ElevationColumnMm[];
 }
 
+/** Plan headings mirroring the engine's `_plan_geometry` walk exactly:
+ * front-chain roots advance in declaration order; each INLINE coupling
+ * between consecutive roots adds its signed deflection (positive turns the
+ * next module counterclockwise). Stacked members inherit their column's
+ * heading. */
+export function moduleHeadingsDeg(product: ProductJson): Map<string, number> {
+  const modules = product.assembly.modules;
+  const { pairs, stackRoot } = resolveStacks(product);
+  const pairCoupling = new Map<string, CouplingJson>();
+  for (const { coupling, pair } of pairs) {
+    const rootA = stackRoot.get(pair[0]) ?? pair[0];
+    const rootB = stackRoot.get(pair[1]) ?? pair[1];
+    if (rootA === rootB) continue;
+    const key = [rootA, rootB].sort().join("|");
+    if (!pairCoupling.has(key)) pairCoupling.set(key, coupling);
+  }
+  const headings = new Map<string, number>();
+  let heading = 0;
+  let previousId: string | null = null;
+  for (const module of modules) {
+    if (stackRoot.has(module.id)) continue;
+    if (previousId !== null) {
+      const coupling = pairCoupling.get([previousId, module.id].sort().join("|"));
+      // kind absent = the inline chain default (CouplingJson contract).
+      if (coupling && (coupling.kind ?? "INLINE") === "INLINE") {
+        heading += Number(coupling.angle_deg);
+      }
+    }
+    headings.set(module.id, heading);
+    previousId = module.id;
+  }
+  return headings;
+}
+
 /** Member placement mirroring the engine's `elevation_layout` exactly:
  * non-stacked roots become front columns in declaration order at their
  * declared widths; a stacked member projects into its root column centred,
- * sill = partner's top edge (cycle-safe, degrades to the baseline). */
-export function elevationLayoutMm(product: ProductJson): ElevationLayoutMm {
+ * sill = partner's top edge (cycle-safe, degrades to the baseline).
+ *
+ * `projected` is the bow/bay orthographic front view ("vista real de
+ * frente"): every column foreshortens to `w·|cos(heading)|` — the bow's
+ * angled wings draw with their escorzo instead of unrolled widths. A
+ * heading past ±90° means the module folds back (the plan strip is the
+ * authoritative view for direction); its apparent front width is still
+ * the projection's absolute extent, never a negative dimension. */
+export function elevationLayoutMm(
+  product: ProductJson,
+  options?: { projected?: boolean },
+): ElevationLayoutMm {
   const modules = product.assembly.modules;
   const { stackParent, stackRoot } = resolveStacks(product);
   const byId = new Map(modules.map((module) => [module.id, module]));
+  const headings = options?.projected ? moduleHeadingsDeg(product) : null;
+  const foreshorten = (moduleId: string): number => {
+    if (!headings) return 1;
+    const heading = headings.get(moduleId) ?? 0;
+    return Math.abs(Math.cos((heading * Math.PI) / 180));
+  };
   const sills = new Map<string, number>();
   const memberSill = (id: string, seen: Set<string>): number => {
     const cached = sills.get(id);
@@ -350,11 +447,15 @@ export function elevationLayoutMm(product: ProductJson): ElevationLayoutMm {
   let cursor = 0;
   for (const root of modules) {
     if (stackRoot.has(root.id)) continue;
-    const columnW = Number(root.width_mm);
+    const columnW = Number(root.width_mm) * foreshorten(root.id);
     let top = 0;
     for (const member of modules) {
       if (member.id !== root.id && stackRoot.get(member.id) !== root.id) continue;
-      const w = Number(member.width_mm);
+      // A stacked member shares its column's plan heading — it foreshortens
+      // by the root's cosine, not by its own (stacked members hold no plan
+      // heading of their own).
+      const anchor = stackRoot.get(member.id) ?? member.id;
+      const w = Number(member.width_mm) * foreshorten(anchor);
       const h = Number(member.height_mm);
       const sill = memberSill(member.id, new Set([member.id]));
       top = Math.max(top, sill + h);
@@ -567,9 +668,10 @@ export function removeUnit(product: ProductJson, moduleId: string): ProductJson 
       const earlier = incident[0]!.index <= incident[1]!.index ? incident[0]! : incident[1]!;
       nextCouplings.splice(earlier.index, 0, {
         id: earlier.coupling.id,
-        angle_deg: (
-          Number(incident[0]!.coupling.angle_deg) + Number(incident[1]!.coupling.angle_deg)
-        ).toFixed(1),
+        angle_deg: fmtWire(
+          Number(incident[0]!.coupling.angle_deg) + Number(incident[1]!.coupling.angle_deg),
+          1,
+        ),
         coupler_profile_sku:
           incident[0]!.coupling.coupler_profile_sku ?? incident[1]!.coupling.coupler_profile_sku,
         kind: "INLINE",
@@ -621,7 +723,7 @@ export function insertModuleBetween(
   };
   const first: CouplingJson = {
     id: resolved.coupling.id,
-    angle_deg: halfAngle.toFixed(1),
+    angle_deg: fmtWire(halfAngle, 1),
     coupler_profile_sku: resolved.coupling.coupler_profile_sku,
     kind: "INLINE",
     modules: [left.id, inserted.id],
@@ -629,7 +731,7 @@ export function insertModuleBetween(
   };
   const second: CouplingJson = {
     id: nextCouplingId(product),
-    angle_deg: (totalAngle - halfAngle).toFixed(1),
+    angle_deg: fmtWire(totalAngle - halfAngle, 1),
     coupler_profile_sku: resolved.coupling.coupler_profile_sku,
     kind: "INLINE",
     modules: [inserted.id, right.id],
@@ -839,8 +941,8 @@ export function scaledContour(
   const n = contour.vertices.length;
   return {
     vertices: contour.vertices.map((v) => ({
-      x_mm: ((Number(v.x_mm) - minX) * sx).toFixed(2),
-      y_mm: ((Number(v.y_mm) - minY) * sy).toFixed(2),
+      x_mm: mmStr((Number(v.x_mm) - minX) * sx),
+      y_mm: mmStr((Number(v.y_mm) - minY) * sy),
     })),
     bulges: contour.bulges.map((b, i) => {
       if (b === null || b === undefined) return null;
@@ -851,7 +953,7 @@ export function scaledContour(
       const len = Math.hypot(dx, dy) || 1;
       // unit normal of the chord, scaled: |(-dy,dx)/len ⊙ (sx,sy)|
       const factor = Math.hypot((-dy / len) * sx, (dx / len) * sy);
-      return (Number(b) * factor).toFixed(2);
+      return mmStr(Number(b) * factor);
     }),
   };
 }
@@ -899,17 +1001,17 @@ export function resizeModuleSeam(
     module.id === left.id
       ? {
           ...module,
-          width_mm: leftMm.toFixed(2),
+          width_mm: mmStr(leftMm),
           ...(module.contour
-            ? { contour: scaledContour(module.contour, leftMm.toFixed(2), module.height_mm) }
+            ? { contour: scaledContour(module.contour, mmStr(leftMm), module.height_mm) }
             : {}),
         }
       : module.id === right.id
         ? {
             ...module,
-            width_mm: rightMm.toFixed(2),
+            width_mm: mmStr(rightMm),
             ...(module.contour
-              ? { contour: scaledContour(module.contour, rightMm.toFixed(2), module.height_mm) }
+              ? { contour: scaledContour(module.contour, mmStr(rightMm), module.height_mm) }
               : {}),
           }
         : module,
@@ -1008,15 +1110,39 @@ export function setAllModuleHeights(product: ProductJson, heightMm: string): Pro
   };
 }
 
+/** Single-module height — the arrow-nudge contract edits the selected
+ * module only (≠ setAllModuleHeights, which sizes the whole elevation). */
+export function setModuleHeight(
+  product: ProductJson,
+  moduleId: string,
+  heightMm: string,
+): ProductJson {
+  return {
+    ...product,
+    assembly: {
+      ...product.assembly,
+      modules: product.assembly.modules.map((module) =>
+        module.id !== moduleId
+          ? module
+          : {
+              ...module,
+              height_mm: heightMm,
+              ...(module.contour
+                ? { contour: scaledContour(module.contour, module.width_mm, heightMm) }
+                : {}),
+            },
+      ),
+    },
+  };
+}
+
 export function equalizeModuleWidths(product: ProductJson): ProductJson {
   const modules = product.assembly.modules;
   const total = totalModuleWidth(product);
   const share = Math.round((total / modules.length) * 100) / 100;
   const nextModules = modules.map((module, index) => {
     const widthMm =
-      index === modules.length - 1
-        ? (total - share * (modules.length - 1)).toFixed(2)
-        : share.toFixed(2);
+      index === modules.length - 1 ? mmStr(total - share * (modules.length - 1)) : mmStr(share);
     return {
       ...module,
       width_mm: widthMm,
@@ -1059,7 +1185,7 @@ export function scaleModuleWidths(product: ProductJson, totalMm: string): Produc
     assembly: {
       ...product.assembly,
       modules: modules.map((module) => {
-        const widthMm = ((map.get(module.id) ?? 1) / 100).toFixed(2);
+        const widthMm = mmStr((map.get(module.id) ?? 1) / 100);
         return {
           ...module,
           width_mm: widthMm,
@@ -1185,35 +1311,90 @@ export function setModuleTree(
 export function setModuleOpening(
   product: ProductJson,
   moduleId: string,
-  opening: Opening,
+  opening: OpeningChoice | string,
 ): ProductJson {
   const module = product.assembly.modules.find((item) => item.id === moduleId);
   if (!module) return product;
+  // Accept the AI-facing emitted key ("PRIMARY:TURN:LEFT:OUTWARD",
+  // "DOOR:...", "PRIMARY:SLIDE") as well as the editor option id and the
+  // legacy enum — the catalog's opening_options keys are the contract.
+  const optionId =
+    (OPTION_SPEC_KEY as Record<string, string>)[opening] !== undefined
+      ? (opening as OpeningChoice)
+      : SPEC_KEY_TO_OPTION[opening];
+  if (!optionId) return product;
+  const spec = OPTION_SPECS[optionId as SpecOptionId] ?? null;
+  const unitKind = spec?.unit_kind;
   function withOpening(node: IntentNode): IntentNode {
     if (node.type === "BAY") {
+      if (spec) {
+        // Spec option: declare opening/leaves on the bay; the unit kind
+        // lands on the unit root below. A panel sku only survives on a
+        // door leaf.
+        const cleared: IntentNode = {
+          ...node,
+          opening_type: null,
+          opening: spec.opening ? { ...spec.opening } : null,
+          leaves:
+            spec.leaves?.map((leaf) => ({
+              slot: leaf.slot,
+              opening: { ...leaf.opening },
+            })) ?? null,
+          door_handedness: null,
+          sliding_layout: null,
+        };
+        if (spec.unit_kind !== "DOOR") cleared.panel_article_sku = null;
+        return cleared;
+      }
       // Panels are only an engine input for DOOR_ENTRY; a stale panel sku on a
       // non-door bay would linger invisibly after switching back. Doors carry
       // declared handedness (DIN: hinges LEFT unless stated) — a stale value
       // on a non-door bay is likewise cleared.
       const cleared =
         opening === "DOOR_ENTRY"
-          ? { ...node, opening_type: opening, door_handedness: node.door_handedness ?? "LEFT" }
-          : { ...node, opening_type: opening, panel_article_sku: null, door_handedness: null };
+          ? {
+              ...node,
+              opening_type: optionId as Opening,
+              opening: null,
+              leaves: null,
+              door_handedness: node.door_handedness ?? "LEFT",
+            }
+          : {
+              ...node,
+              opening_type: optionId as Opening,
+              opening: null,
+              leaves: null,
+              panel_article_sku: null,
+              door_handedness: null,
+            };
       // The opening picker selects presets — a stale declared layout would
       // keep winning over the new preset. "SLIDING" alone needs a layout to
       // evaluate, so it seeds the 2-leaf topology the user then edits.
       return {
         ...cleared,
-        sliding_layout: opening === "SLIDING" ? structuredClone(SLIDING_PRESETS.SLIDING_2L!) : null,
+        sliding_layout:
+          optionId === "SLIDING" ? structuredClone(SLIDING_PRESETS.SLIDING_2L!) : null,
       };
     }
     return { ...node, children: node.children?.map(withOpening) };
   }
   const singleChild = module.tree.children?.at(0);
-  const tree =
+  let tree =
     module.tree.type === "ROOT" && singleChild && module.tree.children?.length === 1
       ? { ...module.tree, children: [withOpening(singleChild)] }
       : withOpening(module.tree);
+  // The unit kind is a declaration on the unit root — the node directly
+  // under ROOT — so door leaf specs inside a split still compose.
+  if (unitKind) {
+    const top = tree.type === "ROOT" ? tree.children?.at(0) : tree;
+    if (top) {
+      const patched = { ...top, unit_kind: unitKind };
+      tree =
+        tree.type === "ROOT"
+          ? { ...tree, children: tree.children?.map((child) => (child === top ? patched : child)) }
+          : patched;
+    }
+  }
   return replaceModule(product, moduleId, { ...module, tree });
 }
 
@@ -1252,9 +1433,12 @@ export function modulePrimaryBay(module: ProductModuleJson): IntentNode | null {
   return bays[0] ?? null;
 }
 
-export function moduleOpening(module: ProductModuleJson): Opening {
+/** The module's leading opening: the legacy enum for enum bays, the
+ * emitted spec key (e.g. "TURN:LEFT:OUTWARD") for spec bays. */
+export function moduleOpening(module: ProductModuleJson): string {
   const bay = modulePrimaryBay(module);
-  return bay?.opening_type ?? "FIXED";
+  if (!bay) return "FIXED";
+  return primaryOpeningKey(bay);
 }
 
 /** Commercial glass SKU on every bay of a module — pricing authority. */
@@ -1283,6 +1467,32 @@ export function setModuleGlass(
 
 export function moduleGlassSku(module: ProductModuleJson): string | null {
   return modulePrimaryBay(module)?.glass_article_sku ?? null;
+}
+
+/** Module-level glazing patch — the structured-composition/surcharge
+ * counterpart of setModuleGlass: every bay of the module takes the patch's
+ * declared keys (absent keys leave the bay's values untouched). */
+export function setModuleGlazing(
+  product: ProductJson,
+  moduleId: string,
+  patch: Partial<
+    Pick<
+      IntentNode,
+      | "glass_article_sku"
+      | "glass_spec"
+      | "glass_thickness_mm"
+      | "glass_composition"
+      | "glass_options"
+    >
+  >,
+): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  if (!module) return product;
+  function withGlazing(node: IntentNode): IntentNode {
+    if (node.type === "BAY") return { ...node, ...patch };
+    return { ...node, children: node.children?.map(withGlazing) };
+  }
+  return replaceModule(product, moduleId, { ...module, tree: withGlazing(module.tree) });
 }
 
 /** Glazing thickness on every bay of a module (the physical bead slot).
@@ -1359,7 +1569,7 @@ function baySpanOnAxis(
   vertical: boolean,
   moduleSpanMm: number,
   members: MemberGeometry,
-): { spanMm: number; isTopBay: boolean } | null {
+): { spanMm: number; originMm: number; isTopBay: boolean } | null {
   const pathTo = (node: IntentNode): { node: IntentNode; index: number }[] | null => {
     if (node.id === bayId) return [];
     for (const [index, child] of (node.children ?? []).entries()) {
@@ -1388,7 +1598,7 @@ function baySpanOnAxis(
     if (index === 0) hi = Math.min(hi, centerline - mullionHalf);
     else lo = Math.max(lo, centerline + mullionHalf);
   }
-  return { spanMm: Math.max(hi - lo, 0), isTopBay: path.length === 0 };
+  return { spanMm: Math.max(hi - lo, 0), originMm: lo, isTopBay: path.length === 0 };
 }
 
 /** "Dividir" — split a module's bay region with a catalog mullion.
@@ -1402,7 +1612,16 @@ function baySpanOnAxis(
 export function splitModuleBay(
   product: ProductJson,
   moduleId: string,
-  division: { type: SplitType; mullionSku: string; offsetMm?: string; bayId?: string },
+  division: {
+    type: SplitType;
+    mullionSku: string;
+    offsetMm?: string;
+    bayId?: string;
+    /** IA2 — divide the bay into N equal parts (2..8): the wire's `parts`
+     * form of split_bay; the engine owns the per-cut offsets so the model
+     * never invents a measure. */
+    parts?: number;
+  },
   members: MemberGeometry,
 ): ProductJson {
   const module = product.assembly.modules.find((item) => item.id === moduleId);
@@ -1412,31 +1631,71 @@ export function splitModuleBay(
   const bay = division.bayId
     ? (intentBays(root).find((item) => item.id === division.bayId) ?? null)
     : modulePrimaryBay(module);
-  if (!bay || moduleOpening(module) === "DOOR_ENTRY") return product;
+  if (!bay || moduleOpening(module) === "DOOR_ENTRY" || moduleOpening(module).startsWith("DOOR:")) {
+    return product;
+  }
   const size = division.type === "SPLIT_V" ? Number(module.width_mm) : Number(module.height_mm);
   if (!Number.isFinite(size) || size <= 0) return product;
-  const region = baySpanOnAxis(root, bay.id, division.type === "SPLIT_V", size, members);
-  if (region === null || region.spanMm <= 0) return product;
-  // The top bay's split becomes the new root — its default centers the
-  // module span, a pure product coordinate with no member geometry in it.
-  // Deeper bays store bay-local offsets, so centering halves the bay's own
-  // span — which only real (declared) member geometry may bound.
-  const offset = division.offsetMm ?? (region.isTopBay ? size / 2 : region.spanMm / 2).toFixed(2);
   const used = new Set(walkIntent(module.tree).map((node) => node.id));
   const freeId = (base: string): string => {
     let index = 1;
     while (used.has(`${base}${index}`)) index += 1;
     return `${base}${index}`;
   };
+  const mintIds = (bayId: string) => {
+    const ids = {
+      split: freeId(`${module.id}-s${division.type === "SPLIT_V" ? "v" : "h"}`),
+      secondBay: freeId(`${bayId}-b`),
+    };
+    used.add(ids.split);
+    used.add(ids.secondBay);
+    return ids;
+  };
+  const parts =
+    division.parts !== undefined && Number.isInteger(division.parts)
+      ? Math.trunc(division.parts)
+      : 0;
+  if (parts >= 2 && parts <= 8) {
+    // N equal parts = N-1 sequential cuts: each cut slices span/(n-k+1) off
+    // the front of the bay region that keeps growing to the right — the
+    // same expansion the backend validator applies, so sim == apply.
+    try {
+      let tree = root;
+      let currentBay = bay.id;
+      for (let cut = 1; cut < parts; cut += 1) {
+        const region = baySpanOnAxis(tree, currentBay, division.type === "SPLIT_V", size, members);
+        if (region === null || region.spanMm <= 0) return product;
+        // The root split stores the absolute centerline; deeper splits store
+        // the region-local offset — the same convention the backend sim uses.
+        const local = region.spanMm / (parts - cut + 1);
+        const offset = mmStr(region.isTopBay ? region.originMm + local : local);
+        const ids = mintIds(currentBay);
+        tree = splitBay(
+          tree,
+          currentBay,
+          { type: division.type, offsetMm: offset, mullionSku: division.mullionSku },
+          ids,
+        );
+        currentBay = ids.secondBay;
+      }
+      return replaceModule(product, moduleId, { ...module, tree });
+    } catch {
+      return product;
+    }
+  }
+  const region = baySpanOnAxis(root, bay.id, division.type === "SPLIT_V", size, members);
+  if (region === null || region.spanMm <= 0) return product;
+  // The top bay's split becomes the new root — its default centers the
+  // module span, a pure product coordinate with no member geometry in it.
+  // Deeper bays store bay-local offsets, so centering halves the bay's own
+  // span — which only real (declared) member geometry may bound.
+  const offset = division.offsetMm ?? mmStr(region.isTopBay ? size / 2 : region.spanMm / 2);
   try {
     const tree = splitBay(
       module.tree.type === "ROOT" ? (module.tree.children?.[0] ?? module.tree) : module.tree,
       bay.id,
       { type: division.type, offsetMm: offset, mullionSku: division.mullionSku },
-      {
-        split: freeId(`${module.id}-s${division.type === "SPLIT_V" ? "v" : "h"}`),
-        secondBay: freeId(`${bay.id}-b`),
-      },
+      mintIds(bay.id),
     );
     return replaceModule(product, moduleId, { ...module, tree });
   } catch {
@@ -1551,4 +1810,288 @@ export function addStackedUnit(
     },
   };
   return linkModules(withMember, baseId, "top", member.id, "bottom", "STACKED");
+}
+
+/* ---------- IA2 — ops de vano/división del contrato tipado ----------
+ * Cada función porta la misma regla que backend/projects/design_ops_sim.py
+ * ejecuta en la simulación del asistente: la IA propone sobre el sim y la
+ * UI aplica sobre el árbol real — nunca dos semánticas distintas. */
+
+/** Patch directo sobre una hoja concreta del módulo (spec fields:
+ * glazing, herrajes, handle_height). Reusa updateBay — mismas reglas
+ * de identidad que el clipboard de spec. */
+export function updateModuleBay(
+  product: ProductJson,
+  moduleId: string,
+  bayId: string,
+  patch: Partial<IntentNode>,
+): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  if (!module) return product;
+  try {
+    const tree = updateBay(module.tree, bayId, patch);
+    return replaceModule(product, moduleId, { ...module, tree });
+  } catch {
+    return product;
+  }
+}
+
+/** Apertura de UNA hoja — changeOpening ya resuelve el spec OPTION_SPECS,
+ * limpia herrajes heredados y exige top-bay para puertas. */
+export function setBayOpening(
+  product: ProductJson,
+  moduleId: string,
+  bayId: string,
+  opening: string,
+): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  if (!module) return product;
+  // IA2 — la op wire puede citar la key D03 del catálogo
+  // ("PRIMARY:TILT_TURN:LEFT:INWARD"), el id de opción del editor o el enum
+  // legacy; changeOpening sólo acepta las dos últimas.
+  const optionId =
+    (OPTION_SPEC_KEY as Record<string, string>)[opening] !== undefined
+      ? opening
+      : SPEC_KEY_TO_OPTION[opening];
+  if (!optionId) return product;
+  try {
+    const tree = changeOpening(module.tree, bayId, optionId as Parameters<typeof changeOpening>[2]);
+    return replaceModule(product, moduleId, { ...module, tree });
+  } catch {
+    return product;
+  }
+}
+
+/** flip_handing — espejo de UNA hoja (manilla al otro lado, recorrido
+ * invertido, hojas del par intercambiadas). No-op honesto cuando la hoja
+ * no tiene nada espejable. */
+export function flipModuleBay(product: ProductJson, moduleId: string, bayId: string): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  const node = module ? findNode(module.tree, bayId) : null;
+  if (!module || !node || node.type !== "BAY") return product;
+  const flipped = flipBay(node);
+  if (flipped === null) return product;
+  try {
+    const tree = replaceNode(module.tree, bayId, flipped);
+    return replaceModule(product, moduleId, { ...module, tree });
+  } catch {
+    return product;
+  }
+}
+
+/** set_sliding_layout — preset u orientación de recorrido sobre hojas
+ * correderas existentes. `preset` cambia el layout entero;
+ * `primaryIndex` fija qué panel viaja delante. */
+export function setBaySlidingPreset(
+  product: ProductJson,
+  moduleId: string,
+  bayId: string,
+  change: { preset?: string; primaryIndex?: number },
+): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  const node = module ? findNode(module.tree, bayId) : null;
+  if (!module || !node || node.type !== "BAY") return product;
+  const resolved = resolvedSlidingLayout(node);
+  if (resolved === null) return product;
+  const nextLayout: SlidingLayout = change.preset
+    ? structuredClone(SLIDING_PRESETS[change.preset] ?? resolved)
+    : { ...resolved, panels: resolved.panels.map((panel) => ({ ...panel })) };
+  if (change.primaryIndex !== undefined) {
+    nextLayout.primary_index = change.primaryIndex;
+  }
+  const isPresetOnly = !change.preset;
+  const patch: Partial<IntentNode> = isPresetOnly
+    ? { sliding_layout: nextLayout }
+    : { opening_type: change.preset as IntentNode["opening_type"], sliding_layout: nextLayout };
+  return updateModuleBay(product, moduleId, bayId, patch);
+}
+
+/** set_travel — marca el panel `slot` de la corredera como MOVING|FIXED. */
+export function setBayTravel(
+  product: ProductJson,
+  moduleId: string,
+  bayId: string,
+  slot: number,
+  kind: "MOVING" | "FIXED",
+): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  const node = module ? findNode(module.tree, bayId) : null;
+  if (!module || !node || node.type !== "BAY") return product;
+  const resolved = resolvedSlidingLayout(node);
+  if (resolved === null || slot < 0 || slot >= resolved.panels.length) return product;
+  const panels = resolved.panels.map((panel, index) =>
+    index === slot ? { ...panel, kind } : { ...panel },
+  );
+  const layout: SlidingLayout = {
+    tracks: resolved.tracks,
+    panels,
+    primary_index: resolved.primary_index ?? 0,
+  };
+  return updateModuleBay(product, moduleId, bayId, { sliding_layout: layout });
+}
+
+/** equalize_bays — reparto igualitario del vano libre entre las hojas que
+ * una cadena de divisiones del mismo eje acota. Misma matemática que
+ * sim.apply_equalize: la cadena (split + splits hijos del mismo tipo)
+ * comparte el vano declarado por baySpanOnAxis de la región raíz. */
+export function equalizeModuleBays(
+  product: ProductJson,
+  moduleId: string,
+  members: MemberGeometry,
+): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  if (!module) return product;
+  const tree = structuredClone(module.tree);
+  const root = tree.type === "ROOT" ? (tree.children?.[0] ?? tree) : tree;
+  const moduleWidth = Number(module.width_mm);
+  const moduleHeight = Number(module.height_mm);
+
+  const pathTo = (node: IntentNode, id: string): { node: IntentNode; index: number }[] | null => {
+    if (node.id === id) return [];
+    for (const [index, child] of (node.children ?? []).entries()) {
+      const rest = pathTo(child, id);
+      if (rest !== null) return [{ node, index }, ...rest];
+    }
+    return null;
+  };
+
+  let mutated = false;
+  for (const node of walkIntent(root)) {
+    if (node.type !== "SPLIT_V" && node.type !== "SPLIT_H") continue;
+    const vertical = node.type === "SPLIT_V";
+    // Solo la raíz de cada cadena: un split con antecesor del mismo eje lo
+    // reparte su propia cadena padre, no una región inventada.
+    const path = pathTo(root, node.id) ?? [];
+    if (path.some(({ node: parent }) => parent.type === node.type)) continue;
+    const chain: IntentNode[] = [node];
+    let current = node;
+    for (;;) {
+      const next = (current.children ?? []).find((child) => child.type === node.type);
+      if (!next) break;
+      chain.push(next);
+      current = next;
+    }
+    const span = vertical ? moduleWidth : moduleHeight;
+    if (!Number.isFinite(span) || span <= 0) return product;
+    const mullion = (vertical ? members.mullionV : members.mullionH)?.faceWidthMm ?? 0;
+    const region = baySpanOnAxis(root, node.id, vertical, span, members);
+    if (region === null) return product;
+    const lo = span - region.spanMm === 0 ? 0 : undefined;
+    // La región real: lo = origen local del split (baySpanOnAxis solo da
+    // span; el origen lo recalcula la misma caminata de antecesores).
+    const originOf = (targetId: string): number | null => {
+      const targetPath = pathTo(root, targetId) ?? [];
+      let origin = 0;
+      for (const { node: parent, index } of targetPath) {
+        if (parent.type !== "SPLIT_V" && parent.type !== "SPLIT_H") continue;
+        if ((parent.type === "SPLIT_V") !== vertical) continue;
+        const offset = Number(parent.split_offset_mm);
+        const half =
+          ((parent.type === "SPLIT_V" ? members.mullionV : members.mullionH)?.faceWidthMm ?? 0) / 2;
+        if (!Number.isFinite(offset)) return null;
+        if (index === 1) origin = origin + offset + half;
+      }
+      return origin;
+    };
+    const lo_ = originOf(node.id);
+    if (lo_ === null) return product;
+    void lo;
+    const count = chain.length;
+    const share = (region.spanMm - count * mullion) / (count + 1);
+    if (share <= 0) return product;
+    for (const [slot, split] of chain.entries()) {
+      const own = slot === 0 ? lo_ : originOf(split.id);
+      if (own === null) return product;
+      const centerline = lo_ + (slot + 1) * share + (slot + 1) * mullion - mullion / 2;
+      const offset = centerline - own;
+      if (offset <= 0) return product;
+      split.split_offset_mm = mmStr(offset);
+      mutated = true;
+    }
+  }
+  if (!mutated) return product;
+  return replaceModule(product, moduleId, { ...module, tree });
+}
+
+/** set_bay_size — fija el vano libre de la hoja moviendo la división que
+ * la acota en el eje pedido (o la medida del módulo cuando no hay división
+ * en ese eje: el vano ES el módulo). Devuelve el producto o un motivo. */
+export function resizeModuleBay(
+  product: ProductJson,
+  moduleId: string,
+  bayId: string,
+  mm: number,
+  axis: "V" | "H" | undefined,
+  members: MemberGeometry,
+): ProductJson | "hoja_invalida" | "medida_invalida" {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  if (!module || !Number.isFinite(mm) || mm <= 0) return "hoja_invalida";
+  const tree = structuredClone(module.tree);
+  const root = tree.type === "ROOT" ? (tree.children?.[0] ?? tree) : tree;
+  const bay = findNode(root, bayId);
+  if (!bay || bay.type !== "BAY") return "hoja_invalida";
+
+  let useAxis = axis;
+  if (useAxis === undefined) {
+    const parent = parentSplitOf(root, bayId);
+    useAxis = parent?.type === "SPLIT_V" ? "V" : parent ? "H" : undefined;
+  }
+  if (useAxis === undefined) {
+    if (!Number.isFinite(Number(module.width_mm))) return "hoja_invalida";
+    return replaceModule(product, moduleId, { ...module, width_mm: mmStr(mm), tree });
+  }
+  const vertical = useAxis === "V";
+  const span = vertical ? Number(module.width_mm) : Number(module.height_mm);
+  if (!Number.isFinite(span) || span <= 0) return "hoja_invalida";
+  const region = baySpanOnAxis(root, bayId, vertical, span, members);
+  if (region === null || region.spanMm <= 0 || mm >= region.spanMm) return "medida_invalida";
+
+  const pathTo = (node: IntentNode, id: string): { node: IntentNode; index: number }[] | null => {
+    if (node.id === id) return [];
+    for (const [index, child] of (node.children ?? []).entries()) {
+      const rest = pathTo(child, id);
+      if (rest !== null) return [{ node, index }, ...rest];
+    }
+    return null;
+  };
+  const bayPath = pathTo(root, bayId) ?? [];
+  let bound: { node: IntentNode; index: number } | null = null;
+  for (const { node: parent, index } of [...bayPath].reverse()) {
+    if (parent.type !== "SPLIT_V" && parent.type !== "SPLIT_H") continue;
+    if ((parent.type === "SPLIT_V") !== vertical) continue;
+    bound = { node: parent, index };
+    break;
+  }
+  if (bound === null) {
+    const key = vertical ? "width_mm" : "height_mm";
+    return replaceModule(product, moduleId, { ...module, [key]: mmStr(mm), tree });
+  }
+  const mullion = (vertical ? members.mullionV : members.mullionH)?.faceWidthMm ?? 0;
+  const half = mullion / 2;
+  const loRegion = span - region.spanMm === 0 ? 0 : 0; // el origen de la hoja se recalcula abajo
+  void loRegion;
+  const originOf = (targetId: string): number | null => {
+    const targetPath = pathTo(root, targetId) ?? [];
+    let origin = 0;
+    for (const { node: parent, index } of targetPath) {
+      if (parent.type !== "SPLIT_V" && parent.type !== "SPLIT_H") continue;
+      if ((parent.type === "SPLIT_V") !== vertical) continue;
+      const offset = Number(parent.split_offset_mm);
+      const parentHalf =
+        ((parent.type === "SPLIT_V" ? members.mullionV : members.mullionH)?.faceWidthMm ?? 0) / 2;
+      if (!Number.isFinite(offset)) return null;
+      if (index === 1) origin = origin + offset + parentHalf;
+    }
+    return origin;
+  };
+  const bayOrigin = originOf(bayId);
+  if (bayOrigin === null) return "medida_invalida";
+  const centerline =
+    bound.index === 0 ? bayOrigin + mm + half : bayOrigin + region.spanMm - mm - half;
+  const parentOrigin = bound.node.id === root.id ? 0 : originOf(bound.node.id);
+  if (parentOrigin === null) return "medida_invalida";
+  const offset = centerline - parentOrigin;
+  if (offset <= 0) return "medida_invalida";
+  bound.node.split_offset_mm = mmStr(offset);
+  return replaceModule(product, moduleId, { ...module, tree });
 }

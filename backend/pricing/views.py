@@ -236,14 +236,27 @@ class OperationsView(APIView):
     def get(self,request):
         with scope(request,('OWNER','ESTIMATOR')) as (token,tenant,org):
             with commercial_backend():
-                condition = '' if tenant.active_organization.role=='OWNER' else ' AND operation.requested_by=%s'
-                parameters = [org] if not condition else [org,token.user_id]
+                conditions = []
+                parameters = [org]
+                if tenant.active_organization.role != 'OWNER':
+                    conditions.append(' AND operation.requested_by=%s')
+                    parameters.append(token.user_id)
+                state = request.query_params.get('state')
+                if state:
+                    if state not in ('PREVIEW','PENDING','APPLIED','REJECTED','WITHDRAWN'):
+                        raise contract_error(400,'validation_error','Revisa los campos y los valores ingresados.')
+                    conditions.append(' AND operation.state=%s')
+                    parameters.append(state)
+                project_id = request.query_params.get('project_id')
+                if project_id:
+                    conditions.append(' AND operation.project_id=%s')
+                    parameters.append(project_id)
                 result = rows('SELECT operation.*,project.code AS project_code,project.name AS project_name,'
                               'project.client_name AS client_name '
                               'FROM public.pricing_operations operation '
                               'JOIN public.projects project ON project.id=operation.project_id '
                               'AND project.org_id=operation.org_id '
-                              'WHERE operation.org_id=%s'+condition+
+                              'WHERE operation.org_id=%s'+''.join(conditions)+
                               ' ORDER BY operation.created_at DESC,operation.id LIMIT 100',parameters)
                 output = [price_response(operation_public(item)) for item in result]
         return Response(output)

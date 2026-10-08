@@ -5,6 +5,9 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { OrgBrandingWriteRequestDocPaperSize } from "./orgBrandingWriteRequestDocPaperSize";
+import type { OrgBrandingWriteRequestDocTerms } from "./orgBrandingWriteRequestDocTerms";
+import type { OrgBrandingWriteRequestWorkshopLabelFormat } from "./orgBrandingWriteRequestWorkshopLabelFormat";
 
 export interface OrgBrandingWriteRequest {
   /**
@@ -32,4 +35,30 @@ export interface OrgBrandingWriteRequest {
    * @nullable
    */
   brand_email?: string | null;
+  brand_color?: string | null;
+  doc_dekopen_credit?: boolean;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$
+   */
+  vano_spread_tolerance_mm?: string | null;
+  doc_paper_size?:
+    | (typeof OrgBrandingWriteRequestDocPaperSize)[keyof typeof OrgBrandingWriteRequestDocPaperSize]
+    | null;
+  workshop_label_format?:
+    | (typeof OrgBrandingWriteRequestWorkshopLabelFormat)[keyof typeof OrgBrandingWriteRequestWorkshopLabelFormat]
+    | null;
+  /**
+   * @minimum 1
+   * @maximum 365
+   */
+  remnant_alert_days?: number;
+  /** @nullable */
+  doc_terms?: OrgBrandingWriteRequestDocTerms;
+  /**
+   * @minimum 1
+   * @maximum 365
+   * @nullable
+   */
+  doc_validity_days?: number | null;
 }

@@ -5,7 +5,9 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import type { CatalogProfileRoleEnum } from "./catalogProfileRoleEnum";
+import type { CatalogItemRequestFields } from "./catalogItemRequestFields";
+import type { CatalogItemRoleEnum } from "./catalogItemRoleEnum";
+import type { EntityEnum } from "./entityEnum";
 
 export interface CatalogItemRequest {
   /**
@@ -13,16 +15,18 @@ export interface CatalogItemRequest {
    * @maxLength 40
    */
   key: string;
-  /**
-   * @minLength 1
-   * @maxLength 100
-   */
-  sku: string;
+  entity?: EntityEnum;
+  fields?: CatalogItemRequestFields;
+  /** @maxLength 100 */
+  sku?: string;
   /** @maxLength 255 */
   name?: string;
-  role: CatalogProfileRoleEnum;
-  /** @pattern ^-?\d{0,8}(?:\.\d{0,2})?$ */
-  face_width_mm: string;
+  role?: CatalogItemRoleEnum;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,8}(?:\.\d{0,2})?$
+   */
+  face_width_mm?: string | null;
   /**
    * @nullable
    * @pattern ^-?\d{0,8}(?:\.\d{0,2})?$

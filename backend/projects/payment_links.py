@@ -12,15 +12,18 @@ no provider mutation is retried after an uncertain outcome — recovery is a GET
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
+
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from authentication.errors import contract_error
-from billing.flow import FlowClient, FlowError
+from billing.flow import FlowClient, FlowError, client_for, mock_enabled
 from documents.repository import documentary_backend
 from pricing.repository import rows
 from projects.payments import _deal
@@ -28,9 +31,19 @@ from projects.receipts import issue_receipt
 from projects.service import project_row
 
 _LINK_KINDS = ("ANTICIPO", "PARCIAL", "SALDO")
+# TTL de referencia del link de pago — decisión registrada en
+# docs/decisions/valores-por-defecto.md.
+_LINK_TTL = timedelta(hours=72)
 
 
 def _public_link(row: dict) -> dict:
+    expires_at = row.get("expires_at")
+    live_statuses = ("DISPATCHING", "PENDING", "UNCERTAIN")
+    expired = bool(
+        expires_at
+        and expires_at <= timezone.now()
+        and row["status"] in live_statuses
+    )
     return {
         "id": str(row["id"]),
         "operation_key": row["operation_key"],
@@ -41,6 +54,10 @@ def _public_link(row: dict) -> dict:
         "status": row["status"],
         "environment": row["environment"],
         "url": row["url"],
+        "expires_at": expires_at.isoformat()
+        if hasattr(expires_at, "isoformat")
+        else expires_at,
+        "expired": expired,
         "project_payment_id": str(row["project_payment_id"]) if row["project_payment_id"] else None,
         "created_at": row["created_at"].isoformat()
         if hasattr(row["created_at"], "isoformat")
@@ -55,12 +72,8 @@ def _environment(api_url: str) -> str:
     return "sandbox" if api_url == "https://sandbox.flow.cl/api" else "production"
 
 
-def _client(integration: dict) -> FlowClient:
-    return FlowClient(
-        api_url=integration["api_url"],
-        api_key=integration["api_key"],
-        secret_key=integration["secret_key"],
-    )
+def _client(integration: dict):
+    return client_for(integration)
 
 
 def get_integration(*, org_id: UUID) -> dict:
@@ -72,10 +85,11 @@ def get_integration(*, org_id: UUID) -> dict:
             [str(org_id)],
         )
     if not found:
-        return {"configured": False}
+        return {"configured": False, "provider_mode": "mock" if mock_enabled() else "live"}
     row = found[0]
     return {
         "configured": True,
+        "provider_mode": "mock" if mock_enabled() else "live",
         "api_url": row["api_url"],
         "api_key_preview": row["api_key"][:4] + "…" + row["api_key"][-2:],
         "payer_return_url": row["payer_return_url"],
@@ -132,6 +146,15 @@ def save_integration(*, org_id: UUID, data: dict) -> dict:
     return get_integration(org_id=org_id)
 
 
+_MOCK_INTEGRATION = {
+    "api_url": "https://sandbox.flow.cl/api",
+    "api_key": "simulated",
+    "secret_key": "simulated",
+    "payer_return_url": None,
+    "enabled": True,
+}
+
+
 def _integration_for_link(link_row: dict) -> dict:
     found = rows(
         "SELECT * FROM public.org_payment_integrations "
@@ -139,6 +162,10 @@ def _integration_for_link(link_row: dict) -> dict:
         [str(link_row["org_id"])],
     )
     if not found:
+        # En modo simulado el proveedor ES el mock — no exige credenciales
+        # reales de Flow para recorrer el cobro de punta a punta.
+        if mock_enabled():
+            return dict(_MOCK_INTEGRATION)
         raise FlowError("flow_not_configured")
     return found[0]
 
@@ -206,13 +233,21 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
             "WHERE org_id=%s AND provider='FLOW' AND enabled",
             [str(org_id)],
         )
+        if not integration and mock_enabled():
+            # FLOW_WS_MOCK=1 — el proveedor simulado no necesita la fila de
+            # credenciales reales; el dominio sigue viendo una integración.
+            integration = [dict(_MOCK_INTEGRATION)]
         if not integration:
             raise contract_error(
                 422,
                 "flow_not_configured",
                 "Configura la integración Flow en Ajustes primero.",
             )
-        return_url = integration[0]["payer_return_url"] or (
+        # P10 — el link puede sellar su propio retorno (el portal cobra
+        # volviendo a la cotización); el default sigue siendo la URL de la
+        # integración o la genérica del frontend.
+        requested_return = (data.get("return_url") or "").strip() or None
+        return_url = requested_return or integration[0]["payer_return_url"] or (
             settings.BILLING_FRONTEND_ORIGIN.rstrip("/") + "/pago/retorno"
             if settings.BILLING_FRONTEND_ORIGIN
             else ""
@@ -247,6 +282,7 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
             "SELECT * FROM public.project_payment_links "
             "WHERE org_id=%s AND project_id=%s "
             "AND status IN ('DISPATCHING','PENDING','UNCERTAIN') "
+            "AND (expires_at IS NULL OR expires_at > now()) "
             "ORDER BY created_at, id",
             [str(org_id), str(project_id)],
         )
@@ -277,8 +313,9 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
             """
             INSERT INTO public.project_payment_links(
                 org_id, project_id, operation_key, kind, amount, payer_email,
-                subject, status, environment, created_by, deal_total, deal_currency)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,'DISPATCHING',%s,%s,%s,%s)
+                subject, status, environment, created_by, deal_total, deal_currency,
+                expires_at, payer_return_url)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,'DISPATCHING',%s,%s,%s,%s,%s,%s)
             RETURNING *
             """,
             [
@@ -293,6 +330,8 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
                 str(actor_id),
                 deal_total,
                 deal_currency,
+                (timezone.now() + _LINK_TTL).isoformat(),
+                requested_return,
             ],
         )[0]
         integration = integration[0]
@@ -410,7 +449,7 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
             over = Decimal(str(link["amount"])) - (
                 Decimal(str(live_deal["total"])) - Decimal(str(collected))
             )
-        note = f"Cobro en línea — link {link['id']}"
+        note = "Cobro en línea — link de pago"
         if over > 0:
             note += f" — excede el saldo por {over} (conciliar devolución)"
         payment = rows(
@@ -430,7 +469,7 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
                 str(Decimal(str(link["amount"]))),
                 f"FLOW {verified['flowOrder']}",
                 note,
-                None,
+                link["created_by"],
                 timezone.now(),
             ],
         )
@@ -484,20 +523,86 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
     return {"link": _public_link(link)}
 
 
+def _webhook_scope(*, link_id: UUID | None = None, flow_token: str | None = None) -> dict | None:
+    """Resolve the webhook's tenant + delegating actor through the SECURITY
+    DEFINER lookup — the public callback carries no JWT, so the org-scoped
+    policy cannot see the row until claims are asserted."""
+    found = rows(
+        "SELECT * FROM private.payment_link_public_scope(%s, %s)",
+        [str(link_id) if link_id else None, flow_token],
+    )
+    return found[0] if found else None
+
+
+def _delegate_claims(created_by) -> None:
+    """The callback proves itself via the opaque link id; the settle then
+    runs with the link creator's membership — the same delegation the
+    portal approval transition asserts on the decision's creator."""
+    if not created_by:
+        raise FlowError("payment_link_not_found")
+    claims = json.dumps({"sub": str(created_by)}, separators=(",", ":"))
+    rows("SELECT set_config('request.jwt.claims', %s, true)", [claims])
+
+
 def confirm_link(*, link_id: UUID, token: str) -> dict:
     """Public webhook: resolve the org through the opaque link id, then verify
-    server-side with the org's own credentials — callback fields are untrusted."""
-    with documentary_backend():
+    server-side with the org's own credentials — callback fields are untrusted.
+
+    One outer transaction: the delegated claims are transaction-local, so the
+    verified settle must commit inside the same tx that asserted them."""
+    with transaction.atomic(), documentary_backend():
+        scope = _webhook_scope(link_id=link_id)
+        if scope is None:
+            raise FlowError("payment_link_not_found")
+        _delegate_claims(scope["created_by"])
         found = rows(
-            "SELECT org_id FROM public.project_payment_links WHERE id=%s", [str(link_id)]
+            "SELECT * FROM public.project_payment_links WHERE org_id=%s AND id=%s",
+            [str(scope["org_id"]), str(link_id)],
         )
-    if not found:
-        raise FlowError("payment_link_not_found")
-    org_id = found[0]["org_id"]
-    integration = _integration_for_link(found[0])
-    client = _client(integration)
-    verified = _payment(client.payment_status(token))
-    return _settle(org_id=org_id, link_id=link_id, verified=verified, client=client)
+        if not found:
+            raise FlowError("payment_link_not_found")
+        link = found[0]
+        org_id = link["org_id"]
+        integration = _integration_for_link(link)
+        client = _client(integration)
+        verified = _payment(client.payment_status(token))
+        return _settle(org_id=org_id, link_id=link_id, verified=verified, client=client)
+
+
+def confirm_simulated(*, token: str) -> dict:
+    """Retorno del checkout simulado (``FLOW_WS_MOCK=1``): el mismo camino
+    del ``urlConfirmation`` real — resuelve el link por su token de
+    proveedor, re-consulta el estado al cliente (aquí el mock) y liquida
+    por ``_settle``, jamás por los campos del POST."""
+    if not mock_enabled():
+        raise FlowError("flow_payment_not_found")
+    with transaction.atomic(), documentary_backend():
+        scope = _webhook_scope(flow_token=token)
+        if scope is None:
+            raise FlowError("payment_link_not_found")
+        _delegate_claims(scope["created_by"])
+        found = rows(
+            "SELECT * FROM public.project_payment_links WHERE flow_token=%s",
+            [str(token)],
+        )
+        if not found:
+            raise FlowError("payment_link_not_found")
+        link = found[0]
+        org_id = link["org_id"]
+        integration = _integration_for_link(link)
+        # El retorno sellado en el link gana: el portal cobra volviendo a
+        # la cotización; sin override, la URL de la integración.
+        return_url = (
+            link.get("payer_return_url")
+            or integration.get("payer_return_url")
+            or f"{settings.BILLING_FRONTEND_ORIGIN}/pago/retorno"
+        )
+        client = _client(integration)
+        verified = _payment(client.payment_status(token))
+        settled = _settle(
+            org_id=org_id, link_id=link["id"], verified=verified, client=client
+        )
+    return {**settled, "payer_return_url": return_url}
 
 
 def recover_link(*, org_id: UUID, link_id: UUID) -> dict:

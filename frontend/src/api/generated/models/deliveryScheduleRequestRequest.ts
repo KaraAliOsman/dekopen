@@ -25,6 +25,15 @@ export interface DeliveryScheduleRequestRequest {
   contact_phone?: string;
   /** @maxLength 200 */
   installer_name?: string;
+  /** @nullable */
+  installer_user_id?: string | null;
+  /** @nullable */
+  crew_id?: string | null;
+  /**
+   * @minimum 1
+   * @nullable
+   */
+  route_order?: number | null;
   /** @maxLength 500 */
   notes?: string;
   /**

@@ -95,16 +95,17 @@ def test_missing_stock_and_default_steel_exact_authority(real_rows: RLSFixtures)
         org = real_rows.organizations["A"]
         with pytest.raises(MissingStockAuthority):
             repo.profile_stock(real_rows.demo_system, org, "UNKNOWN", "WHITE")
-        steel, ix = repo.reinforcement_stock(real_rows.demo_system, org, "MARCO", None, "WHITE")
+        steel, ix = repo.reinforcement_stock(real_rows.demo_system, org, "MARCO", None)
         assert steel.workshop_sku == "ACERO-MARCO"
         assert steel.material.value == "STEEL"
         assert steel.stock_length_mm == Decimal("6000.00")
         assert ix is None
         explicit, _ = repo.reinforcement_stock(
-            real_rows.demo_system, org, "MARCO", steel.workshop_sku, "WHITE")
+            real_rows.demo_system, org, "MARCO", steel.workshop_sku)
         assert explicit == steel
+        assert steel.color == "WHITE"
         with pytest.raises(MissingStockAuthority):
-            repo.reinforcement_stock(real_rows.demo_system, org, "MARCO", "MISSING", "WHITE")
+            repo.reinforcement_stock(real_rows.demo_system, org, "MARCO", "MISSING")
 
 
 def test_cutting_profile_scope_default_and_explicit_visibility(real_rows: RLSFixtures) -> None:

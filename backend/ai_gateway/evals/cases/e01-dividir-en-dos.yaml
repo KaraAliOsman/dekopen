@@ -1,0 +1,20 @@
+id: E01
+view: editor
+via: design_assist
+surface: position
+fixture: editor
+product_variant: vacia
+prompt: "divide la ventana en dos hojas iguales"
+expected: "2 bahías separadas por un montante con eje en 750 mm. Aperturas: las que tenían (FIXED) o una aclaración."
+expect:
+  any:
+    - product:
+        splits:
+          - type: SPLIT_V
+            offset_mm: 750
+        bays_count: 2
+        every_bay:
+          opening_type: FIXED
+    - behavior:
+        asks_clarification: true
+        no_ops_accepted: true

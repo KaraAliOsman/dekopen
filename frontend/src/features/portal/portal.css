@@ -5,7 +5,7 @@
   min-height: 100vh;
   display: grid;
   place-items: start center;
-  padding: clamp(1rem, 5vw, 4rem) var(--space-4);
+  padding: clamp(1rem, 5vw, 4rem) var(--space-16);
   background: var(--theme-bg-canvas);
   color: var(--theme-text-primary);
 }
@@ -16,9 +16,9 @@
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
-  padding: var(--space-6);
+  padding: var(--space-32);
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-16);
 }
 
 .portal-card h1 {
@@ -40,12 +40,12 @@
   margin: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: var(--space-3) var(--space-4);
+  gap: var(--space-12) var(--space-16);
 }
 
 .portal-facts > div {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-4);
 }
 
 .portal-facts dt {
@@ -68,9 +68,9 @@
 .portal-doc {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-8);
   justify-self: start;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
   color: var(--theme-accent-strong);
@@ -83,15 +83,23 @@
   text-decoration: underline;
 }
 
+/* El acento de marca llega validado AA sobre papel — en tema oscuro un
+   acento profundo cae bajo 4.5 sobre el panel, así que el texto enlazado
+   usa la tinta de acento del tema (pálida en oscuro). La marca sigue
+   presente en bordes, rellenos y logo. */
+[data-theme="dark"] .portal-doc {
+  color: var(--theme-accent-ink);
+}
+
 .portal-pay {
   display: inline-flex;
   align-items: center;
   justify-self: start;
-  margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-4);
+  margin-top: var(--space-12);
+  padding: var(--space-8) var(--space-16);
   border-radius: var(--radius-md);
   background: var(--theme-accent-strong);
-  color: var(--theme-surface-panel);
+  color: var(--theme-accent-onfill);
   font-weight: 600;
   text-decoration: none;
 }
@@ -103,19 +111,19 @@
 
 .portal-decision__error {
   margin: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-8) var(--space-12);
   border-radius: var(--radius-md);
   background: var(--theme-danger-soft);
-  color: var(--theme-danger);
+  color: var(--danger-ink);
   font-size: var(--text-s);
 }
 
 .portal-decided {
   margin: 0;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-12) var(--space-16);
   border-radius: var(--radius-md);
   background: var(--theme-accent-soft);
-  color: var(--theme-accent-ink);
+  color: var(--info-ink);
   font-weight: 500;
 }
 
@@ -153,9 +161,9 @@
 
 .portal-decision {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-12);
   border-top: 1px solid var(--theme-border-subtle);
-  padding-top: var(--space-4);
+  padding-top: var(--space-16);
 }
 
 .portal-decision label {
@@ -165,7 +173,7 @@
 }
 
 .portal-decision input {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
   background: var(--theme-surface-panel);
@@ -189,27 +197,27 @@
 .portal-proposal {
   width: min(62rem, 100%);
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-24);
 }
 
 .portal-proposal__head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--space-4);
-  padding-bottom: var(--space-4);
+  gap: var(--space-16);
+  padding-bottom: var(--space-16);
   border-bottom: 2px solid var(--theme-accent);
 }
 
 .portal-proposal__org {
   margin: 0;
   font-size: var(--text-title);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 .portal-proposal__taxid {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-4) 0 0;
   font-size: var(--text-xs);
   color: var(--theme-text-muted);
 }
@@ -222,15 +230,15 @@
 }
 
 .portal-proposal__notes {
-  margin: var(--space-5) 0;
-  padding: var(--space-4);
+  margin: var(--space-24) 0;
+  padding: var(--space-16);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
   background: var(--theme-surface-panel);
 }
 
 .portal-proposal__notes h2 {
-  margin: 0 0 var(--space-2);
+  margin: 0 0 var(--space-8);
   font-size: var(--text-m);
 }
 
@@ -252,7 +260,7 @@
 }
 
 .portal-proposal__ref {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-4) 0 0;
   font-size: var(--text-s);
   color: var(--theme-text-secondary);
 }
@@ -261,14 +269,14 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: var(--space-4);
+  gap: var(--space-16);
   flex-wrap: wrap;
 }
 
 .portal-totals {
   margin: 0;
   display: flex;
-  gap: var(--space-5);
+  gap: var(--space-24);
   text-align: right;
 }
 
@@ -286,12 +294,12 @@
 
 .portal-totals__gross dd {
   font-size: var(--text-display);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
 .portal-proposal__positions h2 {
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-12);
   font-size: var(--text-s);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -301,14 +309,14 @@
 .portal-positions {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-  gap: var(--space-3);
+  gap: var(--space-12);
 }
 
 .portal-position {
   display: grid;
   grid-template-columns: minmax(0, 7.5rem) 1fr;
-  gap: var(--space-3);
-  padding: var(--space-3);
+  gap: var(--space-12);
+  padding: var(--space-12);
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
@@ -320,15 +328,14 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   /* Studio backdrop — white PVC on near-white canvas washed the render out. */
-  background:
-    radial-gradient(120% 90% at 50% 25%, rgba(255, 255, 255, 0.75), transparent 62%),
-    linear-gradient(180deg, var(--theme-surface-hover) 0%, var(--theme-border-subtle) 100%);
+  background: var(--theme-surface-hover);
 }
 
 .portal-position__views {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-raise);
   display: inline-flex;
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
@@ -340,24 +347,24 @@
 .portal-view-toggle {
   border: 0;
   background: transparent;
-  padding: 2px 7px;
-  font-size: 10px;
+  padding: var(--space-2) var(--space-6);
+  font-size: var(--type-micro);
   font-weight: 600;
-  color: var(--theme-text-muted);
+  color: var(--theme-text-secondary);
   cursor: pointer;
 }
 
 .portal-view-toggle[data-active="true"] {
   background: var(--theme-accent);
-  color: var(--theme-surface-panel);
+  color: var(--theme-accent-onfill);
 }
 
 .portal-position__count {
-  margin-left: 6px;
-  padding: 0 6px;
-  border-radius: 999px;
+  margin-left: var(--space-6);
+  padding: 0 var(--space-6);
+  border-radius: var(--r-pill);
   background: var(--theme-accent-soft);
-  color: var(--theme-accent-ink);
+  color: var(--info-ink);
   font-size: var(--text-xs);
   font-weight: 600;
 }
@@ -383,10 +390,10 @@
 }
 
 .portal-position__facts {
-  margin: var(--space-2) 0;
+  margin: var(--space-8) 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-8) var(--space-16);
 }
 
 .portal-position__facts dt {
@@ -403,7 +410,7 @@
   margin: 0;
   display: flex;
   justify-content: space-between;
-  gap: var(--space-2);
+  gap: var(--space-8);
   font-size: var(--text-s);
 }
 
@@ -419,16 +426,16 @@
 .portal-proposal__commercial {
   display: flex;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-16);
   flex-wrap: wrap;
-  padding: var(--space-4);
+  padding: var(--space-16);
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
 }
 
 .portal-terms h3 {
-  margin: 0 0 var(--space-1);
+  margin: 0 0 var(--space-4);
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -442,7 +449,7 @@
 .portal-payment {
   margin: 0;
   display: flex;
-  gap: var(--space-5);
+  gap: var(--space-24);
   text-align: right;
 }
 
@@ -460,7 +467,7 @@
 
 .portal-payment__state {
   display: inline-block;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-8);
   border-radius: var(--radius-md);
   font-weight: 600;
   font-size: var(--text-s);
@@ -473,16 +480,16 @@
 
 .portal-payment__state--partial {
   background: var(--theme-warning-soft);
-  color: var(--theme-warning);
+  color: var(--warn-ink);
 }
 
 .portal-payment__state--paid {
   background: var(--theme-accent-soft);
-  color: var(--theme-accent-ink);
+  color: var(--info-ink);
 }
 
 .portal-decision textarea {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
   background: var(--theme-surface-panel);
@@ -498,8 +505,8 @@
 }
 
 .portal-proposal__brand {
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
+  margin-top: var(--space-16);
+  padding-top: var(--space-12);
   border-top: 1px solid var(--theme-border-subtle);
   font-size: var(--text-xs);
   color: var(--theme-text-muted);
@@ -511,7 +518,7 @@
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
-  padding: var(--space-4);
+  padding: var(--space-16);
 }
 
 /* hero — the customer's own flagship unit rendered large under the masthead */
@@ -519,8 +526,8 @@
   margin: 0;
   display: grid;
   justify-items: center;
-  gap: var(--space-2);
-  padding: var(--space-4);
+  gap: var(--space-8);
+  padding: var(--space-16);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
   background: var(--theme-surface-panel);
@@ -534,9 +541,13 @@
   max-width: 100%;
 }
 
+.portal-proposal__hero-render {
+  position: relative;
+}
+
 .portal-proposal__hero figcaption {
   font-size: var(--text-xs);
-  color: var(--theme-text-muted);
+  color: var(--theme-text-secondary);
 }
 
 /* decision recap — identity, total and validity next to the buttons, so the
@@ -547,7 +558,7 @@
 }
 
 .portal-decision__recap {
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-12) var(--space-16);
   border: 1px solid var(--theme-border-subtle);
   border-left: 3px solid var(--theme-accent);
   border-radius: var(--radius-md);
@@ -558,7 +569,7 @@
   margin: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-8) var(--space-16);
 }
 
 .portal-decision__recap dt {
@@ -573,7 +584,7 @@
 }
 
 .portal-decision__hint {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-8) 0 0;
   font-size: var(--text-s);
   color: var(--theme-text-secondary);
 }
@@ -584,22 +595,22 @@
 
 .portal-decided__state {
   font-weight: 600;
-  margin-bottom: var(--space-1) !important;
+  margin-bottom: var(--space-4) !important;
 }
 
 /* Decision progress — Propuesta → Decisión → Producción */
 .portal-steps {
   display: flex;
-  gap: var(--space-2);
+  gap: var(--space-8);
   list-style: none;
-  margin: var(--space-4) 0;
+  margin: var(--space-16) 0;
   padding: 0;
   counter-reset: portal-step;
 }
 .portal-step {
   flex: 1;
   position: relative;
-  padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-4) + 1.4rem);
+  padding: var(--space-8) var(--space-12) var(--space-8) calc(var(--space-16) + 1.4rem);
   border: 1px solid var(--theme-border);
   border-radius: var(--radius-m);
   font-size: var(--text-s);
@@ -609,7 +620,7 @@
 .portal-step::before {
   content: counter(portal-step);
   position: absolute;
-  left: var(--space-2);
+  left: var(--space-8);
   top: 50%;
   transform: translateY(-50%);
   width: 1.4rem;
@@ -629,25 +640,26 @@
 .portal-step[data-state="done"]::before {
   content: "✓";
   background: var(--theme-accent);
-  color: var(--theme-surface-panel);
+  color: var(--theme-accent-onfill);
 }
 .portal-step[data-state="current"] {
   border-color: var(--theme-accent);
-  box-shadow: 0 0 0 1px var(--theme-accent);
+  outline: 1px solid var(--theme-accent);
+  outline-offset: -1px;
   color: var(--theme-text);
   font-weight: 600;
 }
 .portal-step[data-state="current"]::before {
   background: var(--theme-accent);
-  color: var(--theme-surface-panel);
+  color: var(--theme-accent-onfill);
 }
 .portal-step[data-state="declined"] {
-  border-color: var(--theme-warning, #b45309);
+  border-color: var(--theme-warning);
   color: var(--theme-text);
 }
 .portal-step[data-state="declined"]::before {
   content: "↺";
-  background: var(--theme-warning, #b45309);
+  background: var(--theme-warning);
   color: var(--theme-surface-panel);
 }
 
@@ -656,7 +668,7 @@
 @media (max-width: 640px) {
   .portal-proposal__head {
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-12);
   }
   .portal-proposal__refs {
     text-align: left;
@@ -664,7 +676,7 @@
   .portal-totals,
   .portal-payment {
     flex-wrap: wrap;
-    gap: var(--space-4);
+    gap: var(--space-16);
     text-align: left;
   }
   .portal-position {
@@ -677,7 +689,7 @@
     flex-direction: column;
   }
   .portal-card {
-    padding: var(--space-4);
+    padding: var(--space-16);
   }
   .portal-proposal__hero svg,
   .portal-proposal__hero img,
@@ -687,5 +699,365 @@
   .portal-page .projects-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+/* P08 — el cliente pidió cambios: estado intermedio naranja (requiere
+ * persona), el enlace sigue vivo para aprobar/rechazar después. */
+.portal-decided[data-state="changes"] {
+  background: var(--theme-warning-soft);
+  border-color: var(--theme-warning);
+  color: var(--theme-text);
+}
+
+.portal-step[data-state="changes"] {
+  border-color: var(--theme-warning);
+  color: var(--theme-text);
+}
+
+.portal-step[data-state="changes"]::before {
+  content: "↺";
+  background: var(--theme-warning);
+  color: var(--theme-surface-panel);
+}
+
+/* P10 — identidad del emisor, estados dedicados, zoom, alternativas,
+   evidencia de decisión y pago gateado (móvil primero). */
+
+.portal-proposal__issuer {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: start;
+}
+
+/* Páginas de estado — el enlace muere con dignidad: qué pasó y con quién
+   hablar, con la marca del fabricante arriba. */
+.portal-state {
+  padding: var(--space-16);
+  border: 1px solid var(--theme-border-subtle);
+  border-left: 3px solid var(--theme-accent);
+  border-radius: var(--radius-lg);
+  background: var(--theme-surface-panel);
+}
+
+.portal-state__title {
+  margin: 0 0 var(--space-8);
+  font-size: var(--type-title-l);
+  line-height: var(--type-title-l-lh);
+}
+
+.portal-state__body {
+  margin: 0;
+  font-size: var(--text-body);
+}
+
+.portal-state__contact {
+  margin: var(--space-12) 0 0;
+  color: var(--theme-text-secondary);
+}
+
+.portal-state__follow {
+  margin-top: var(--space-16);
+  /* primary-action usa --theme-surface-panel como tinta — en tema oscuro ese
+   * token es oscuro y falla AA sobre la marca; brandOnFill decide la tinta. */
+  color: var(--theme-accent-onfill);
+}
+
+.portal-daysleft {
+  /* La marca como texto falla AA en oscuro cuando brand_color es oscuro —
+   * accent-ink es el rol "tinta de acento" que adapta por tema. */
+  color: var(--theme-accent-ink);
+  font-weight: 600;
+}
+
+/* Zoom — lightbox full-viewport, paneo por arrastre y pinch táctil. */
+.portal-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast);
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.portal-zoom__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: color-mix(in srgb, var(--g-950) 82%, transparent);
+  cursor: zoom-out;
+}
+
+.portal-zoom__bar {
+  position: relative;
+  z-index: var(--z-raise);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-16);
+  background: var(--g-950);
+  color: var(--paper);
+}
+
+.portal-zoom__title {
+  font-size: var(--text-s);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-zoom__tools {
+  display: flex;
+  gap: var(--space-4);
+  flex-shrink: 0;
+}
+
+.portal-zoom__tools button {
+  min-width: 2rem;
+  padding: var(--space-4) var(--space-8);
+  border: 1px solid color-mix(in srgb, var(--paper) 30%, transparent);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.portal-zoom__tools button:hover {
+  background: color-mix(in srgb, var(--paper) 12%, transparent);
+}
+
+.portal-zoom__stage {
+  position: relative;
+  z-index: var(--z-raise);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+
+.portal-zoom__stage:active {
+  cursor: grabbing;
+}
+
+.portal-zoom__content {
+  transform-origin: center;
+  max-width: min(92vw, 900px);
+}
+
+.portal-zoom__content svg,
+.portal-zoom__content img,
+.portal-zoom__content canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 82vh;
+}
+
+/* El render pide "tócame" sin romper el flujo — overlay hermano del
+   render (no envolvente) para no anidar controles interactivos. */
+.portal-position__zoom {
+  position: absolute;
+  inset: 0;
+  z-index: calc(var(--z-base) + 1);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: zoom-in;
+}
+
+.portal-position__zoomhint {
+  position: absolute;
+  left: var(--space-8);
+  bottom: var(--space-8);
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-md);
+  /* Fondo sólido: el translúcido queda ilegible sobre renders claros y el
+   * detector AA no evalúa color-mix — papel sobre g-950 siempre pasa. */
+  background: var(--g-950);
+  color: var(--paper);
+  font-size: var(--text-xs);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.portal-position__zoom:hover .portal-position__zoomhint,
+.portal-position__zoom:focus-visible .portal-position__zoomhint {
+  opacity: 1;
+}
+
+.portal-position__viewname {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-xs);
+  color: var(--theme-text-secondary);
+}
+
+/* Alternativas — banda lateral ámbar, nunca confundida con lo incluido. */
+.portal-options > h2 {
+  color: var(--warn-ink);
+}
+
+.portal-options__note {
+  margin: 0 0 var(--space-8);
+  font-size: var(--text-s);
+  color: var(--theme-text-secondary);
+}
+
+.portal-position[data-option="true"] {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--theme-warning-soft) 40%, var(--theme-surface-panel));
+}
+
+.portal-option-tag {
+  display: inline-block;
+  margin-right: var(--space-8);
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-md);
+  background: var(--theme-warning-soft);
+  color: var(--warn-ink);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.portal-option-note {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-xs);
+  color: var(--warn-ink);
+}
+
+.portal-condlist {
+  margin: 0;
+  display: grid;
+  gap: var(--space-8);
+}
+
+.portal-condlist div {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 1fr;
+  gap: var(--space-8);
+}
+
+.portal-condlist dt {
+  font-size: var(--text-xs);
+  color: var(--theme-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.portal-condlist dd {
+  margin: 0;
+  font-size: var(--text-s);
+}
+
+/* Pago — el CTA vive dentro del bloque comercial, con su aviso de simulación. */
+.portal-paybox {
+  display: grid;
+  gap: var(--space-8);
+  align-content: start;
+  min-width: 14rem;
+}
+
+.portal-paybox__label {
+  font-size: var(--text-xs);
+  color: var(--theme-text-muted);
+}
+
+.portal-paybox input {
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--theme-surface-panel);
+  color: var(--theme-text-primary);
+  font: inherit;
+}
+
+.portal-paybox__sim {
+  margin: 0;
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-md);
+  background: var(--theme-warning-soft);
+  color: var(--warn-ink);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+/* Decisión — aceptación literal, alternativas marcables y evidencia visible. */
+.portal-decision__options {
+  margin: 0;
+  padding: var(--space-8) var(--space-12);
+  border: 1px dashed var(--theme-warning);
+  border-radius: var(--radius-md);
+}
+
+.portal-decision__options legend {
+  padding: 0 var(--space-4);
+  font-size: var(--text-s);
+  font-weight: 600;
+  color: var(--warn-ink);
+}
+
+.portal-decision__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4) 0;
+  font-size: var(--text-s);
+}
+
+.portal-decision__accept {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--theme-accent);
+  border-radius: var(--radius-md);
+  background: var(--theme-accent-soft);
+  font-size: var(--text-s);
+  font-weight: 500;
+}
+
+.portal-decision__accept input {
+  margin-top: 0.2em;
+  flex-shrink: 0;
+}
+
+.portal-evidence {
+  margin: var(--space-8) 0 0 !important;
+  padding: var(--space-8) var(--space-12);
+  border-left: 3px solid var(--theme-accent);
+  background: var(--theme-surface-panel);
+  border-radius: var(--radius-md);
+  font-size: var(--text-s);
+}
+
+.portal-evidence__label {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--theme-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-4);
+}
+
+.portal-return__amount {
+  font-size: var(--text-m);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .portal-zoom__title {
+    display: none;
+  }
+  .portal-zoom__bar {
+    justify-content: flex-end;
+  }
+  .portal-condlist div {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
   }
 }

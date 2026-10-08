@@ -9,6 +9,7 @@
 /**
  * * `PENDING` - PENDING
  * * `ACCEPTED` - ACCEPTED
+ * * `OBSERVED` - OBSERVED
  * * `REJECTED` - REJECTED
  */
 export type SiiEnvioStatusEnum = (typeof SiiEnvioStatusEnum)[keyof typeof SiiEnvioStatusEnum];
@@ -16,5 +17,6 @@ export type SiiEnvioStatusEnum = (typeof SiiEnvioStatusEnum)[keyof typeof SiiEnv
 export const SiiEnvioStatusEnum = {
   PENDING: "PENDING",
   ACCEPTED: "ACCEPTED",
+  OBSERVED: "OBSERVED",
   REJECTED: "REJECTED",
 } as const;

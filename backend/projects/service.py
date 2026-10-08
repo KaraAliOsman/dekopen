@@ -9,7 +9,7 @@ from django.db import connection
 from psycopg import sql
 
 from authentication.errors import contract_error
-from dekopen_engine.documentary_canonical import documentary_canonical_json_v1
+from dekopen_engine.documentary_canonical import same_documentary_value
 from dekopen_engine.models import EngineResult
 from dekopen_engine.snapshot import calculation_response, calculation_hash, result_payload
 from documents.repository import documentary_backend
@@ -24,6 +24,10 @@ from engine_api.repository import SystemParamsRepository, SystemNotFound, Unsupp
 from pricing.repository import audit_reason, commercial_backend, json_text, one, rows
 from pricing.service import decoded
 from projects.clients import linkable_client
+from projects.measurement import (
+    measurement_fields_for_save,
+    resolve_position_measurement,
+)
 from projects.serializers import PositionWriteSerializer
 from projects.typology import derive_typology
 
@@ -50,11 +54,16 @@ PROJECT_COLUMNS = (
     "total_price_tax",
     "total_price_gross",
     "client_id",
+    # P18 — declaraciones térmicas del proyecto (OGUC 4.1.10).
+    "thermal_zone",
+    "thermal_use",
+    "thermal_wall_areas",
     "updated_at",
 )
 POSITION_COLUMNS = (
     "id",
     "project_id",
+    "org_id",
     "position_index",
     "location_tag",
     "quantity",
@@ -70,6 +79,15 @@ POSITION_COLUMNS = (
     # excludes it from every member read; sale price stays readable.
     "price_net",
     "discount_pct",
+    "rough_opening_input",
+    "mounting_rule_id",
+    "fabrication_lock",
+    "measurement_state",
+    "measurement_confirmed_at",
+    "measurement_confirmed_by",
+    "is_option",
+    # P18 — orientación del paramento donde se instala (N/OP/S/OGT/ROOF).
+    "thermal_orientation",
     "updated_at",
 )
 
@@ -125,11 +143,38 @@ def editable(org_id, project_id):
     return project
 
 
+def editable_measurement_target(org_id, project_id):
+    """D07 measurement confirmation runs on an open draft revision — same
+    DRAFT + unsealed gate as `editable`, but the applied-pricing check is
+    absent: confirming a measure never changes the priced content, so a
+    priced draft can still be confirmed before emission."""
+    project = project_row(org_id, project_id, lock=True)
+    sealed = rows(
+        "SELECT id FROM public.project_versions WHERE org_id=%s AND project_id=%s "
+        "AND revision_code=%s",
+        [org_id, project_id, project["current_revision"]],
+    )
+    if project["status"] != "DRAFT" or sealed:
+        raise contract_error(409, "revision_required", "Esta revisión está cerrada para edición.")
+    return project
+
+
 def unchanged(row, expected):
     if row["updated_at"] != expected:
         raise contract_error(
             409, "stale_edit", "Otra persona guardó cambios. Recarga antes de reemplazarlos."
         )
+
+
+def _canonical_design(design):
+    """D05 canonical request preimage: ``color_exterior`` rides the design
+    only when it differs from ``color`` — an explicit duplicate would hash
+    differently from the stored legacy contract for the same design."""
+    design = dict(design)
+    exterior = design.get("color_exterior")
+    if exterior is None or str(exterior) == str(design.get("color")):
+        design.pop("color_exterior", None)
+    return design
 
 
 def position_public(row):
@@ -140,6 +185,8 @@ def position_public(row):
         "color": row["color_interior"],
         "parametric_tree": decoded(row["parametric_tree"]),
     }
+    if str(row["color_exterior"]) != str(row["color_interior"]):
+        design["color_exterior"] = row["color_exterior"]
     stored = decoded(row["bom_snapshot"])
     try:
         payload = {key: value for key, value in stored.items() if key != "calculation_hash"}
@@ -171,6 +218,10 @@ def position_public(row):
                 "updated_at",
             )
         },
+        "measurement": resolve_position_measurement(row.get("org_id"), row),
+        # Posiciones almacenadas antes de la columna térmica se decodifican
+        # sin orientación — el panel las reporta con causa, nunca inventadas.
+        "thermal_orientation": row.get("thermal_orientation"),
         # The pricing authority writes these on apply — the workspace shows
         # each vano's live net alongside its total, no re-derivation. The
         # cost side stays inside pricing operations (member-denied column).
@@ -178,6 +229,8 @@ def position_public(row):
         "discount_pct": str(row["discount_pct"]),
         "design": design,
         "bom": {**safe, "calculation_hash": expected},
+        # P10: alternativa declarada — se precifica pero no suma al total.
+        "is_option": bool(row.get("is_option")),
     }
 
 
@@ -228,6 +281,7 @@ def project_public(org_id, row, *, detail=False, authority=_UNSET,
         "currency": (authority or {}).get("currency") or "CLP",
     }
     value.pop("pricing_reset_at", None)  # internal gate timestamp, not API state
+    value["thermal_wall_areas"] = decoded(value["thermal_wall_areas"])
     for key in METADATA:
         value[key] = value[key] or ""
     for key in ("total_price_net", "total_price_tax", "total_price_gross"):
@@ -327,6 +381,18 @@ def create_project(org_id, actor_id, data):
         "VALUES(" + ",".join(["%s"] * (5 + len(METADATA))) + ") RETURNING id",
         [identity, org_id, code, actor_id, *values.values(), client_id],
     )
+    # D06: the org's service templates seed the new project's selections —
+    # a preselection the estimator edits, never a hidden charge.
+    rows(
+        "INSERT INTO public.project_service_selections"
+        " (project_id, org_id, service_article_id)"
+        " SELECT %s, %s, t.service_article_id"
+        " FROM public.org_service_templates t"
+        " JOIN public.service_articles a ON a.id = t.service_article_id"
+        " WHERE t.org_id = %s AND a.is_active"
+        " ON CONFLICT DO NOTHING RETURNING id",
+        [identity, org_id, org_id],
+    )
     return project_public(org_id, project_row(org_id, identity), detail=True)
 
 
@@ -334,6 +400,18 @@ def update_project(org_id, project_id, data):
     current = editable(org_id, project_id)
     unchanged(current, data["expected_updated_at"])
     values = {key: data[key] for key in METADATA if key in data}
+    for key in ("thermal_zone", "thermal_use"):
+        if key in data:
+            values[key] = data[key]
+    if "thermal_wall_areas" in data:
+        # JSONB — el placeholder genérico no castea; Jsonb() adapta el dict.
+        from psycopg.types.json import Jsonb
+
+        values["thermal_wall_areas"] = (
+            Jsonb(data["thermal_wall_areas"])
+            if data["thermal_wall_areas"] is not None
+            else None
+        )
     if "client_id" in data:
         if data["client_id"]:
             linkable_client(org_id, data["client_id"])
@@ -362,6 +440,7 @@ def position_row(org_id, position_id, *, lock=False):
 
 
 def calculate_design(org_id, design):
+    design = _canonical_design(design)
     try:
         repository = SystemParamsRepository()
         params = repository.load_visible(design["system_id"], org_id)
@@ -371,6 +450,7 @@ def calculate_design(org_id, design):
             evaluation = evaluate_assembly_from_api(
                 product=model,
                 color=design["color"],
+                color_exterior=design.get("color_exterior"),
                 params=params,
                 coupler_articles=repository.load_coupler_articles(
                     design["system_id"], org_id
@@ -432,6 +512,7 @@ def calculate_design(org_id, design):
         else:
             result = calculate_from_api(
                 params=params,
+                color_exterior=design.get("color_exterior"),
                 **{
                     key: design[key]
                     for key in (
@@ -472,6 +553,28 @@ def _typology(tree):
         ) from error
 
 
+def _glass_resolution(bom):
+    """D02 structured-glass bookkeeping for ``project_positions``: a
+    ``bay:leaf`` → composition map plus the review flag — set when a bay
+    declares a spec the parser could not structure (UNKNOWN never seals as
+    resolved)."""
+    compositions = {}
+    pending = False
+    for piece in bom.get("glasses") or []:
+        key = f"{piece.get('bay_id') or ''}:{piece.get('leaf_id') or ''}"
+        composition = piece.get("composition")
+        if composition is None:
+            compositions[key] = {
+                "status": "UNKNOWN",
+                "spec": piece.get("glass_spec"),
+            }
+            if piece.get("glass_spec"):
+                pending = True
+        else:
+            compositions[key] = composition
+    return compositions, pending
+
+
 def save_position(org_id, project_id, data, *, position_id=None):
     editable(org_id, project_id)
     current = None
@@ -480,28 +583,59 @@ def save_position(org_id, project_id, data, *, position_id=None):
         if current["project_id"] != project_id:
             missing()
         unchanged(current, data["expected_updated_at"])
-    design = data["design"]
+    design = _canonical_design(data["design"])
     with connection.cursor() as cursor:
         cursor.execute("SELECT private.reserve_catalog_authority(%s,%s)",
                        [design["system_id"], org_id])
     bom = calculate_design(org_id, design)
+    glass_composition, glass_pending = _glass_resolution(bom)
+    measurement = measurement_fields_for_save(
+        org_id, data=data, current=current, system_id=design["system_id"]
+    )
     values = [
         data["location_tag"],
         data["quantity"],
+        bool(data.get("is_option")),
         _typology(design["parametric_tree"]),
         design["system_id"],
         design["nominal_width_mm"],
         design["nominal_height_mm"],
         design["color"],
-        design["color"],
+        design.get("color_exterior") or design["color"],
         json_text(design["parametric_tree"]),
         json_text(bom),
+        json_text(glass_composition),
+        glass_pending,
+        (
+            None if measurement["rough_opening_input"] is None
+            else json_text(measurement["rough_opening_input"])
+        ),
+        measurement["mounting_rule_id"],
+        (
+            None if measurement["fabrication_lock"] is None
+            else json_text(measurement["fabrication_lock"])
+        ),
+        measurement["measurement_state"],
+        measurement["measurement_confirmed_at"],
+        measurement["measurement_confirmed_by"],
+        # Un PUT sin la clave conserva la orientación — clientes antiguos
+        # (qty en línea, mover) no deben borrarla al guardar otra cosa.
+        (
+            data["thermal_orientation"]
+            if "thermal_orientation" in data
+            else (current["thermal_orientation"] if current else None)
+        ),
     ]
     if current:
         rows(
-            "UPDATE public.project_positions SET location_tag=%s,quantity=%s,typology=%s,"
+            "UPDATE public.project_positions SET location_tag=%s,quantity=%s,is_option=%s,"
+            "typology=%s,"
             "system_id=%s,width_mm=%s,height_mm=%s,color_interior=%s,color_exterior=%s,"
-            "parametric_tree=%s::jsonb,bom_snapshot=%s::jsonb,updated_at=clock_timestamp() "
+            "parametric_tree=%s::jsonb,bom_snapshot=%s::jsonb,"
+            "glass_composition=%s::jsonb,glass_review_pending=%s,"
+            "rough_opening_input=%s::jsonb,mounting_rule_id=%s,fabrication_lock=%s::jsonb,"
+            "measurement_state=%s,measurement_confirmed_at=%s,measurement_confirmed_by=%s,"
+            "thermal_orientation=%s,updated_at=clock_timestamp() "
             "WHERE id=%s AND org_id=%s RETURNING id",
             [*values, position_id, org_id],
         )
@@ -513,10 +647,17 @@ def save_position(org_id, project_id, data, *, position_id=None):
         )[0]["next_index"]
         position_id = uuid4()
         rows(
-            "INSERT INTO public.project_positions(location_tag,quantity,typology,system_id,"
+            "INSERT INTO public.project_positions(location_tag,quantity,is_option,typology,system_id,"
             "width_mm,height_mm,color_interior,color_exterior,parametric_tree,bom_snapshot,"
+            "glass_composition,glass_review_pending,"
+            "rough_opening_input,mounting_rule_id,fabrication_lock,"
+            "measurement_state,measurement_confirmed_at,measurement_confirmed_by,"
+            "thermal_orientation,"
             "id,project_id,org_id,position_index) "
-            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s) RETURNING id",
+            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s,"
+            "%s::jsonb,%s,%s::jsonb,"
+            "%s,%s,%s,"
+            "%s,%s,%s,%s,%s) RETURNING id",
             [*values, position_id, project_id, org_id, index],
         )
     rows(
@@ -542,8 +683,59 @@ def delete_position(org_id, position_id, expected):
         )
 
 
+def move_position(org_id, position_id, to_index, expected):
+    """Move a position inside its project's print order.
+
+    The (project_id, position_index) unique constraint makes an in-place
+    swap impossible, so every sibling first parks at a negative scratch
+    index and the final 1..N run is assigned in a second pass — all under
+    the same row locks the concurrent save path takes.
+    """
+    original = position_row(org_id, position_id)
+    editable(org_id, original["project_id"])
+    current = position_row(org_id, position_id, lock=True)
+    unchanged(current, expected)
+    project_id = original["project_id"]
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT id FROM public.project_positions "
+            "WHERE project_id=%s AND org_id=%s ORDER BY position_index FOR UPDATE",
+            [project_id, org_id],
+        )
+        order = [str(row[0]) for row in cursor.fetchall()]
+        order.remove(str(position_id))
+        target = max(0, min(int(to_index) - 1, len(order)))
+        order.insert(target, str(position_id))
+        for scratch, row_id in enumerate(order, start=1):
+            cursor.execute(
+                "UPDATE public.project_positions SET position_index=%s "
+                "WHERE id=%s AND org_id=%s",
+                [-scratch, row_id, org_id],
+            )
+        for index, row_id in enumerate(order, start=1):
+            # Only the moved row takes a fresh updated_at — bumping the
+            # siblings' timestamp would wrongly invalidate a parallel
+            # design edit holding their optimistic lock.
+            stamp = ",updated_at=clock_timestamp()" if row_id == str(position_id) else ""
+            cursor.execute(
+                "UPDATE public.project_positions SET position_index=%s"
+                + stamp
+                + " WHERE id=%s AND org_id=%s",
+                [index, row_id, org_id],
+            )
+        cursor.execute(
+            "UPDATE public.projects SET updated_at=clock_timestamp() WHERE id=%s AND org_id=%s",
+            [project_id, org_id],
+        )
+    return position_public(position_row(org_id, position_id))
+
+
 def _same_documentary_value(left, right):
-    return documentary_canonical_json_v1(left) == documentary_canonical_json_v1(right)
+    # Scale-free compare: the canonical BOM serializes mm as "16.00" while
+    # the frozen snapshot's raw model_dump keeps "16" — the same
+    # measurement must not read as binding drift (shared with
+    # documents.service's freeze-time check).
+    return same_documentary_value(left, right)
 
 
 def next_revision_code(value):
@@ -660,6 +852,7 @@ def _assert_live_matches_version(org_id, project_id, version):
             "color_interior": position["color_interior"],
             "color_exterior": position["color_exterior"],
             "location_tag": position["location_tag"] or "",
+            "is_option": bool(position.get("is_option")),
             "parametric_tree": decoded(position["parametric_tree"]),
         }
         frozen_input = {key: frozen.get(key) for key in live_input}
@@ -703,6 +896,7 @@ def clone_project(org_id, actor_id, project_id, data):
                 "location_tag": position["location_tag"] or "",
                 "quantity": position["quantity"],
                 "design": deepcopy(position["design"]),
+                "is_option": bool(position.get("is_option")),
             }
         )
         serializer.is_valid(raise_exception=True)

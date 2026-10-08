@@ -14,6 +14,7 @@ import ipaddress
 import json
 import logging
 import os
+import random
 import re
 import socket
 import time
@@ -63,16 +64,39 @@ def _timeout_seconds(provider: str) -> float:
     return value
 
 
+# Transient retries: transport blips and 5xx answers deserve a bounded
+# backoff retry, quota/auth/rejection do not. Route retry_max overrides the
+# env default of 2; both are capped at 4 so a wedged endpoint cannot hold a
+# worker loop hostage.
+def _retries_max(provider: str) -> int:
+    """AI_GATEWAY_{P}_RETRIES — retries after the first attempt on a
+    transient failure. Default 2, range 0..4; malformed refuses the
+    provider outright like a malformed timeout."""
+    raw = os.environ.get(f"AI_GATEWAY_{provider}_RETRIES", "")
+    if not raw:
+        return 2
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ProviderError("ai_provider_unavailable") from error
+    if not 0 <= value <= 4:
+        raise ProviderError("ai_provider_unavailable")
+    return value
+
+
 def _mock_enabled() -> bool:
     """Whether the deterministic MOCK provider may serve this deployment.
-    Explicit AI_GATEWAY_MOCK_ENABLED wins either way; otherwise it serves
-    only development (DEBUG) and the test suite (pytest sets
-    PYTEST_CURRENT_TEST) — a production stack can never answer silently
-    with fabricated content."""
+    Explicit AI_GATEWAY_MOCK_ENABLED wins either way — it is the only channel
+    that can enable MOCK under ENVIRONMENT=production (the explicit "Modo de
+    prueba" flag). Without it, MOCK serves development (DEBUG) and the test
+    suite (PYTEST_CURRENT_TEST) only — DEBUG or a stray pytest process can
+    never turn fabricated answers on in a production stack."""
     explicit = os.environ.get("AI_GATEWAY_MOCK_ENABLED", "").lower()
     if explicit in {"1", "true", "yes"}:
         return True
     if explicit in {"0", "false", "no"}:
+        return False
+    if os.environ.get("ENVIRONMENT", "") == "production":
         return False
     return os.environ.get("DEBUG", "").lower() in {"1", "true", "yes"} or bool(
         os.environ.get("PYTEST_CURRENT_TEST")
@@ -109,27 +133,73 @@ def _resolve_provider_hosts(hostname: str) -> list[str] | None:
     return [str(address)] if address.is_global else None
 
 
-class ProviderError(Exception):
-    """Sanitized provider failure — never carries credentials or payloads."""
+def _retry_after_seconds(raw: str | None) -> float | None:
+    """Parse a Retry-After header value in seconds (HTTP-date forms are
+    ignored — capped at 30s so a hostile header can't park a worker)."""
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return min(max(value, 0.0), 30.0)
 
-    def __init__(self, code: str):
+
+def _strict_json_options(options: dict) -> dict:
+    """Drop tool calling and pin strict JSON output — the degraded contract
+    a provider without tools support still satisfies: the model answers the
+    same document shape the caller validates."""
+    fallback = {
+        key: value
+        for key, value in options.items()
+        if key not in ("tools", "tool_choice")
+    }
+    fallback["json_output"] = True
+    return fallback
+
+
+class ProviderError(Exception):
+    """Sanitized provider failure — never carries credentials or payloads.
+
+    ``transient`` marks a failure the caller may retry after a short backoff
+    (timeouts, connect failures, 5xx/408/425, 429 with Retry-After). Quota,
+    auth, rejection and mock-disabled errors are terminal — retrying them
+    only burns time and can replay a billed call."""
+
+    def __init__(
+        self,
+        code: str,
+        *,
+        transient: bool = False,
+        retry_after: float | None = None,
+    ):
         self.code = code
+        self.transient = transient
+        self.retry_after = retry_after
         super().__init__(code)
 
 
 class HttpProvider:
     """Generic JSON invocation endpoint: POST {model, capability, input}."""
 
-    def __init__(self, *, provider: str):
+    def __init__(
+        self,
+        *,
+        provider: str,
+        timeout_s: float | None = None,
+        retry_max: int | None = None,
+    ):
         self.provider = provider
         self.api_key = os.environ.get(f"AI_GATEWAY_{provider}_API_KEY", "")
         self.base_url = os.environ.get(f"AI_GATEWAY_{provider}_BASE_URL", "").rstrip("/")
         if not self.api_key or not self.base_url:
             raise ProviderError("ai_provider_unavailable")
-        # AI_GATEWAY_{P}_TIMEOUT_S bounds the whole HTTP exchange. A malformed
-        # value is a deployment mistake — it fails visibly, never clamps
-        # silently to an operator-surprising bound.
-        self.timeout = _timeout_seconds(provider)
+        # AI_GATEWAY_{P}_TIMEOUT_S bounds the whole HTTP exchange; the route's
+        # timeout_s pins a per-capability bound on top. A malformed env value
+        # is a deployment mistake — it fails visibly, never clamps silently.
+        self.timeout = float(timeout_s) if timeout_s is not None else _timeout_seconds(provider)
+        # Route retry_max (0..4, DB-checked) overrides the env default.
+        self.retry_max = _retries_max(provider) if retry_max is None else int(retry_max)
         # Provider URLs are operator config, but a compromised value must not
         # turn the gateway into an authenticated proxy for internal services:
         # https-only, no userinfo/query/fragment, and the host must resolve
@@ -209,7 +279,7 @@ class HttpProvider:
             stream = response.iter_bytes(65536) if response.is_stream_consumed else response.iter_raw()
             for chunk in stream:
                 if time.monotonic() - started > self.timeout:
-                    raise ProviderError("ai_provider_error")
+                    raise ProviderError("ai_provider_timeout", transient=True)
                 content += chunk
                 if len(content) > MAX_BODY_BYTES:
                     raise ProviderError("ai_provider_output_too_large")
@@ -283,7 +353,117 @@ class HttpProvider:
                 )
             except (httpx.ConnectError, httpx.ConnectTimeout) as error:
                 last_error = error
-        raise ProviderError("ai_provider_error") from last_error
+        # Every pinned answer refused the connection — a transient transport
+        # failure the retry loop may re-attempt on a later tick.
+        raise ProviderError("ai_provider_error", transient=True) from last_error
+
+    def _request_retried(
+        self,
+        *,
+        route: dict,
+        capability: str,
+        input_payload: dict,
+        provider_options: dict,
+        client: httpx.Client | None,
+        operation_key: str | None,
+        requested_model: str,
+    ) -> bytes:
+        """The request with its transient-retry budget. Only transient
+        failures retry — transport timeouts/connect errors and classified
+        transient statuses. Quota, auth and rejection are terminal: a retry
+        there wastes the caller's window and can replay a billed call."""
+        attempt = 0
+        while True:
+            try:
+                return self._request(
+                    route=route,
+                    capability=capability,
+                    input_payload=input_payload,
+                    provider_options=provider_options,
+                    client=client,
+                    operation_key=operation_key,
+                )
+            except httpx.HTTPStatusError as error:
+                mapped = self._classify_status(error, capability, requested_model)
+                if mapped.transient and attempt < self.retry_max:
+                    self._sleep_retry(mapped, attempt, capability)
+                    attempt += 1
+                    continue
+                raise mapped from error
+            except ProviderError as error:
+                if error.transient and attempt < self.retry_max:
+                    self._sleep_retry(error, attempt, capability)
+                    attempt += 1
+                    continue
+                raise
+            except httpx.TransportError as error:
+                if attempt < self.retry_max:
+                    self._sleep_retry(
+                        ProviderError("ai_provider_error", transient=True),
+                        attempt,
+                        capability,
+                    )
+                    attempt += 1
+                    continue
+                # Budget exhausted — the failure stays marked transient:
+                # a transport blip is what it is; the bound was policy.
+                raise ProviderError("ai_provider_error", transient=True) from error
+
+    @staticmethod
+    def _sleep_retry(error: "ProviderError", attempt: int, capability: str) -> None:
+        delay = 0.4 * (2 ** attempt) + random.uniform(0, 0.1)
+        if error.retry_after is not None:
+            delay = max(delay, min(error.retry_after, 30.0))
+        delay = min(delay, 30.0)
+        logger.warning(
+            "AI provider transient failure (capability=%s attempt=%s): %s"
+            " — retrying in %.1fs",
+            capability,
+            attempt + 1,
+            error.code,
+            delay,
+        )
+        time.sleep(delay)
+
+    _TRANSIENT_STATUSES = frozenset({408, 425, 500, 502, 503, 504})
+
+    def _classify_status(
+        self,
+        error: httpx.HTTPStatusError,
+        capability: str,
+        requested_model: str,
+    ) -> ProviderError:
+        """Map an answered HTTP status to the sanitized contract. Transient
+        statuses (5xx family, 408, 425) and a 429 that carries Retry-After
+        are retryable; a bare 429 means quota exhausted — terminal."""
+        response = error.response
+        status = response.status_code
+        retry_after = _retry_after_seconds(response.headers.get("retry-after"))
+        # The provider answered — the status class is the diagnosis an
+        # operator needs (bad key vs bad model vs spent quota), and the
+        # effective model identifies which pin/override was actually sent.
+        logger.warning(
+            "AI provider %s answered %s (model=%s capability=%s)",
+            self.provider,
+            status,
+            requested_model,
+            capability,
+        )
+        if status in (401, 403):
+            return ProviderError("ai_provider_auth")
+        if status == 429:
+            return ProviderError(
+                "ai_provider_quota",
+                transient=retry_after is not None,
+                retry_after=retry_after,
+            )
+        if status in self._TRANSIENT_STATUSES:
+            return ProviderError(
+                "ai_provider_error", transient=True, retry_after=retry_after
+            )
+        if 400 <= status < 500:
+            return ProviderError("ai_provider_rejected")
+        return ProviderError("ai_provider_error")
 
     def invoke(
         self,
@@ -297,90 +477,95 @@ class HttpProvider:
         document_path: str | None = None,
     ) -> dict[str, Any]:
         started = time.monotonic()
-        options = provider_options or {}
+        options = dict(provider_options or {})
         # The model must fit the provenance column BEFORE the paid call runs —
         # an env override longer than VARCHAR(120) would otherwise fail the
         # sealed audit after inference already happened.
         requested_model = self._requested_model(route)
         if not (0 < len(requested_model) <= 120):
             raise ProviderError("ai_provider_error")
-        try:
-            # Ephemeral fetch URLs are resolved at wire time, never carried in
-            # input_payload: the audited input hash must stay identical across
-            # retries even though a fresh signed URL is minted each attempt.
-            # document_path arrives only from the service's org-scoped source
-            # resolution — a request can name an owned document row but can
-            # never choose the object key that gets signed.
-            wire_input = dict(input_payload)
-            if document_path:
-                from documents.repository import DocumentaryError
-                from documents.storage import SupabaseDocumentStorage
+        # Ephemeral fetch URLs are resolved at wire time, never carried in
+        # input_payload: the audited input hash must stay identical across
+        # retries even though a fresh signed URL is minted each attempt.
+        # document_path arrives only from the service's org-scoped source
+        # resolution — a request can name an owned document row but can
+        # never choose the object key that gets signed.
+        wire_input = dict(input_payload)
+        if document_path:
+            from documents.repository import DocumentaryError
+            from documents.storage import SupabaseDocumentStorage
 
+            try:
+                wire_input["document_url"] = SupabaseDocumentStorage().signed_url(
+                    document_path
+                )
+            except DocumentaryError as error:
+                raise ProviderError("ai_provider_unavailable") from error
+            if input_payload.get("kind") == "IMAGE":
+                # True multimodal: the image bytes ride inside the request
+                # as a data URI so the provider never has to fetch the
+                # document itself. Larger files keep the signed URL, which
+                # the wire layer still emits as an image_url part.
                 try:
-                    wire_input["document_url"] = SupabaseDocumentStorage().signed_url(
-                        document_path
+                    raw = SupabaseDocumentStorage().download_bounded(
+                        document_path, _IMAGE_WIRE_MAX_BYTES
                     )
-                except DocumentaryError as error:
-                    raise ProviderError("ai_provider_unavailable") from error
-                if input_payload.get("kind") == "IMAGE":
-                    # True multimodal: the image bytes ride inside the request
-                    # as a data URI so the provider never has to fetch the
-                    # document itself. Larger files keep the signed URL, which
-                    # the wire layer still emits as an image_url part.
-                    try:
-                        raw = SupabaseDocumentStorage().download_bounded(
-                            document_path, _IMAGE_WIRE_MAX_BYTES
-                        )
-                        if raw is not None:
-                            wire_input["_document_image"] = {
-                                "mime": _image_mime(document_path),
-                                "data": base64.b64encode(raw).decode("ascii"),
-                            }
-                    except (DocumentaryError, httpx.HTTPError):
-                        pass
-            content = self._request(
-                route=route,
-                capability=capability,
-                input_payload=wire_input,
-                provider_options=options,
-                client=client,
-                operation_key=operation_key,
-            )
-            parsed = self._parse_response(content)
-            tokens_prompt = int(parsed["tokens_prompt"])
-            tokens_completion = int(parsed["tokens_completion"])
-            # Usage feeds an INT4 audit column — a malformed or impossible count
-            # is a provider error, not an audit-time database exception raised
-            # after the paid call already succeeded.
-            if not (
-                0 <= tokens_prompt <= 2_147_483_647 and 0 <= tokens_completion <= 2_147_483_647
-            ):
-                raise TypeError("provider token usage is outside the audit range")
-        except ProviderError:
-            raise
-        except httpx.HTTPStatusError as error:
-            # The provider answered — the status class is the diagnosis an
-            # operator needs (bad key vs bad model vs spent quota), and the
-            # effective model identifies which pin/override was actually sent.
-            status = error.response.status_code
-            logger.warning(
-                "AI provider %s answered %s (model=%s capability=%s)",
-                self.provider,
-                status,
-                requested_model,
-                capability,
-            )
-            if status in (401, 403):
-                raise ProviderError("ai_provider_auth") from error
-            if status == 429:
-                raise ProviderError("ai_provider_quota") from error
-            if 400 <= status < 500:
-                raise ProviderError("ai_provider_rejected") from error
-            raise ProviderError("ai_provider_error") from error
-        except (httpx.HTTPError, TypeError, ValueError) as error:
-            raise ProviderError("ai_provider_error") from error
+                    if raw is not None:
+                        wire_input["_document_image"] = {
+                            "mime": _image_mime(document_path),
+                            "data": base64.b64encode(raw).decode("ascii"),
+                        }
+                except (DocumentaryError, httpx.HTTPError):
+                    pass
+        tools_fallback = False
+        while True:
+            try:
+                content = self._request_retried(
+                    route=route,
+                    capability=capability,
+                    input_payload=wire_input,
+                    provider_options=options,
+                    client=client,
+                    operation_key=operation_key,
+                    requested_model=requested_model,
+                )
+            except ProviderError as error:
+                # A caller that asked for tool calling degrades once to strict
+                # JSON when the endpoint rejects the tools parameter — the
+                # model answers the same document contract and server-side
+                # query steps still execute.
+                if (
+                    error.code == "ai_provider_rejected"
+                    and options.get("tools")
+                    and not tools_fallback
+                ):
+                    tools_fallback = True
+                    logger.warning(
+                        "AI provider %s rejected tool calling (capability=%s);"
+                        " retrying without tools under strict JSON",
+                        self.provider,
+                        capability,
+                    )
+                    options = _strict_json_options(options)
+                    continue
+                raise
+            try:
+                parsed = self._parse_response(content)
+                tokens_prompt = int(parsed["tokens_prompt"])
+                tokens_completion = int(parsed["tokens_completion"])
+                # Usage feeds an INT4 audit column — a malformed or impossible
+                # count is a provider error, not an audit-time database
+                # exception raised after the paid call already succeeded.
+                if not (
+                    0 <= tokens_prompt <= 2_147_483_647
+                    and 0 <= tokens_completion <= 2_147_483_647
+                ):
+                    raise TypeError("provider token usage is outside the audit range")
+            except (TypeError, ValueError, KeyError) as error:
+                raise ProviderError("ai_provider_error") from error
+            break
         response_model = parsed.get("model")
-        return {
+        result: dict[str, Any] = {
             "output": parsed["output"],
             "tokens_prompt": tokens_prompt,
             "tokens_completion": tokens_completion,
@@ -395,7 +580,13 @@ class HttpProvider:
                 else requested_model
             ),
         }
-
+        if parsed.get("tool_calls"):
+            result["tool_calls"] = parsed["tool_calls"]
+        if parsed.get("assistant_message") is not None:
+            result["assistant_message"] = parsed["assistant_message"]
+        if tools_fallback:
+            result["tools_fallback"] = True
+        return result
     def _requested_model(self, route: dict) -> str:
         """Model the request will run on; subclasses may override the route."""
         return str(route["provider_model"])
@@ -439,6 +630,40 @@ _DEFAULT_SYSTEM = (
 )
 
 
+def _parse_tool_calls(raw: Any) -> list[dict]:
+    """Normalize choices[0].message.tool_calls into {id, name, arguments}
+    triples — arguments arrive as a JSON string on OpenAI-compatible
+    endpoints; anything malformed is skipped, never crashes the round."""
+    if not isinstance(raw, list) or not raw:
+        return []
+    calls: list[dict] = []
+    for item in raw[:8]:
+        function = item.get("function") if isinstance(item, dict) else None
+        if not isinstance(function, dict):
+            continue
+        name = function.get("name")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        arguments = function.get("arguments")
+        if isinstance(arguments, str):
+            try:
+                parsed_args = json.loads(arguments)
+            except ValueError:
+                parsed_args = {"_raw": arguments}
+        elif isinstance(arguments, dict):
+            parsed_args = arguments
+        else:
+            parsed_args = {}
+        calls.append(
+            {
+                "id": str(item.get("id") or f"call_{len(calls)}")[:80],
+                "name": name.strip()[:120],
+                "arguments": parsed_args,
+            }
+        )
+    return calls
+
+
 class OpenAICompatibleProvider(HttpProvider):
     """OpenAI-compatible chat-completions transport (Xiaomi MiMo, OpenAI,
     OpenRouter, …). Inherits the pinned-host request machinery; only the wire
@@ -457,8 +682,10 @@ class OpenAICompatibleProvider(HttpProvider):
       "json_output" — truthy requests response_format={"type": "json_object"}
     input_payload is serialized whole as the user message."""
 
-    def __init__(self, *, provider: str):
-        super().__init__(provider=provider)
+    def __init__(
+        self, *, provider: str, timeout_s=None, retry_max=None
+    ):
+        super().__init__(provider=provider, timeout_s=timeout_s, retry_max=retry_max)
         self._model = os.environ.get(f"AI_GATEWAY_{provider}_MODEL", "")
 
     def _wire_request(
@@ -512,19 +739,44 @@ class OpenAICompatibleProvider(HttpProvider):
                 if not key.startswith("_")
             }
             user_content = json.dumps(clean_payload, ensure_ascii=False, default=str)
+        messages: list[dict] = [
+            {
+                "role": "system",
+                "content": str(provider_options.get("system") or _DEFAULT_SYSTEM),
+            }
+        ]
+        # Prior turns/tool transcripts the caller feeds forward — server-side
+        # options only, never client input. Each must be a plain {role,
+        # content[, tool_calls]} message dict.
+        extra = provider_options.get("extra_messages")
+        if isinstance(extra, list):
+            messages.extend(
+                message
+                for message in extra
+                if isinstance(message, dict) and isinstance(message.get("role"), str)
+            )
+        messages.append({"role": "user", "content": user_content})
         body: dict[str, Any] = {
             "model": self._requested_model(route),
-            "messages": [
-                {
-                    "role": "system",
-                    "content": str(provider_options.get("system") or _DEFAULT_SYSTEM),
-                },
-                {"role": "user", "content": user_content},
-            ],
+            "messages": messages,
             "temperature": 0,
         }
         if provider_options.get("json_output"):
             body["response_format"] = {"type": "json_object"}
+        # Native tool calling: callers pass OpenAI-shaped tool specs; the
+        # model answers choices[0].message.tool_calls the server executes.
+        tools = provider_options.get("tools")
+        if isinstance(tools, list) and tools:
+            body["tools"] = [
+                tool for tool in tools if isinstance(tool, dict)
+            ][:16]
+            tool_choice = provider_options.get("tool_choice")
+            if isinstance(tool_choice, str) and tool_choice in (
+                "auto",
+                "none",
+                "required",
+            ):
+                body["tool_choice"] = tool_choice
         return path, body
 
     def _requested_model(self, route: dict) -> str:
@@ -557,18 +809,31 @@ class OpenAICompatibleProvider(HttpProvider):
         if not isinstance(choices, list) or not choices:
             raise TypeError("provider returned no choices")
         message = choices[0].get("message") if isinstance(choices[0], dict) else None
-        output = message.get("content") if isinstance(message, dict) else None
-        if not isinstance(output, str):
+        if not isinstance(message, dict):
+            raise TypeError("provider returned no message")
+        output = message.get("content")
+        tool_calls = _parse_tool_calls(message.get("tool_calls"))
+        if not isinstance(output, str) and not tool_calls:
             raise TypeError("provider output is not a string")
         usage = body.get("usage") or {}
         if not isinstance(usage, dict):
             raise TypeError("provider usage is not an object")
-        return {
-            "output": output,
+        result: dict[str, Any] = {
+            "output": output if isinstance(output, str) else "",
             "tokens_prompt": int(usage.get("prompt_tokens") or 0),
             "tokens_completion": int(usage.get("completion_tokens") or 0),
             "model": body["model"] if isinstance(body.get("model"), str) else None,
         }
+        if tool_calls:
+            result["tool_calls"] = tool_calls
+            # The assistant message verbatim so a caller can echo it back
+            # into a follow-up request's message list.
+            result["assistant_message"] = {
+                key: value
+                for key, value in message.items()
+                if key in ("role", "content", "tool_calls")
+            }
+        return result
 
 
 _COUNT_RE = re.compile(r"(\d+)\s*(m[oó]dulos?|vanos?|unidades?|pa[nñ]os?)")
@@ -589,13 +854,198 @@ _OPENING_KEYWORDS = (
 def _design_assist_output(input_payload: dict) -> dict:
     """Mock design intent → typed product ops. The contract the real provider
     must satisfy is exercised exactly: a JSON document of whitelisted ops plus
-    a human note, deterministic per prompt so environments and tests agree."""
+    a human note, deterministic per prompt so environments and tests agree.
+
+    IA2 — el mock cubre el registro completo: split_bay con `parts` (N hojas
+    iguales), refs de hoja posicionales post-split, ops de posición
+    (set_system desde el catálogo real), vidrio sólo cuando el SKU existe, y
+    el canal tipado `clarify` cuando la instrucción es ambigua."""
     prompt = str(input_payload.get("prompt") or "").lower()
     product = input_payload.get("product") or {}
     modules = product.get("modules") or []
     couplings = product.get("couplings") or []
+    catalog = input_payload.get("catalog") or {}
     ops: list[dict] = []
     notes: list[str] = []
+    clarify: dict | None = None
+
+    # Reglas IA2 — van antes de las genéricas y marcan `handled` para que
+    # el mismo prompt no dispare dos interpretaciones contradictorias.
+    handled = False
+    measure_mm = re.search(r"(\d+(?:[.,]\d+)?)\s*mm", prompt)
+    measure_mm_loose = re.search(r"manilla[^\d]*?(\d{3,4})", prompt)
+
+    if (
+        re.search(r"manilla", prompt)
+        and (measure_mm or measure_mm_loose)
+        and re.search(r"instalaci[oó]n|elevaci[oó]n|altura\s+final|final\s+sobre", prompt)
+    ):
+        # La respuesta al clarify continúa el mismo pedido: la altura
+        # queda zanjada y la manilla se fija a la medida declarada.
+        ops.append(
+            {
+                "op": "set_handle_height",
+                "mm": (measure_mm or measure_mm_loose).group(1).replace(",", "."),
+            }
+        )
+        notes.append("manilla a la altura aclarada")
+        handled = True
+    elif re.search(r"manilla", prompt) and (measure_mm or measure_mm_loose):
+        # "manilla a 1050 del piso" — ambigua: altura de instalación o
+        # elevación objetivo. La respuesta correcta del contrato es una
+        # aclaración tipada con opciones reales, no adivinar.
+        mm = (measure_mm or measure_mm_loose).group(1)
+        clarify = {
+            "question": (
+                f"¿{mm} mm es la altura de instalación "
+                "o el punto donde debe quedar la manilla?"
+            ),
+            "options": [
+                {"value": "instalacion", "label": "Altura de instalación"},
+                {"value": "elevacion", "label": "Altura final sobre el piso"},
+            ],
+        }
+        notes.append("aclaración sobre la altura de la manilla")
+        handled = True
+    elif re.search(r"manilla.*otro\s+lado|otro\s+lado|invertir|espej", prompt):
+        # "pon la manilla al otro lado" — flip_handing espeja la hoja.
+        ops.append({"op": "flip_handing"})
+        notes.append("manilla al otro lado")
+        handled = True
+    if re.search(r"travesa[nñ]o", prompt):
+        op: dict[str, object] = {"op": "split_bay", "axis": "H"}
+        if measure_mm:
+            op["offset_mm"] = measure_mm.group(1).replace(",", ".")
+            op["from"] = (
+                "START"
+                if re.search(r"arriba|superior", prompt)
+                else "END" if re.search(r"abajo|inferior", prompt) else "CENTER"
+            )
+        ops.append(op)
+        notes.append("travesaño")
+        handled = True
+    if re.search(r"tres\s+hojas|en\s+tres\b", prompt):
+        ops.append({"op": "split_bay", "axis": "V", "parts": 3})
+        if re.search(r"fija\s+al\s+centro|centro\s+fij", prompt):
+            # "fija al centro y abatibles a los lados" — refs posicionales
+            # sobre el orden de hojas post-split (0,1,2).
+            ops.append({"op": "set_opening", "bay": 0, "opening": "TURN_LEFT"})
+            ops.append({"op": "set_opening", "bay": 2, "opening": "TURN_RIGHT"})
+            notes.append("fija al centro, abatibles espejo")
+        else:
+            notes.append("tres hojas iguales")
+        handled = True
+    elif re.search(r"izquierda\s+fija.*oscil|fija.*(?:y|e)\s+.*oscil", prompt):
+        # "la izquierda fija y la derecha oscilobatiente" — split + una
+        # apertura por hoja, en orden de documento.
+        ops.append({"op": "split_bay", "axis": "V"})
+        ops.append({"op": "set_opening", "bay": 0, "opening": "FIXED"})
+        ops.append({"op": "set_opening", "bay": 1, "opening": "TILT_TURN_LEFT"})
+        notes.append("dos hojas: fija izquierda, oscilobatiente derecha")
+        handled = True
+    elif re.search(r"(?:en\s+dos|dos\s+hojas).*(?:oscil|batiente|tilt)", prompt):
+        # "divide la hoja en dos oscilobatientes" — split + una apertura por
+        # hoja en orden de documento (espejo: izquierda TILT_TURN_LEFT,
+        # derecha TILT_TURN_RIGHT), mismo patrón que "fija + oscilobatiente".
+        ops.append({"op": "split_bay", "axis": "V", "parts": 2})
+        ops.append({"op": "set_opening", "bay": 0, "opening": "TILT_TURN_LEFT"})
+        ops.append({"op": "set_opening", "bay": 1, "opening": "TILT_TURN_RIGHT"})
+        notes.append("dos hojas oscilobatientes espejo")
+        handled = True
+    elif re.search(r"tercio|1/3|2/3", prompt):
+        # «Proponer división 1/3–2/3» — un corte vertical al tercio del
+        # ancho real del módulo (offset_mm es un número derivado de la
+        # medida del contexto, lo que el contrato permite).
+        total = sum(
+            int(str(module.get("width_mm") or 0)) for module in modules
+        )
+        op: dict[str, object] = {"op": "split_bay", "axis": "V"}
+        if total > 0:
+            op["offset_mm"] = str(total // 3)
+        ops.append(op)
+        notes.append("división 1/3–2/3")
+        handled = True
+    elif re.search(r"dos\s+hojas|en\s+dos\b|a\s+la\s+mitad|por\s+la\s+mitad", prompt):
+        ops.append({"op": "split_bay", "axis": "V", "parts": 2})
+        notes.append("dos hojas iguales")
+        handled = True
+    if re.search(r"corred", prompt):
+        # Sistema corredera: set_system con el id REAL del catálogo — la
+        # op de posición existe, nunca un set_opening SLIDING_2L inventado.
+        sliding = next(
+            (
+                item
+                for item in catalog.get("systems") or []
+                if isinstance(item, dict)
+                and "SLIDING" in str(item.get("system_family") or "").upper()
+            ),
+            None,
+        )
+        if sliding is not None:
+            ops.append({"op": "set_system", "system_id": str(sliding["id"])})
+            notes.append(f"sistema {sliding.get('code') or 'corredero'}")
+        handled = True
+    if re.search(r"vidrio|termopanel|laminad", prompt):
+        # Sólo SKUs reales del catálogo: si la composición pedida no existe,
+        # se declara la no disponibilidad con las alternativas reales —
+        # nunca un SKU inventado.
+        wanted = re.search(r"(\d+[-+]\d+[-+]\d+|\d+\s*\+\s*\d+|laminad)", prompt)
+        recipes = catalog.get("glass_recipes") or {}
+        match = next(
+            (
+                sku
+                for sku, spec in recipes.items()
+                if wanted and str(wanted.group(1)).replace(" ", "") in str(spec).replace(" ", "")
+            ),
+            None,
+        )
+        if match:
+            ops.append({"op": "set_glass", "sku": match})
+            notes.append(f"vidrio {match}")
+        else:
+            options = ", ".join(
+                f"{sku} ({spec})" for sku, spec in sorted(recipes.items())
+            ) or "sin opciones registradas"
+            notes.append(
+                f"ese vidrio no está disponible en el catálogo; opciones: {options}"
+            )
+        handled = True
+    if re.search(r"m[aá]s\s+ancha|m[aá]s\s+ancho", prompt):
+        # "20 cm más ancha" — el número derivado lo calcula el motor
+        # (declared + context), el mock lo emite como set_total_width.
+        extra = re.search(r"(\d+(?:[.,]\d+)?)\s*(cm|mm|metros?)", prompt)
+        if extra:
+            value = float(extra.group(1).replace(",", "."))
+            unit = extra.group(2)
+            extra_mm = value * (1000 if unit.startswith("m") and unit != "mm" else 10 if unit == "cm" else 1)
+            current = sum(
+                float(str(module.get("width_mm") or 0)) for module in modules
+            )
+            if current > 0:
+                ops.append(
+                    {
+                        "op": "set_total_width",
+                        "width_mm": str(int(round(current + extra_mm))),
+                    }
+                )
+                notes.append(f"ancho {int(round(current + extra_mm))} mm")
+        handled = True
+    meter_width = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:metros?|mts?)\s+de\s+ancho", prompt)
+    if meter_width:
+        ops.append(
+            {
+                "op": "set_total_width",
+                "width_mm": str(int(float(meter_width.group(1).replace(",", ".")) * 1000)),
+            }
+        )
+        notes.append(f"ancho total {meter_width.group(1)} m")
+        handled = True
+    bare_height = re.search(r"(\d{3,4})\s+de\s+alto", prompt)
+    if bare_height:
+        ops.append({"op": "set_height", "height_mm": int(bare_height.group(1))})
+        notes.append(f"alto {bare_height.group(1)} mm")
+        handled = True
+
     count = _COUNT_RE.search(prompt)
     if count and int(count.group(1)) > 0:
         ops.append({"op": "set_module_count", "count": int(count.group(1))})
@@ -609,25 +1059,29 @@ def _design_assist_output(input_payload: dict) -> dict:
         ops.append({"op": "set_height", "height_mm": int(height.group(1) or height.group(2))})
         notes.append(f"alto {height.group(1) or height.group(2)} mm")
     if re.search(r"igual|mismo\s+ancho|uniform", prompt):
+        # "iguales" compone con conteo/ancho/sistema en la misma frase — no
+        # es una petición alternativa, es una constraint más.
         ops.append({"op": "equalize_widths"})
         notes.append("anchos iguales")
     if re.search(r"arco|bow|proa", prompt) and couplings:
         for index, _ in enumerate(couplings):
             ops.append({"op": "set_coupling_angle", "coupling": index, "angle_deg": 22.5})
         notes.append("ángulos de arco 22.5°")
-    for pattern, opening in _OPENING_KEYWORDS:
-        if pattern.search(prompt):
-            target = 0 if opening == "DOOR_ENTRY" else None
-            indices = [target] if target is not None else range(len(modules))
-            for index in indices:
-                ops.append({"op": "set_opening", "module": index, "opening": opening})
-            notes.append(f"apertura {opening}")
-            break
+    if not handled:
+        for pattern, opening in _OPENING_KEYWORDS:
+            if pattern.search(prompt):
+                target = 0 if opening == "DOOR_ENTRY" else None
+                indices = [target] if target is not None else range(len(modules))
+                for index in indices:
+                    ops.append({"op": "set_opening", "module": index, "opening": opening})
+                notes.append(f"apertura {opening}")
+                break
     return {
         "ops": ops,
         "notes": (
             "; ".join(notes) if notes else "No reconocí una acción de diseño en la instrucción."
         ),
+        **({"clarify": clarify} if clarify else {}),
     }
 
 
@@ -739,9 +1193,25 @@ def _context_assist_output(input_payload: dict) -> dict:
     warnings: list[str] = []
     if context.get("shortages"):
         warnings.append("La orden tiene líneas de material sin reservar.")
+    answer = " ".join(parts) + (
+        " Para una respuesta generativa configura un proveedor real en la ruta 'context_assist'."
+    )
+    question = str(
+        input_payload.get("question") or input_payload.get("prompt") or ""
+    ).lower()
+    if re.search(r"oscilobatiente|abatible|diferencia", question):
+        # Pregunta de dominio (G02) — el glosario del contrato IA2, citado
+        # literal para que el mock satisfaga el mismo piso editorial que el
+        # proveedor real.
+        answer = (
+            "La diferencia: una hoja abatible gira sobre bisagras laterales "
+            "y se abre completa (ventilación total); la oscilobatiente "
+            "combina dos movimientos — abatible desde el costado y "
+            "proyectante basculante desde arriba — así ventila de noche "
+            "sin abrir del todo."
+        )
     return {
-        "answer": " ".join(parts)
-        + " Para una respuesta generativa configura un proveedor real en la ruta 'context_assist'.",
+        "answer": answer,
         "actions": [],
         "warnings": warnings,
     }
@@ -777,6 +1247,35 @@ _QUERYABLE_WITHOUT_REFS = {
 }
 
 
+def _collection_reminder_output(input_payload: dict) -> dict:
+    """Mock del recordatorio de cobranza (P11): redacta el mensaje con los
+    hechos reales del payload — nunca inventa monto ni proyecto — para que
+    el flujo preparar→revisar→enviar sea ejercitable de punta a punta sin
+    proveedor externo."""
+    from decimal import Decimal, InvalidOperation
+
+    try:
+        entero = int(Decimal(str(input_payload.get("amount_due") or "0")))
+    except (InvalidOperation, ValueError):
+        entero = 0
+    monto = f"${entero:,}".replace(",", ".")
+    moneda = str(input_payload.get("currency") or "CLP")
+    proyecto = str(input_payload.get("project_name") or "su proyecto")
+    codigo = str(input_payload.get("project_code") or "")
+    empresa = str(input_payload.get("company_name") or "nuestra empresa")
+    subject = f"Recordatorio de pago — {proyecto}"
+    body = (
+        f"Estimado cliente:\n\n"
+        f"Junto con saludar, le recordamos que el proyecto {proyecto}"
+        f"{f' ({codigo})' if codigo else ''} registra un saldo pendiente de "
+        f"{monto} {moneda}. Agradecemos gestionar el pago a la brevedad "
+        f"para continuar con el calendario acordado.\n\n"
+        f"Si ya realizó el pago, por favor ignore este mensaje.\n\n"
+        f"Atentamente,\n{empresa}"
+    )
+    return {"subject": subject, "body": body}
+
+
 def _agent_output(input_payload: dict) -> dict:
     """Mock agent round: a contract-valid JSON document built only from the
     server-built context — so dev/CI can exercise the flagship agent loop
@@ -791,7 +1290,7 @@ def _agent_output(input_payload: dict) -> dict:
     org_name = str(org.get("name") or "la organización")
     reply = (
         f"Revisé el contexto de {org_name} para “{goal[:120]}”. "
-        "Respuesta determinista del proveedor MOCK."
+        "Respuesta determinista del proveedor de prueba."
     )
     evidence = re.findall(
         r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
@@ -818,46 +1317,453 @@ def _agent_output(input_payload: dict) -> dict:
     # The service passes the position's product at input_payload top level
     # (not inside context) — the mock must read the same place the prompt does.
     product = context.get("product") or input_payload.get("product")
+    goal_l = goal.lower()
+
+    # IA2 §2 — los números salen de herramientas del motor: el paso
+    # {"kind":"tool"} se ejecuta server-side y su salida vuelve como
+    # observación la ronda siguiente, donde el mock la cita tal cual.
+    if not observations:
+        position_ref = context.get("id") if surface_name == "position" else None
+        project_ref = (
+            context.get("id")
+            if surface_name == "project"
+            else (context.get("project") or {}).get("id")
+            if isinstance(context.get("project"), dict)
+            else None
+        )
+        position_ref = str(position_ref) if position_ref else None
+        project_ref = str(project_ref) if project_ref else None
+        if position_ref and re.search(r"pesa|peso", goal_l):
+            document["steps"].append(
+                {
+                    "kind": "tool",
+                    "name": "calculate_position",
+                    "args": {"position_id": position_ref},
+                }
+            )
+        if position_ref and re.search(r"guardar|bloque|v[aá]lid|herraje|compatib", goal_l):
+            document["steps"].append(
+                {
+                    "kind": "tool",
+                    "name": "validate_position",
+                    "args": {"position_id": position_ref},
+                }
+            )
+        if project_ref and re.search(
+            r"m[aá]s\s+car|mayor\s+costo|precio.*posici|posici[oó]n.*(precio|costo)", goal_l
+        ):
+            document["steps"].append(
+                {
+                    "kind": "tool",
+                    "name": "price_project",
+                    "args": {"project_id": project_ref},
+                }
+            )
+        if project_ref and re.search(r"falta.*emitir|emitir|emiti|falta", goal_l):
+            document["steps"].append(
+                {
+                    "kind": "tool",
+                    "name": "get_blockers",
+                    "args": {"project_id": project_ref},
+                }
+            )
+        if project_ref and re.search(r"compar|rev-?[ab]|subi|encarec|delta", goal_l):
+            document["steps"].append(
+                {
+                    "kind": "tool",
+                    "name": "explain_price_delta",
+                    "args": {"project_id": project_ref},
+                }
+            )
+        if surface_name == "production" and re.search(
+            r"bloquead|atrasad|detenid|pendiente", goal_l
+        ):
+            # ¿Qué OT están bloqueadas? — profundiza cada orden visible:
+            # los ids vienen del contexto (refs observados).
+            for order in (context.get("work_orders") or [])[:3]:
+                if order.get("id"):
+                    document["steps"].append(
+                        {
+                            "kind": "query",
+                            "surface": "work_order",
+                            "refs": {"work_order_id": str(order["id"])},
+                        }
+                    )
+        if surface_name == "purchase_plan" and re.search(
+            r"compra|falta|cobertura", goal_l
+        ):
+            # Plan de compras borrador — líneas sin cobertura y proveedores
+            # del contexto, agrupados por order_type como el prompt exige.
+            lines = context.get("uncovered_lines") or []
+            suppliers = context.get("suppliers") or []
+            if lines:
+                groups: dict[str, list] = {}
+                for line in lines:
+                    groups.setdefault(
+                        str(line.get("order_type") or "OTHER"), []
+                    ).append(
+                        {
+                            "requirement_key": line.get("requirement_key"),
+                            "sku": line.get("sku"),
+                            "quantity": line.get("quantity"),
+                            "unit": line.get("unit"),
+                            "project_code": line.get("project_code"),
+                        }
+                    )
+                document["steps"].append(
+                    {
+                        "kind": "artifact",
+                        "artifact": {
+                            "kind": "purchase_plan",
+                            "title": "Plan de compras",
+                            "payload": {
+                                "groups": [
+                                    {
+                                        "order_type": key,
+                                        "lines": value,
+                                        "suppliers": [
+                                            str(item.get("supplier"))
+                                            for item in suppliers
+                                            if item.get("order_type") == key
+                                        ],
+                                    }
+                                    for key, value in groups.items()
+                                ]
+                            },
+                        },
+                        "references": [
+                            str(line.get("id")) for line in lines if line.get("id")
+                        ],
+                    }
+                )
+                document["reply"] = (
+                    f"Preparé el plan de compras: {len(lines)} líneas sin "
+                    "cobertura agrupadas por tipo de pedido, con los "
+                    "proveedores elegibles del contexto."
+                )
+
     if not observations and surface_name == "position" and product:
         # A mutation-looking goal on the position surface produces a real
         # design-ops proposal — the ops card → apply → Guardar path stays
         # exercisable under mock. The service validates each op through the
         # same contract a live provider hits.
-        design = _design_assist_output({"prompt": goal, "product": product})
+        design = _design_assist_output(
+            {
+                "prompt": goal,
+                "product": product,
+                "catalog": input_payload.get("catalog") or context.get("catalog") or {},
+            }
+        )
         if design["ops"]:
             document["steps"].append(
                 {"kind": "ops", "ops": design["ops"], "label": design["notes"]}
             )
+        if design.get("clarify"):
+            document["clarify"] = design["clarify"]
     elif not observations and surface_name == "project" and context.get("editable"):
-        # Same exercise for the batch card: "todas las fijas a abatible" on a
-        # project drafts one op set against the positions the context shows.
-        # Batch ops never carry a positional module index — refs differ per
-        # position, so module-bound ops use the "*" wildcard the server
-        # expands against each position's real summary.
-        design = _design_assist_output({"prompt": goal, "product": {}})
-        batch_ops = [
-            {**op, "module": "*"} if "module" in op else op
-            for op in design["ops"]
-            if op.get("op") in _MOCK_BATCH_OPS
-        ]
-        # No product lives in the batch payload — the opening-keyboard loop
-        # iterates modules, so scan the goal for an opening keyword directly.
-        if not batch_ops:
-            for pattern, opening in _OPENING_KEYWORDS:
-                if pattern.search(goal.lower()):
-                    batch_ops.append(
-                        {"op": "set_opening", "module": "*", "opening": opening}
-                    )
-                    break
-        if batch_ops and context.get("positions"):
+        # IA2 §1 — el agente del proyecto opera posiciones con las mismas
+        # ops tipadas que la API: crear, duplicar y lote sobre producto.
+        positions = context.get("positions") or []
+        measure = re.search(r"(\d+)\s*[×x]\s*(\d+)", goal)
+        if re.search(r"crea|crear|agrega|nueva\s+posici", goal_l) and measure:
+            # system_id real del contexto: la familia corredera cuando la
+            # meta la nombra, si no el primer sistema activo del taller —
+            # default documentado, nunca un UUID inventado.
+            catalog_systems = context.get("systems") or []
+            sliding_system = next(
+                (
+                    item
+                    for item in catalog_systems
+                    if isinstance(item, dict)
+                    and "SLIDING" in str(item.get("family") or "").upper()
+                ),
+                None,
+            )
+            wants_sliding = bool(re.search(r"corred", goal_l))
+            system = (
+                sliding_system
+                if wants_sliding and sliding_system is not None
+                else catalog_systems[0]
+                if catalog_systems and isinstance(catalog_systems[0], dict)
+                else None
+            )
+            ops: list[dict] = [
+                {
+                    "op": "add_position",
+                    "width_mm": measure.group(1),
+                    "height_mm": measure.group(2),
+                    **(
+                        {"system_id": str(system["id"])}
+                        if system is not None and system.get("id")
+                        else {}
+                    ),
+                    **(
+                        {"opening": "SLIDING_2L"}
+                        if wants_sliding
+                        else {}
+                    ),
+                    **(
+                        {"location": "Cocina"}
+                        if re.search(r"cocina", goal_l)
+                        else {}
+                    ),
+                }
+            ]
+            document["steps"].append(
+                {"kind": "ops", "ops": ops, "label": "crear posición"}
+            )
+        elif re.search(r"duplica|duplicar|copia", goal_l) and positions:
+            wanted_index = None
+            index_match = re.search(r"posici[oó]n\s*(\d+)", goal_l)
+            if index_match:
+                wanted_index = int(index_match.group(1))
+            target = next(
+                (
+                    item
+                    for item in positions
+                    if int(item.get("index") or 0) == wanted_index
+                ),
+                positions[wanted_index - 1]
+                if wanted_index and 0 < wanted_index <= len(positions)
+                else None,
+            )
+            count = None
+            count_match = re.search(r"(cuatro|tres|dos|cinco|\d+)\s+veces", goal_l)
+            if count_match:
+                raw = count_match.group(1)
+                count = {"cuatro": 4, "tres": 3, "dos": 2, "cinco": 5}.get(
+                    raw, int(raw) if raw.isdigit() else 0
+                )
+            if isinstance(target, dict) and target.get("id"):
+                op: dict[str, object] = {
+                    "op": "duplicate_position",
+                    "position_id": str(target["id"]),
+                }
+                if count:
+                    op["count"] = count
+                document["steps"].append(
+                    {"kind": "ops", "ops": [op], "label": "duplicar posición"}
+                )
+        elif re.search(r"vidrio|glass|termopanel|low-?e|dvh", goal_l) and re.search(
+            r"todas|segundo\s*piso|[2２]\s*[º°o]?\s*piso|piso\s*2|piso", goal_l
+        ):
+            # Lote por ubicación: position_ids explícitos del contexto —
+            # los que dicen "segundo piso"/"2º piso" (o todas si no hay
+            # filtro). «Termopanel Low-E» mapea al SKU real del catálogo
+            # demo — la propuesta siempre apunta a un artículo existente.
+            wants_low_e = bool(re.search(r"low-?e|lowe", goal_l))
+            floor_re = re.compile(r"segundo\s*piso|[2２]\s*[º°o]?\s*piso|piso\s*2")
+            wants_floor = bool(floor_re.search(goal_l))
+            filtered = [
+                item for item in positions
+                if floor_re.search(str(item.get("location") or "").lower())
+            ] if wants_floor else positions
+            if wants_low_e:
+                sku = "VIDRIO-LOWE-24"
+            else:
+                sku_match = re.search(r"vidrio\s+a\s+([A-Z0-9-]+)|a\s+([A-Z0-9-]+)$", goal, re.I)
+                sku = next(
+                    (
+                        group for group in (sku_match.groups() if sku_match else [])
+                        if group
+                    ),
+                    "VIDRIO-BASE",
+                ).upper()
+            ids = [str(item["id"]) for item in filtered if item.get("id")]
+            if ids:
+                document["steps"].append(
+                    {
+                        "kind": "batch_ops",
+                        "targets": {"position_ids": ids},
+                        "ops": [{"op": "set_glass", "sku": sku}],
+                        "label": f"vidrio {sku} en {len(ids)} posición(es)",
+                    }
+                )
+        elif re.search(r"descuento|baja.*precio|precio.*%|%\s*de\s*desc", goal_l):
+            # Sin op de precio: lo honesto es derivar a la superficie real.
+            pid = str(context.get("id"))
             document["steps"].append(
                 {
-                    "kind": "batch_ops",
-                    "targets": {"typology": "ALL"},
-                    "ops": batch_ops,
-                    "label": design["notes"],
+                    "kind": "navigate",
+                    "path": f"/projects/{pid}/pricing",
+                    "label": "Precios del proyecto",
                 }
             )
+            document["reply"] = (
+                "Los descuentos no se aplican desde el asistente — en Precios "
+                "puedes emitir una revisión con la banda correspondiente."
+            )
+        elif re.search(r"emit", goal_l):
+            pid = str(context.get("id"))
+            document["steps"].append(
+                {
+                    "kind": "prepare",
+                    "action": "emit_revision",
+                    "path": f"/projects/{pid}/pricing",
+                    "label": "Preparar emisión de la revisión",
+                }
+            )
+        else:
+            # Same exercise for the batch card: "todas las fijas a abatible" on a
+            # project drafts one op set against the positions the context shows.
+            # Batch ops never carry a positional module index — refs differ per
+            # position, so module-bound ops use the "*" wildcard the server
+            # expands against each position's real summary.
+            design = _design_assist_output({"prompt": goal, "product": {}})
+            batch_ops = [
+                {**op, "module": "*"} if "module" in op else op
+                for op in design["ops"]
+                if op.get("op") in _MOCK_BATCH_OPS
+            ]
+            # No product lives in the batch payload — the opening-keyboard loop
+            # iterates modules, so scan the goal for an opening keyword directly.
+            if not batch_ops:
+                for pattern, opening in _OPENING_KEYWORDS:
+                    if pattern.search(goal_l):
+                        batch_ops.append(
+                            {"op": "set_opening", "module": "*", "opening": opening}
+                        )
+                        break
+            if batch_ops and positions:
+                document["steps"].append(
+                    {
+                        "kind": "batch_ops",
+                        "targets": {"typology": "ALL"},
+                        "ops": batch_ops,
+                        "label": design["notes"],
+                    }
+                )
+
+    # Ronda 2 — las observaciones de herramienta se citan tal cual: el mock
+    # cumple la misma regla que el prompt exige al proveedor real.
+    wo_observations = [
+        item
+        for item in (observations or [])
+        if isinstance(item, dict)
+        and item.get("surface") == "work_order"
+        and isinstance(item.get("context"), dict)
+    ]
+    if wo_observations:
+        lines: list[str] = []
+        for obs in wo_observations:
+            ctx = obs["context"]
+            pending = [
+                str(step.get("label") or step.get("code"))
+                for step in (ctx.get("steps") or [])
+                if step.get("status") == "PENDING"
+            ]
+            reason = " por material faltante" if ctx.get("shortages") else ""
+            lines.append(
+                f"La {ctx.get('order_code')} está {ctx.get('status')}{reason}"
+                + (
+                    f"; pendiente: {', '.join(pending)}."
+                    if pending
+                    else "."
+                )
+            )
+        document["reply"] = " ".join(lines)
+    elif surface_name == "work_order" and re.search(
+        r"barras|marco|plan de corte", goal_l
+    ):
+        # F02 — la proyección no expone el plan de corte: la respuesta
+        # honesta es admitir el dato faltante, no inventar un número.
+        document["reply"] = (
+            "La proyección de la orden no dispone del plan de corte — "
+            "las barras de marco no constan aquí; el dato vive en el "
+            "expediente CNC de la OT."
+        )
+    elif surface_name == "dashboard" and re.search(
+        r"precio|cu[aá]nto|aproximad", goal_l
+    ):
+        # G01 — sin motor no hay precio honesto para una ventana suelta.
+        document["reply"] = (
+            "No dispone de un cálculo del motor para una ventana suelta — "
+            "el precio solo es real si lo calcula el motor. Puedo crear "
+            "un borrador de posición y calcularlo ahí si quieres."
+        )
+
+    tool_observations = [
+        item
+        for item in (observations or [])
+        if isinstance(item, dict) and item.get("tool") and item.get("output")
+    ]
+    if tool_observations:
+        parts: list[str] = []
+        for obs in tool_observations:
+            name = str(obs.get("tool"))
+            output = obs.get("output") or {}
+            if not isinstance(output, dict) or output.get("ok") is False:
+                parts.append(
+                    f"La herramienta {name} no pudo responder: "
+                    f"{output.get('error') if isinstance(output, dict) else 'error'}."
+                )
+                continue
+            if name == "calculate_position":
+                weights = output.get("leaf_weights") or []
+                if weights:
+                    parts.append(
+                        f"La hoja derecha pesa {weights[-1].get('total_weight_kg')} kg "
+                        f"según el BOM persistido."
+                    )
+                else:
+                    parts.append(
+                        "La posición no tiene cálculo persistido todavía "
+                        "(has_bom=false) — guárdala para que el motor calcule."
+                    )
+            elif name == "validate_position":
+                blockers = output.get("blockers") or []
+                if blockers:
+                    parts.append(
+                        "Bloqueos del motor: "
+                        + ", ".join(
+                            str(item.get("code") or item) for item in blockers
+                        )
+                        + "."
+                    )
+                else:
+                    parts.append(
+                        "El motor no reporta bloqueos para la posición — "
+                        "la validación viene limpia."
+                    )
+            elif name == "price_project":
+                lines = [
+                    item
+                    for item in (output.get("positions") or [])
+                    if isinstance(item, dict) and item.get("ok")
+                ]
+                if lines:
+                    top = max(
+                        lines, key=lambda item: float(item.get("line_cost") or 0)
+                    )
+                    parts.append(
+                        f"La posición más cara es la {top.get('index')} "
+                        f"({top.get('location') or 'sin ubicación'}): "
+                        f"${int(float(top.get('line_cost') or 0)):,} "
+                        f"{output.get('currency') or ''}.".replace(",", ".")
+                    )
+            elif name == "price_position":
+                parts.append(
+                    f"La posición cuesta ${output.get('unit_cost')} "
+                    f"{output.get('currency') or ''} "
+                    f"(línea: ${output.get('line_cost')})."
+                )
+            elif name == "get_blockers":
+                missing = output.get("missing") or []
+                if missing:
+                    parts.append("Falta para emitir: " + ", ".join(map(str, missing)) + ".")
+                else:
+                    parts.append("No falta nada para emitir según el motor.")
+            elif name == "explain_price_delta":
+                deltas = output.get("positions") or []
+                parts.append(
+                    f"El delta contra la autoridad aplicada cubre "
+                    f"{len(deltas)} posición(es) "
+                    f"(has_applied={output.get('has_applied')})."
+                )
+            else:
+                parts.append(f"{name}: {json.dumps(output, default=str)[:160]}.")
+        if parts:
+            document["reply"] = " ".join(parts)
     return document
 
 
@@ -890,6 +1796,10 @@ class MockProvider:
             output = json.dumps(
                 _context_assist_output(input_payload), ensure_ascii=False
             )
+        elif capability == "collection_reminder":
+            output = json.dumps(
+                _collection_reminder_output(input_payload), ensure_ascii=False
+            )
         elif capability == "agent":
             output = json.dumps(
                 _agent_output(input_payload), ensure_ascii=False
@@ -918,7 +1828,13 @@ def provider_for(route: dict):
         if not _mock_enabled():
             raise ProviderError("ai_provider_mock_disabled")
         return MockProvider()
+    # Per-capability transport options from ai_routes: NULL keeps the
+    # provider's env/default bound.
+    timeout_s = route.get("timeout_s")
+    retry_max = route.get("retry_max")
     protocol = os.environ.get(f"AI_GATEWAY_{name}_PROTOCOL", "").lower()
     if protocol == "openai" or (not protocol and name in _OPENAI_PROTOCOL_PROVIDERS):
-        return OpenAICompatibleProvider(provider=name)
-    return HttpProvider(provider=name)
+        return OpenAICompatibleProvider(
+            provider=name, timeout_s=timeout_s, retry_max=retry_max
+        )
+    return HttpProvider(provider=name, timeout_s=timeout_s, retry_max=retry_max)

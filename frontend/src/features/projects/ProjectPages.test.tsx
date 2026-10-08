@@ -79,10 +79,21 @@ function makePosition(): PositionResponse {
     project_id: "project-a",
     position_index: 1,
     location_tag: "Dormitorio principal",
+    is_option: false,
     quantity: 2,
     price_net: "0",
     discount_pct: "0",
+    thermal_orientation: null,
     typology: "FIXED",
+    measurement: {
+      state: "CLIENT_DECLARED",
+      confirmed_at: null,
+      confirmed_by: null,
+      vano: null,
+      mounting_rule: null,
+      fabrication_lock: null,
+      resolution: null,
+    },
     updated_at: "2026-09-18T12:01:02.123456Z",
     design: {
       system_id: "system-a",
@@ -197,6 +208,12 @@ async function decide(approve: boolean): Promise<void> {
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 }
 
+/** El hub pereza-monta cada pestaña al primer toque — el test abre la
+ * pestaña real antes de tocar el panel (misma superficie que el usuario). */
+async function openTab(label: Parameters<typeof t>[0]): Promise<void> {
+  fireEvent.click(await screen.findByRole("tab", { name: t(label) }));
+}
+
 function change(label: Parameters<typeof t>[0], value: string): void {
   fireEvent.change(screen.getByLabelText(t(label)), {
     target: { value },
@@ -226,6 +243,15 @@ beforeEach(() => {
     response(200, {
       payments: [],
       invoices: [],
+      schedule: [],
+      movements: [],
+      sii: {
+        adapter: "none",
+        certified: false,
+        certificate: false,
+        caf_available: false,
+      },
+      reminder: null,
       collected: "0",
       quote_total_gross: null,
       balance: null,
@@ -278,6 +304,7 @@ it("creates a project, navigates to the server ID and renders persisted metadata
   // The project code stays visible as secondary metadata, not as the title.
   expect(screen.getByText("P-1042")).toBeInTheDocument();
   expect(router.state.location.pathname).toBe("/projects/server-created-id");
+  await openTab("projects.tab.cotizacion");
   expect(screen.getByText("Cliente persistido")).toBeInTheDocument();
   expect(screen.getByText("persistido@example.test")).toBeInTheDocument();
   expect(screen.getByText("Nota recuperada desde detalle")).toBeInTheDocument();
@@ -332,6 +359,7 @@ it("PATCHes the exact original timestamp and reloads persisted metadata", async 
     level: 1,
     name: "Casa actualizada",
   });
+  await openTab("projects.tab.cotizacion");
   expect(screen.getByText(saved.client_phone!)).toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent(t("projects.saved"));
   expect(screen.queryByLabelText(t("projects.name"))).not.toBeInTheDocument();
@@ -433,12 +461,12 @@ it("deletes using the exact position timestamp and renders the refreshed project
 
   mount();
   // The delete action lives in the side pane — select the vano first.
-  fireEvent.click(await screen.findByText("1. Dormitorio principal"));
+  fireEvent.click(await screen.findByTitle("Dormitorio principal"));
   fireEvent.click(screen.getByRole("button", { name: t("projects.deletePosition") }));
 
   await decide(true);
   expect(await screen.findByText(t("projects.noPositions"))).toBeInTheDocument();
-  expect(screen.queryByText("1. Dormitorio principal")).not.toBeInTheDocument();
+  expect(screen.queryByTitle("Dormitorio principal")).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent(t("projects.deleted"));
 
   expect(positionsDestroy).toHaveBeenCalledTimes(1);
@@ -470,12 +498,12 @@ it.each([
     );
 
     mount();
-    fireEvent.click(await screen.findByText("1. Dormitorio principal"));
+    fireEvent.click(await screen.findByTitle("Dormitorio principal"));
     fireEvent.click(screen.getByRole("button", { name: t("projects.deletePosition") }));
     await decide(true);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(t(message));
-    expect(screen.getByText("1. Dormitorio principal")).toBeInTheDocument();
+    expect(screen.getByTitle("Dormitorio principal")).toBeInTheDocument();
     expect(screen.queryByText(t("projects.noPositions"))).not.toBeInTheDocument();
     expect(screen.queryByText(t("projects.deleted"))).not.toBeInTheDocument();
     await waitFor(() => {
@@ -496,6 +524,8 @@ it.each([
 it("prepares and explicitly emits the current priced revision", async () => {
   const position = makePosition();
   const priced = makeProject({
+    client_rut: "11.111.111-1",
+    delivery_address: "Obra 123",
     pricing_current: true,
     currency: "CLP",
     current_pricing_operation_id: "operation-a",
@@ -529,6 +559,16 @@ it("prepares and explicitly emits the current priced revision", async () => {
         revision_code: "REV-A",
         payment_terms: "",
         quotation_valid_until: null,
+        org_doc_terms: {},
+        default_payment_terms: "",
+        doc_validity_days: 15,
+        doc_terms: {
+          plazo_entrega: "15 días hábiles",
+          instalacion: "Instalación incluida",
+          exclusiones: "No incluye obras civiles",
+          garantia: "2 años",
+        },
+        emission_missing: [],
         positions: [
           {
             position_id: position.id,
@@ -553,26 +593,44 @@ it("prepares and explicitly emits the current priced revision", async () => {
       }) as never;
     if (url.endsWith("/inputs/") && options.method === "PUT")
       return response(200, { project_id: priced.id, positions_saved: 1 }) as never;
+    if (url.endsWith("/quote-preview/") && options.method === "POST")
+      return response(200, {
+        html: "<p>preview</p>",
+        bom_hash: "c".repeat(64),
+        revision_code: "REV-A",
+      }) as never;
+    if (url.includes("/quote-links") && options.method === "POST")
+      return response(200, {
+        token: "token-test",
+        expires_at: "2099-01-01T00:00:00Z",
+        path: "/portal/token-test",
+      }) as never;
     if (url.endsWith("/freeze/") && options.method === "POST")
       return response(201, { revision_code: "REV-A" }) as never;
     throw new Error(`Unexpected lifecycle request ${options.method} ${url}`);
   });
 
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   await screen.findByLabelText(t("quotation.paymentTerms"));
   change("quotation.paymentTerms", "50% anticipo");
-  change("quotation.validUntil", "2026-10-19");
-  fireEvent.click(screen.getByLabelText(t("quotation.confirm")));
-  fireEvent.click(screen.getByRole("button", { name: t("quotation.emit") }));
+  change("quotation.validUntil", "2030-10-19");
+  fireEvent.click(screen.getByRole("button", { name: t("quotation.emitSend") }));
+  fireEvent.click(
+    (await screen.findAllByRole("button", { name: t("quotation.emitSend") })).at(-1)!,
+  );
 
   await screen.findAllByText(t("projects.quoted"));
   expect(screen.getAllByText("Revisión A")).toHaveLength(2);
-  expect(apiMutator).toHaveBeenCalledTimes(3);
-  const saveRequest = vi.mocked(apiMutator).mock.calls[1]!;
+  const saveRequest = vi
+    .mocked(apiMutator)
+    .mock.calls.find(
+      ([url, options]) => url.endsWith("/inputs/") && (options as RequestInit).method === "PUT",
+    )!;
   expect(JSON.parse(String((saveRequest[1] as RequestInit).body))).toMatchObject({
     payment_terms: "50% anticipo",
-    quotation_valid_until: "2026-10-19",
+    quotation_valid_until: "2030-10-19",
     positions: [{ location_tag: "Dormitorio principal" }],
   });
 });
@@ -580,6 +638,8 @@ it("prepares and explicitly emits the current priced revision", async () => {
 it("guards unsaved quotation preparation edits against navigation and cancel", async () => {
   const position = makePosition();
   const priced = makeProject({
+    client_rut: "11.111.111-1",
+    delivery_address: "Obra 123",
     pricing_current: true,
     current_pricing_operation_id: "operation-a",
     total_price_gross: "1190.00",
@@ -594,6 +654,16 @@ it("guards unsaved quotation preparation edits against navigation and cancel", a
         revision_code: "REV-A",
         payment_terms: "",
         quotation_valid_until: null,
+        org_doc_terms: {},
+        default_payment_terms: "",
+        doc_validity_days: 15,
+        doc_terms: {
+          plazo_entrega: "15 días hábiles",
+          instalacion: "Instalación incluida",
+          exclusiones: "No incluye obras civiles",
+          garantia: "2 años",
+        },
+        emission_missing: [],
         positions: [
           {
             position_id: position.id,
@@ -620,6 +690,7 @@ it("guards unsaved quotation preparation edits against navigation and cancel", a
   });
 
   const router = mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   await screen.findByLabelText(t("quotation.paymentTerms"));
   change("quotation.paymentTerms", "50% anticipo");
@@ -645,7 +716,7 @@ it("guards unsaved quotation preparation edits against navigation and cancel", a
 
   fireEvent.click(screen.getByRole("button", { name: t("quotation.prepare") }));
   await screen.findByLabelText(t("quotation.paymentTerms"));
-  change("quotation.validUntil", "2026-10-19");
+  change("quotation.validUntil", "2030-10-19");
   fireEvent.click(screen.getByRole("link", { name: t("projects.back") }));
   const leaveDialog2 = await screen.findByRole("dialog");
   expect(leaveDialog2).toHaveTextContent(t("projects.leaveUnsaved"));
@@ -660,6 +731,8 @@ it("guards unsaved quotation preparation edits against navigation and cancel", a
 it("saves handle placement intents for operable leaves before emitting", async () => {
   const position = makePosition();
   const priced = makeProject({
+    client_rut: "11.111.111-1",
+    delivery_address: "Obra 123",
     pricing_current: true,
     current_pricing_operation_id: "operation-a",
     total_price_gross: "1190.00",
@@ -692,6 +765,16 @@ it("saves handle placement intents for operable leaves before emitting", async (
         revision_code: "REV-A",
         payment_terms: "",
         quotation_valid_until: null,
+        org_doc_terms: {},
+        default_payment_terms: "",
+        doc_validity_days: 15,
+        doc_terms: {
+          plazo_entrega: "15 días hábiles",
+          instalacion: "Instalación incluida",
+          exclusiones: "No incluye obras civiles",
+          garantia: "2 años",
+        },
+        emission_missing: [],
         positions: [
           {
             position_id: position.id,
@@ -741,12 +824,25 @@ it("saves handle placement intents for operable leaves before emitting", async (
       }) as never;
     if (url.endsWith("/inputs/") && options.method === "PUT")
       return response(200, { project_id: priced.id, positions_saved: 1 }) as never;
+    if (url.endsWith("/quote-preview/") && options.method === "POST")
+      return response(200, {
+        html: "<p>preview</p>",
+        bom_hash: "c".repeat(64),
+        revision_code: "REV-A",
+      }) as never;
+    if (url.includes("/quote-links") && options.method === "POST")
+      return response(200, {
+        token: "token-test",
+        expires_at: "2099-01-01T00:00:00Z",
+        path: "/portal/token-test",
+      }) as never;
     if (url.endsWith("/freeze/") && options.method === "POST")
       return response(201, { revision_code: "REV-A" }) as never;
     throw new Error(`Unexpected lifecycle request ${options.method} ${url}`);
   });
 
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   const heightInput = await screen.findByLabelText(t("quotation.handleHeight"));
   // Missing intents are seeded with the displayed midpoint — the visible
@@ -768,12 +864,18 @@ it("saves handle placement intents for operable leaves before emitting", async (
   fireEvent.change(heightInput, { target: { value: "300" } });
   expect(screen.queryByText(t("quotation.handleOutOfBounds"))).toBeNull();
   change("quotation.paymentTerms", "50% anticipo");
-  change("quotation.validUntil", "2026-10-19");
-  fireEvent.click(screen.getByLabelText(t("quotation.confirm")));
-  fireEvent.click(screen.getByRole("button", { name: t("quotation.emit") }));
+  change("quotation.validUntil", "2030-10-19");
+  fireEvent.click(screen.getByRole("button", { name: t("quotation.emitSend") }));
+  fireEvent.click(
+    (await screen.findAllByRole("button", { name: t("quotation.emitSend") })).at(-1)!,
+  );
 
   await screen.findAllByText(t("projects.quoted"));
-  const saveRequest = vi.mocked(apiMutator).mock.calls[1]!;
+  const saveRequest = vi
+    .mocked(apiMutator)
+    .mock.calls.find(
+      ([url, options]) => url.endsWith("/inputs/") && (options as RequestInit).method === "PUT",
+    )!;
   const body = JSON.parse(String((saveRequest[1] as RequestInit).body));
   expect(body.positions[0].handle_intents).toEqual([
     {
@@ -789,6 +891,8 @@ it("saves handle placement intents for operable leaves before emitting", async (
 it("reconciles handle intents when the handle policy changes", async () => {
   const position = makePosition();
   const priced = makeProject({
+    client_rut: "11.111.111-1",
+    delivery_address: "Obra 123",
     pricing_current: true,
     current_pricing_operation_id: "operation-a",
     total_price_gross: "1190.00",
@@ -821,6 +925,16 @@ it("reconciles handle intents when the handle policy changes", async () => {
         revision_code: "REV-A",
         payment_terms: "",
         quotation_valid_until: null,
+        org_doc_terms: {},
+        default_payment_terms: "",
+        doc_validity_days: 15,
+        doc_terms: {
+          plazo_entrega: "15 días hábiles",
+          instalacion: "Instalación incluida",
+          exclusiones: "No incluye obras civiles",
+          garantia: "2 años",
+        },
+        emission_missing: [],
         positions: [
           {
             position_id: position.id,
@@ -919,22 +1033,41 @@ it("reconciles handle intents when the handle policy changes", async () => {
       }) as never;
     if (url.endsWith("/inputs/") && options.method === "PUT")
       return response(200, { project_id: priced.id, positions_saved: 1 }) as never;
+    if (url.endsWith("/quote-preview/") && options.method === "POST")
+      return response(200, {
+        html: "<p>preview</p>",
+        bom_hash: "c".repeat(64),
+        revision_code: "REV-A",
+      }) as never;
+    if (url.includes("/quote-links") && options.method === "POST")
+      return response(200, {
+        token: "token-test",
+        expires_at: "2099-01-01T00:00:00Z",
+        path: "/portal/token-test",
+      }) as never;
     if (url.endsWith("/freeze/") && options.method === "POST")
       return response(201, { revision_code: "REV-A" }) as never;
     throw new Error(`Unexpected lifecycle request ${options.method} ${url}`);
   });
 
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   const policySelect = await screen.findByLabelText(t("quotation.handlePolicy"));
   fireEvent.change(policySelect, { target: { value: "handle-b" } });
   change("quotation.paymentTerms", "50% anticipo");
-  change("quotation.validUntil", "2026-10-19");
-  fireEvent.click(screen.getByLabelText(t("quotation.confirm")));
-  fireEvent.click(screen.getByRole("button", { name: t("quotation.emit") }));
+  change("quotation.validUntil", "2030-10-19");
+  fireEvent.click(screen.getByRole("button", { name: t("quotation.emitSend") }));
+  fireEvent.click(
+    (await screen.findAllByRole("button", { name: t("quotation.emitSend") })).at(-1)!,
+  );
 
   await screen.findAllByText(t("projects.quoted"));
-  const saveRequest = vi.mocked(apiMutator).mock.calls[1]!;
+  const saveRequest = vi
+    .mocked(apiMutator)
+    .mock.calls.find(
+      ([url, options]) => url.endsWith("/inputs/") && (options as RequestInit).method === "PUT",
+    )!;
   const body = JSON.parse(String((saveRequest[1] as RequestInit).body));
   // B2's SECONDARY slot does not exist under handle-b: dropped. B1 survives
   // but LEAF_TOP is not permitted there: reset to the only permitted value.
@@ -952,6 +1085,8 @@ it("reconciles handle intents when the handle policy changes", async () => {
 it("keeps a manually edited height when the handle policy changes", async () => {
   const position = makePosition();
   const priced = makeProject({
+    client_rut: "11.111.111-1",
+    delivery_address: "Obra 123",
     pricing_current: true,
     current_pricing_operation_id: "operation-a",
     total_price_gross: "1190.00",
@@ -1008,6 +1143,16 @@ it("keeps a manually edited height when the handle policy changes", async () => 
         revision_code: "REV-A",
         payment_terms: "",
         quotation_valid_until: null,
+        org_doc_terms: {},
+        default_payment_terms: "",
+        doc_validity_days: 15,
+        doc_terms: {
+          plazo_entrega: "15 días hábiles",
+          instalacion: "Instalación incluida",
+          exclusiones: "No incluye obras civiles",
+          garantia: "2 años",
+        },
+        emission_missing: [],
         positions: [
           {
             position_id: position.id,
@@ -1042,12 +1187,25 @@ it("keeps a manually edited height when the handle policy changes", async () => 
       }) as never;
     if (url.endsWith("/inputs/") && options.method === "PUT")
       return response(200, { project_id: priced.id, positions_saved: 1 }) as never;
+    if (url.endsWith("/quote-preview/") && options.method === "POST")
+      return response(200, {
+        html: "<p>preview</p>",
+        bom_hash: "c".repeat(64),
+        revision_code: "REV-A",
+      }) as never;
+    if (url.includes("/quote-links") && options.method === "POST")
+      return response(200, {
+        token: "token-test",
+        expires_at: "2099-01-01T00:00:00Z",
+        path: "/portal/token-test",
+      }) as never;
     if (url.endsWith("/freeze/") && options.method === "POST")
       return response(201, { revision_code: "REV-A" }) as never;
     throw new Error(`Unexpected lifecycle request ${options.method} ${url}`);
   });
 
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   const heightInput = await screen.findByLabelText(t("quotation.handleHeight"));
   expect(heightInput).toHaveValue("1000");
@@ -1055,12 +1213,18 @@ it("keeps a manually edited height when the handle policy changes", async () => 
   const policySelect = screen.getByLabelText(t("quotation.handlePolicy"));
   fireEvent.change(policySelect, { target: { value: "handle-b" } });
   change("quotation.paymentTerms", "50% anticipo");
-  change("quotation.validUntil", "2026-10-19");
-  fireEvent.click(screen.getByLabelText(t("quotation.confirm")));
-  fireEvent.click(screen.getByRole("button", { name: t("quotation.emit") }));
+  change("quotation.validUntil", "2030-10-19");
+  fireEvent.click(screen.getByRole("button", { name: t("quotation.emitSend") }));
+  fireEvent.click(
+    (await screen.findAllByRole("button", { name: t("quotation.emitSend") })).at(-1)!,
+  );
 
   await screen.findAllByText(t("projects.quoted"));
-  const saveRequest = vi.mocked(apiMutator).mock.calls[1]!;
+  const saveRequest = vi
+    .mocked(apiMutator)
+    .mock.calls.find(
+      ([url, options]) => url.endsWith("/inputs/") && (options as RequestInit).method === "PUT",
+    )!;
   const body = JSON.parse(String((saveRequest[1] as RequestInit).body));
   // The estimator typed 750 — the v2 reseed (bounds 700–900 → midpoint 800)
   // must not overwrite it with its own recomputed value.
@@ -1078,6 +1242,8 @@ it("keeps a manually edited height when the handle policy changes", async () => 
 it("seals suggested heights only after the estimator confirms them", async () => {
   const position = makePosition();
   const priced = makeProject({
+    client_rut: "11.111.111-1",
+    delivery_address: "Obra 123",
     pricing_current: true,
     current_pricing_operation_id: "operation-a",
     total_price_gross: "1190.00",
@@ -1110,6 +1276,16 @@ it("seals suggested heights only after the estimator confirms them", async () =>
         revision_code: "REV-A",
         payment_terms: "",
         quotation_valid_until: null,
+        org_doc_terms: {},
+        default_payment_terms: "",
+        doc_validity_days: 15,
+        doc_terms: {
+          plazo_entrega: "15 días hábiles",
+          instalacion: "Instalación incluida",
+          exclusiones: "No incluye obras civiles",
+          garantia: "2 años",
+        },
+        emission_missing: [],
         positions: [
           {
             position_id: position.id,
@@ -1188,12 +1364,25 @@ it("seals suggested heights only after the estimator confirms them", async () =>
       }) as never;
     if (url.endsWith("/inputs/") && options.method === "PUT")
       return response(200, { project_id: priced.id, positions_saved: 1 }) as never;
+    if (url.endsWith("/quote-preview/") && options.method === "POST")
+      return response(200, {
+        html: "<p>preview</p>",
+        bom_hash: "c".repeat(64),
+        revision_code: "REV-A",
+      }) as never;
+    if (url.includes("/quote-links") && options.method === "POST")
+      return response(200, {
+        token: "token-test",
+        expires_at: "2099-01-01T00:00:00Z",
+        path: "/portal/token-test",
+      }) as never;
     if (url.endsWith("/freeze/") && options.method === "POST")
       return response(201, { revision_code: "REV-A" }) as never;
     throw new Error(`Unexpected lifecycle request ${options.method} ${url}`);
   });
 
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   const heightInput = await screen.findByLabelText(t("quotation.handleHeight"));
   // The generated midpoint is visible but flagged as a suggestion — not yet
@@ -1201,12 +1390,12 @@ it("seals suggested heights only after the estimator confirms them", async () =>
   expect(heightInput).toHaveValue("1000");
   expect(screen.getByText(t("quotation.handleSuggested"))).toBeTruthy();
   change("quotation.paymentTerms", "50% anticipo");
-  change("quotation.validUntil", "2026-10-19");
-  fireEvent.click(screen.getByLabelText(t("quotation.confirm")));
-  fireEvent.click(screen.getByRole("button", { name: t("quotation.emit") }));
+  change("quotation.validUntil", "2030-10-19");
+  fireEvent.click(screen.getByRole("button", { name: t("quotation.emitSend") }));
 
-  // Unconfirmed suggestions block the seal — nothing is persisted.
-  await screen.findByText(t("quotation.seedsUnconfirmed"));
+  // Unconfirmed suggestions block the seal — the checklist leads to the
+  // first pending field and nothing is persisted.
+  await screen.findByText(t("quotation.missingLead"));
   expect(
     vi
       .mocked(apiMutator)
@@ -1223,7 +1412,10 @@ it("seals suggested heights only after the estimator confirms them", async () =>
 
   fireEvent.click(screen.getByRole("button", { name: t("quotation.confirmSuggested") }));
   expect(screen.queryByText(t("quotation.handleSuggested"))).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: t("quotation.emit") }));
+  fireEvent.click(screen.getByRole("button", { name: t("quotation.emitSend") }));
+  fireEvent.click(
+    (await screen.findAllByRole("button", { name: t("quotation.emitSend") })).at(-1)!,
+  );
 
   await screen.findByText(t("projects.quoted"));
   const saveRequest = vi
@@ -1246,6 +1438,8 @@ it("seals suggested heights only after the estimator confirms them", async () =>
 it("asks before cloning away from dirty quotation preparation edits", async () => {
   const position = makePosition();
   const priced = makeProject({
+    client_rut: "11.111.111-1",
+    delivery_address: "Obra 123",
     pricing_current: true,
     current_pricing_operation_id: "operation-a",
     position_count: 1,
@@ -1265,6 +1459,16 @@ it("asks before cloning away from dirty quotation preparation edits", async () =
         revision_code: "REV-A",
         payment_terms: "",
         quotation_valid_until: null,
+        org_doc_terms: {},
+        default_payment_terms: "",
+        doc_validity_days: 15,
+        doc_terms: {
+          plazo_entrega: "15 días hábiles",
+          instalacion: "Instalación incluida",
+          exclusiones: "No incluye obras civiles",
+          garantia: "2 años",
+        },
+        emission_missing: [],
         positions: [
           {
             position_id: position.id,
@@ -1291,6 +1495,7 @@ it("asks before cloning away from dirty quotation preparation edits", async () =
   });
 
   const router = mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   await screen.findByLabelText(t("quotation.paymentTerms"));
   change("quotation.paymentTerms", "50% anticipo");
@@ -1321,18 +1526,25 @@ it("opens one idempotent editable successor from a quoted revision", async () =>
   );
 
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.editQuoted") }));
 
   const dialog = await screen.findByRole("dialog");
   expect(dialog).toHaveTextContent(t("quotation.successorConfirm"));
   await decide(true);
   await screen.findByText("Revisión B");
-  expect(apiMutator).toHaveBeenCalledTimes(1);
-  expect(vi.mocked(apiMutator).mock.calls[0]?.[0]).toBe("/api/v1/projects/project-a/successor/");
+  // La sucesión es UN solo POST idempotente — el resto de llamadas son las
+  // lecturas del hub (preparación documental para la vigencia del header).
+  const successorCalls = vi
+    .mocked(apiMutator)
+    .mock.calls.filter(([url]) => String(url).endsWith("/successor/"));
+  expect(successorCalls).toHaveLength(1);
 });
 
 it("explicitly retires current draft pricing with an audit reason before editing", async () => {
   const priced = makeProject({
+    client_rut: "11.111.111-1",
+    delivery_address: "Obra 123",
     pricing_current: true,
     current_pricing_operation_id: "operation-a",
     position_count: 1,
@@ -1345,6 +1557,7 @@ it("explicitly retires current draft pricing with an audit reason before editing
     );
   vi.mocked(apiMutator).mockResolvedValue(response(200, {}) as never);
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.resetPricing") }));
   const dialog = await screen.findByRole("dialog");
   expect(dialog).toHaveTextContent(t("quotation.resetReason"));
@@ -1365,6 +1578,7 @@ it("explicitly retires current draft pricing with an audit reason before editing
       }),
     ),
   );
+  await openTab("projects.tab.posiciones");
   expect(await screen.findByRole("link", { name: t("projects.addPosition") })).toBeInTheDocument();
 });
 
@@ -1447,6 +1661,8 @@ it("lists human timeline events once the activity section opens", async () => {
         revoked_at: null,
         view_count: 3,
         last_viewed_at: null,
+        channel: "EMAIL",
+        first_viewed_at: "2026-09-19T17:00:00Z",
       },
     ]),
   );
@@ -1470,6 +1686,15 @@ it("lists human timeline events once the activity section opens", async () => {
         },
       ],
       invoices: [],
+      schedule: [],
+      movements: [],
+      sii: {
+        adapter: "none",
+        certified: false,
+        certificate: false,
+        caf_available: false,
+      },
+      reminder: null,
       collected: "500000",
       quote_total_gross: "3000000",
       balance: "2500000",
@@ -1480,10 +1705,10 @@ it("lists human timeline events once the activity section opens", async () => {
   );
 
   mount();
-  fireEvent.click(await screen.findByText(t("projects.activityTitle")));
+  await openTab("projects.tab.actividad");
 
   expect(await screen.findByText(t("projects.activityEmitted"))).toBeInTheDocument();
   expect(screen.getByText(t("projects.activityApproved"))).toBeInTheDocument();
   expect(screen.getByText(t("projects.activityPayment"))).toBeInTheDocument();
-  expect(screen.getAllByText(/REV-A/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/Revisión A/).length).toBeGreaterThan(0);
 });

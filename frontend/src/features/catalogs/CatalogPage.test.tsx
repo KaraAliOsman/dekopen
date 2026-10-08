@@ -60,6 +60,7 @@ function system(): SystemResponse {
     code: "TEST-GLOBAL",
     material: "PVC",
     depth_mm: "60.00",
+    system_family: "CASEMENT",
     chamber_count: 3,
     sash_overlap_mm: "8.00",
     glass_clearance_white_mm: "4.00",
@@ -280,6 +281,9 @@ beforeEach(() => {
   vi.mocked(client.catalogArticleList).mockResolvedValue(ok({ items: [] }));
   vi.mocked(client.catalogBeadList).mockResolvedValue(ok({ items: [] }));
   vi.mocked(client.catalogKitList).mockResolvedValue(ok({ items: [kit()] }));
+  vi.mocked(client.catalogSpacerList).mockResolvedValue(ok({ items: [] }));
+  vi.mocked(client.catalogFrameufList).mockResolvedValue(ok({ items: [] }));
+  vi.mocked(client.catalogPerformancetestList).mockResolvedValue(ok({ items: [] }));
 });
 
 afterEach(() => {

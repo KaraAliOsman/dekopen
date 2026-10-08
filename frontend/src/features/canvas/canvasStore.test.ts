@@ -11,6 +11,7 @@ function inputs(patch?: Partial<CanvasDesignInputs>): CanvasDesignInputs {
     nominalWidthMm: "1000.00",
     nominalHeightMm: "1000.00",
     color: "WHITE",
+    colorExterior: "",
     parametricTree: { ...BARE },
     product: null,
     ...patch,

@@ -1,10 +1,17 @@
 """Read-only technical choices for the manual estimator, without cost information."""
 
+from decimal import Decimal
+
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
 from rest_framework.views import APIView
 
 from catalogs.serializers import ProfileSectionSerializer
+from dekopen_engine.glass_composition import (
+    composition_to_dict,
+    format_glass_notation,
+)
+from dekopen_engine import admitted_capabilities, spec_options_from_capabilities
 from engine_api.repository import SystemParamsRepository
 from pricing.repository import rows
 from pricing.views import ERRORS, scope
@@ -26,6 +33,10 @@ class CouplerChoiceSerializer(serializers.Serializer):
     material = serializers.CharField()
     face_width_mm = serializers.CharField()
     section = ProfileSectionSerializer(required=False, allow_null=True)
+    # P06 — envolvente de ángulo declarada sobre |angle_deg|; null = sin
+    # declarar (el editor no puede verificarla — estado UNKNOWN).
+    angle_min_deg = serializers.CharField(allow_null=True, required=False)
+    angle_max_deg = serializers.CharField(allow_null=True, required=False)
 
 
 class GlazingBeadChoiceSerializer(serializers.Serializer):
@@ -39,12 +50,53 @@ def _section_json(section):
     return None if section is None else section.model_dump()
 
 
+def _component_json(component) -> dict:
+    """Declared catalog component for the design surface — including the
+    qty/cut rules when the catalog carries them (D04)."""
+    return {
+        "sku": component.sku,
+        "name": component.name,
+        "qty": None if component.qty is None else str(component.qty),
+        "unit": component.unit,
+        "category": component.category,
+        "qty_rule": (
+            None
+            if component.qty_rule is None
+            else component.qty_rule.model_dump(mode="json")
+        ),
+        "cut_rule": (
+            None
+            if component.cut_rule is None
+            else component.cut_rule.model_dump(mode="json")
+        ),
+        "weight_kg": (
+            None if component.weight_kg is None else str(component.weight_kg)
+        ),
+        "cost_clp": (
+            None if component.cost_clp is None else str(component.cost_clp)
+        ),
+        "machining": [
+            declaration.model_dump(mode="json")
+            for declaration in component.machining
+        ],
+    }
+
+
 class KitComponentSerializer(serializers.Serializer):
     sku = serializers.CharField()
     name = serializers.CharField()
-    qty = serializers.CharField()
+    qty = serializers.CharField(allow_null=True)
     unit = serializers.CharField()
     category = serializers.CharField()
+    # Declared rules behind the quantity/cut — the editor mirrors the
+    # engine's expansion, it never invents counts.
+    qty_rule = serializers.DictField(allow_null=True, required=False)
+    cut_rule = serializers.DictField(allow_null=True, required=False)
+    weight_kg = serializers.CharField(allow_null=True, required=False)
+    cost_clp = serializers.CharField(allow_null=True, required=False)
+    machining = serializers.ListField(
+        child=serializers.DictField(), required=False
+    )
 
 
 class KitChoiceSerializer(serializers.Serializer):
@@ -64,6 +116,11 @@ class KitChoiceSerializer(serializers.Serializer):
     # quantities. The design surface uses it to bind visual hardware to the
     # selected kit instead of inventing positions and counts (phase-03).
     contents = KitComponentSerializer(many=True)
+    # D04: the class the kit plays inside its family, and the declared
+    # restrictions beyond the envelope.
+    class_label = serializers.CharField(allow_null=True)
+    max_aspect_ratio = serializers.CharField(allow_null=True)
+    min_stay_height_mm = serializers.CharField(allow_null=True)
 
 
 class HandleSlotSerializer(serializers.Serializer):
@@ -85,9 +142,75 @@ class HandlePolicySerializer(serializers.Serializer):
     slots = HandleSlotSerializer(many=True)
 
 
+class HandleModelChoiceSerializer(serializers.Serializer):
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+    price_delta_clp = serializers.CharField(allow_null=True)
+
+
+class HandleColorChoiceSerializer(serializers.Serializer):
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    price_delta_clp = serializers.CharField(allow_null=True)
+
+
+class HardwareFamilySerializer(serializers.Serializer):
+    """D04: the family's sellable handle catalogue + declared height rule."""
+
+    opening_type = serializers.CharField()
+    handle_models = HandleModelChoiceSerializer(many=True)
+    handle_colors = HandleColorChoiceSerializer(many=True)
+    handle_height_rule = serializers.CharField(allow_null=True)
+    handle_height_min_mm = serializers.CharField(allow_null=True)
+    handle_height_max_mm = serializers.CharField(allow_null=True)
+    handle_height_default_mm = serializers.CharField(allow_null=True)
+
+
+class HardwareOptionSerializer(serializers.Serializer):
+    """D04: a sellable option — the catalog declares its price delta and
+    the components it adds to the leaf BOM."""
+
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+    opening_type = serializers.CharField()
+    price_delta_clp = serializers.CharField(allow_null=True)
+    contents = KitComponentSerializer(many=True)
+
+
 class GlassSpecChoiceSerializer(serializers.Serializer):
     sku = serializers.CharField()
     spec = serializers.CharField(allow_null=True)
+
+
+class GlassSurchargeChoiceSerializer(serializers.Serializer):
+    kind = serializers.CharField()
+    unit = serializers.CharField()
+    amount = serializers.CharField()
+    currency = serializers.CharField(allow_null=True)
+    label = serializers.CharField(allow_null=True)
+
+
+class GlassProductChoiceSerializer(serializers.Serializer):
+    """D02 structured glass product for the selector cards/composer."""
+
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    notation = serializers.CharField(allow_null=True)
+    composition = serializers.DictField(allow_null=True)
+    total_thickness_mm = serializers.CharField(allow_null=True)
+    safety_class = serializers.CharField(allow_null=True)
+    ug_w_m2k = serializers.CharField(allow_null=True)
+    g_value = serializers.CharField(allow_null=True)
+    light_transmission_pct = serializers.CharField(allow_null=True)
+    weight_kg_m2 = serializers.CharField(allow_null=True)
+    min_billable_area_m2 = serializers.CharField(allow_null=True)
+    # Declared 1..5 relative-price band — comparability signal only; real
+    # money stays in the cost lists.
+    price_tier = serializers.IntegerField(allow_null=True)
+    surcharges = GlassSurchargeChoiceSerializer(many=True)
+    review_pending = serializers.BooleanField()
 
 
 class PanelChoiceSerializer(serializers.Serializer):
@@ -96,21 +219,91 @@ class PanelChoiceSerializer(serializers.Serializer):
     thickness_mm = serializers.CharField()
 
 
+class ExtraArticleOptionSerializer(serializers.Serializer):
+    """D06: one catalog extra the position inspector can attach — the same
+    catalog row the engine re-measures; the UI never fabricates a number."""
+
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+    pricing_unit = serializers.CharField()
+    unit_price = serializers.CharField(allow_null=True)
+    unit_price_currency = serializers.CharField(allow_null=True)
+    vuelo_default_mm = serializers.CharField(allow_null=True)
+    families = serializers.ListField(child=serializers.CharField())
+    unit_kinds = serializers.ListField(child=serializers.CharField())
+    suggestion_reason = serializers.CharField(allow_null=True)
+    cut_profile_sku = serializers.CharField(allow_null=True)
+    cut_material = serializers.CharField(allow_null=True)
+
+
+class OpeningOptionSerializer(serializers.Serializer):
+    """One admitted opening choice: the key the engine emits, the Spanish
+    display name and the unit kind the option types the module as."""
+
+    key = serializers.CharField()
+    name = serializers.CharField()
+    unit_kind = serializers.CharField()
+    legacy = serializers.CharField(allow_null=True, required=False)
+    opening = serializers.DictField(required=False)
+    leaves = serializers.ListField(child=serializers.DictField(), required=False)
+
+
+class ColorOptionChoiceSerializer(serializers.Serializer):
+    """D05: a sellable finish — the selector renders its declared swatch,
+    face availability, pair requirement and surcharge hint."""
+
+    code = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+    manufacturer_code = serializers.CharField(allow_null=True)
+    gloss = serializers.CharField(allow_null=True)
+    render_color = serializers.CharField(allow_null=True)
+    render_texture = serializers.CharField(allow_null=True)
+    finish_class = serializers.CharField()
+    dark = serializers.BooleanField()
+    faces = serializers.CharField()
+    pair_code = serializers.CharField(allow_null=True)
+    sort_order = serializers.IntegerField()
+    surcharge_kind = serializers.CharField(allow_null=True)
+    surcharge_amount = serializers.CharField(allow_null=True)
+    surcharge_currency = serializers.CharField(allow_null=True)
+    surcharge_label = serializers.CharField(allow_null=True)
+
+
 class DesignOptionsSerializer(serializers.Serializer):
     profiles = ProfileChoiceSerializer(many=True)
+    # Concrete opening compositions the system admits (D03): the editor,
+    # the API and the IA only offer these — each carries its spec payload
+    # and Spanish display name.
+    opening_options = serializers.ListField(
+        child=OpeningOptionSerializer(), required=False
+    )
     glazing_thicknesses = serializers.ListField(child=serializers.CharField())
     hardware_kits = KitChoiceSerializer(many=True)
+    hardware_families = HardwareFamilySerializer(many=True)
+    hardware_options = HardwareOptionSerializer(many=True)
     # Declared handle-mounting authority for the system — null when no policy
     # is on file. The design surface must not silently invent positions.
     handle_policy = HandlePolicySerializer(allow_null=True)
     glass_skus = serializers.ListField(child=serializers.CharField())
+    glass_products = GlassProductChoiceSerializer(many=True)
     glass_specs = GlassSpecChoiceSerializer(many=True)
     colors = serializers.ListField(child=serializers.CharField())
+    # D05: the declared finish catalog — rich options when the system
+    # carries system_color_options rows, plus its bicolor capability.
+    color_options = ColorOptionChoiceSerializer(many=True, required=False)
+    bicolor_allowed = serializers.BooleanField(required=False, default=False)
     coupler_skus = serializers.ListField(child=serializers.CharField())
     coupler_profiles = CouplerChoiceSerializer(many=True)
     glazing_beads = GlazingBeadChoiceSerializer(many=True)
     panel_skus = serializers.ListField(child=serializers.CharField())
     panel_choices = PanelChoiceSerializer(many=True)
+    # D06: accessory/extra articles the system admits — the inspector's
+    # "Extras de la posición" picker is built from this catalog scope.
+    extra_articles = serializers.ListField(
+        child=ExtraArticleOptionSerializer(), required=False
+    )
     rebate_depth_mm = serializers.CharField()
     sash_overlap_mm = serializers.CharField()
     depth_mm = serializers.CharField()
@@ -141,6 +334,9 @@ class DesignOptionsView(APIView):
             )
             return response(
                 {
+                    "opening_options": spec_options_from_capabilities(
+                        admitted_capabilities(params)
+                    ),
                     "profiles": [
                         {
                             "sku": item.sku,
@@ -166,18 +362,90 @@ class DesignOptionsView(APIView):
                             "max_leaf_height_mm": str(item.max_leaf_height_mm),
                             "max_leaf_weight_kg": str(item.max_leaf_weight_kg),
                             "weight_kg": None if item.weight_kg is None else str(item.weight_kg),
-                            "contents": [
-                                {
-                                    "sku": component.sku,
-                                    "name": component.name,
-                                    "qty": str(component.qty),
-                                    "unit": component.unit,
-                                    "category": component.category,
-                                }
-                                for component in item.contents
-                            ],
+                            "contents": [_component_json(c) for c in item.contents],
+                            "class_label": item.class_label,
+                            "max_aspect_ratio": (
+                                None
+                                if item.max_aspect_ratio is None
+                                else str(item.max_aspect_ratio)
+                            ),
+                            "min_stay_height_mm": (
+                                None
+                                if item.min_stay_height_mm is None
+                                else str(item.min_stay_height_mm)
+                            ),
                         }
                         for item in params.available_hardware_kits
+                    ],
+                    "hardware_families": [
+                        {
+                            "opening_type": family.opening_type,
+                            "handle_models": [
+                                {
+                                    "sku": model.sku,
+                                    "name": model.name,
+                                    "kind": model.kind,
+                                    "price_delta_clp": (
+                                        None
+                                        if model.price_delta_clp is None
+                                        else str(model.price_delta_clp)
+                                    ),
+                                }
+                                for model in family.handle_models
+                            ],
+                            "handle_colors": [
+                                {
+                                    "sku": color.sku,
+                                    "name": color.name,
+                                    "price_delta_clp": (
+                                        None
+                                        if color.price_delta_clp is None
+                                        else str(color.price_delta_clp)
+                                    ),
+                                }
+                                for color in family.handle_colors
+                            ],
+                            "handle_height_rule": family.handle_height_rule,
+                            "handle_height_min_mm": (
+                                None
+                                if family.handle_height_min_mm is None
+                                else str(family.handle_height_min_mm)
+                            ),
+                            "handle_height_max_mm": (
+                                None
+                                if family.handle_height_max_mm is None
+                                else str(family.handle_height_max_mm)
+                            ),
+                            "handle_height_default_mm": (
+                                None
+                                if family.handle_height_default_mm is None
+                                else str(family.handle_height_default_mm)
+                            ),
+                        }
+                        for family in sorted(
+                            params.hardware_families.values(),
+                            key=lambda family: family.opening_type,
+                        )
+                    ],
+                    "hardware_options": [
+                        {
+                            "sku": option.sku,
+                            "name": option.name,
+                            "kind": option.kind.value,
+                            "opening_type": option.opening_type,
+                            "price_delta_clp": (
+                                None
+                                if option.price_delta_clp is None
+                                else str(option.price_delta_clp)
+                            ),
+                            "contents": [
+                                _component_json(c) for c in option.components
+                            ],
+                        }
+                        for option in sorted(
+                            params.hardware_options.values(),
+                            key=lambda option: option.sku,
+                        )
                     ],
                     "handle_policy": (
                         None
@@ -187,7 +455,7 @@ class DesignOptionsView(APIView):
                             "version": handle_policy.version,
                             "slots": [
                                 {
-                                    "opening_type": slot.opening_type.value,
+                                    "opening_type": slot.opening_type,
                                     "leaf_slot": slot.leaf_slot,
                                     "leaf_handedness": slot.leaf_handedness,
                                     "handle_domain_slot": slot.handle_domain_slot,
@@ -210,6 +478,66 @@ class DesignOptionsView(APIView):
                         }
                     ),
                     "glass_skus": [item["technical_sku"] for item in glass_rows],
+                    # D02 structured products (same scope resolution the
+                    # engine repository applies): the selector's card
+                    # content — name, notation, thickness/weight, safety
+                    # class, declared surcharges and pending-review flag.
+                    "glass_products": [
+                        {
+                            "sku": product.sku,
+                            "name": product.name,
+                            "notation": (
+                                format_glass_notation(product.composition)
+                                if product.composition is not None
+                                else None
+                            ),
+                            "composition": (
+                                composition_to_dict(product.composition)
+                                if product.composition is not None
+                                else None
+                            ),
+                            "total_thickness_mm": (
+                                None
+                                if product.composition is None
+                                else str(
+                                    product.composition.total_thickness_mm().quantize(
+                                        Decimal("0.01")
+                                    )
+                                )
+                            ),
+                            "safety_class": product.safety_class,
+                            "ug_w_m2k": (
+                                None if product.ug_w_m2k is None else str(product.ug_w_m2k)
+                            ),
+                            "g_value": (
+                                None if product.g_value is None else str(product.g_value)
+                            ),
+                            "light_transmission_pct": (
+                                None
+                                if product.light_transmission_pct is None
+                                else str(product.light_transmission_pct)
+                            ),
+                            "weight_kg_m2": (
+                                None if product.weight_kg_m2 is None else str(product.weight_kg_m2)
+                            ),
+                            "min_billable_area_m2": (
+                                None if product.min_area_m2 is None else str(product.min_area_m2)
+                            ),
+                            "price_tier": product.price_tier,
+                            "surcharges": [
+                                {
+                                    "kind": rate.kind,
+                                    "unit": rate.unit,
+                                    "amount": str(rate.amount),
+                                    "currency": rate.currency,
+                                    "label": rate.label,
+                                }
+                                for rate in product.surcharges
+                            ],
+                            "review_pending": product.review_pending,
+                        }
+                        for product in params.glass_products.values()
+                    ],
                     "glass_specs": [
                         {
                             "sku": item["technical_sku"],
@@ -218,6 +546,43 @@ class DesignOptionsView(APIView):
                         for item in glass_rows
                     ],
                     "colors": list(params.finishes),
+                    "bicolor_allowed": params.bicolor_allowed,
+                    "color_options": [
+                        {
+                            "code": option.code,
+                            "name": option.name,
+                            "kind": option.kind.value,
+                            "manufacturer_code": option.manufacturer_code,
+                            "gloss": option.gloss,
+                            "render_color": option.render_color,
+                            "render_texture": option.render_texture,
+                            "finish_class": option.finish_class,
+                            "dark": option.dark,
+                            "faces": option.faces,
+                            "pair_code": option.pair_code,
+                            "sort_order": option.sort_order,
+                            "surcharge_kind": (
+                                None if option.surcharge is None
+                                else option.surcharge.kind
+                            ),
+                            "surcharge_amount": (
+                                None if option.surcharge is None
+                                else str(option.surcharge.amount)
+                            ),
+                            "surcharge_currency": (
+                                None if option.surcharge is None
+                                else option.surcharge.currency
+                            ),
+                            "surcharge_label": (
+                                None if option.surcharge is None
+                                else option.surcharge.label
+                            ),
+                        }
+                        for option in sorted(
+                            params.color_options.values(),
+                            key=lambda option: (option.sort_order, option.code),
+                        )
+                    ],
                     "coupler_skus": sorted(couplers),
                     "coupler_profiles": [
                         {
@@ -226,6 +591,16 @@ class DesignOptionsView(APIView):
                             "material": item.material.value,
                             "face_width_mm": str(item.face_width_mm),
                             "section": _section_json(item.section),
+                            "angle_min_deg": (
+                                str(item.coupler_angle_min_deg)
+                                if item.coupler_angle_min_deg is not None
+                                else None
+                            ),
+                            "angle_max_deg": (
+                                str(item.coupler_angle_max_deg)
+                                if item.coupler_angle_max_deg is not None
+                                else None
+                            ),
                         }
                         for item in sorted(couplers.values(), key=lambda article: article.sku)
                     ],
@@ -248,6 +623,38 @@ class DesignOptionsView(APIView):
                         for item in sorted(
                             params.available_panel_rules.values(),
                             key=lambda panel: panel.sku,
+                        )
+                    ],
+                    "extra_articles": [
+                        {
+                            "sku": item.sku,
+                            "name": item.name,
+                            "kind": item.kind.value,
+                            "pricing_unit": item.pricing_unit.value,
+                            "unit_price": (
+                                None
+                                if item.unit_price is None
+                                else str(item.unit_price)
+                            ),
+                            "unit_price_currency": item.unit_price_currency,
+                            "vuelo_default_mm": (
+                                None
+                                if item.vuelo_default_mm is None
+                                else str(item.vuelo_default_mm)
+                            ),
+                            "families": list(item.families),
+                            "unit_kinds": list(item.unit_kinds),
+                            "suggestion_reason": item.suggestion_reason,
+                            "cut_profile_sku": item.cut_profile_sku,
+                            "cut_material": (
+                                None
+                                if item.cut_material is None
+                                else item.cut_material.value
+                            ),
+                        }
+                        for item in sorted(
+                            (getattr(params, "extra_articles", None) or {}).values(),
+                            key=lambda article: article.sku,
                         )
                     ],
                     "rebate_depth_mm": str(params.rebate_depth_mm),

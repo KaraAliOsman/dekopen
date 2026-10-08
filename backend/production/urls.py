@@ -1,6 +1,7 @@
 from django.urls import path
 
 from production.views import (
+    ProductionDeliveriesView,
     ProductionOrderDeliveryConfirmationView,
     ProductionOrderDeliveryConfirmView,
     ProductionOrderDeliveryTransitionView,
@@ -17,6 +18,7 @@ from production.views import (
     ProductionOrderDispatchNoteEnvioView,
     ProductionOrderInstallationView,
     ProductionOrderLabelsView,
+    ProductionOrderGlazierOrderView,
     ProductionOrderCncFileView,
     ProductionOrderCutPackView,
     ProductionOrderCancelView,
@@ -45,6 +47,7 @@ from production.views import (
     CncReadinessView,
     CncProgramListView,
     CncProgramFileView,
+    CncProgramCompareView,
 )
 
 urlpatterns = [
@@ -53,6 +56,11 @@ urlpatterns = [
         "station-queue/",
         ProductionStationQueueView.as_view(),
         name="production-station-queue",
+    ),
+    path(
+        "deliveries/",
+        ProductionDeliveriesView.as_view(),
+        name="production-deliveries",
     ),
     path("orders/", ProductionOrderListView.as_view(), name="production-orders"),
     path(
@@ -129,6 +137,11 @@ urlpatterns = [
         "orders/<uuid:order_id>/labels/",
         ProductionOrderLabelsView.as_view(),
         name="production-order-labels",
+    ),
+    path(
+        "orders/<uuid:order_id>/glass-order/",
+        ProductionOrderGlazierOrderView.as_view(),
+        name="production-order-glass-order",
     ),
     path(
         "orders/<uuid:order_id>/delivery/",
@@ -238,6 +251,11 @@ urlpatterns = [
         "orders/<uuid:order_id>/cnc/programs/",
         CncProgramListView.as_view(),
         name="production-order-cnc-programs",
+    ),
+    path(
+        "cnc/programs/<uuid:program_id>/compare/<uuid:other_id>/",
+        CncProgramCompareView.as_view(),
+        name="production-cnc-program-compare",
     ),
     path(
         "cnc/programs/<uuid:program_id>/file/<str:filename>",

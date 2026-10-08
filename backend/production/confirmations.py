@@ -30,6 +30,7 @@ from documents.renderers import render_delivery_pod
 from documents.storage import SupabaseDocumentStorage
 from pricing.repository import one, rows
 from projects import org_branding
+from projects.sii_envio import integration_state
 from projects.payments import resolve_or_insert_payment
 from projects.receipts import issue_receipt
 from projects.service import project_row
@@ -162,6 +163,7 @@ def confirm_delivery(
     receiver_rut: str | None,
     signature_b64: str,
     payment: dict | None,
+    observations: str | None = None,
 ) -> dict:
     """Seal the comprobante de entrega (and its cobro, if any) as one atomic
     act. The org advisory slot serializes CE codes; ``UNIQUE(order_id)``
@@ -324,6 +326,7 @@ def confirm_delivery(
                 "confirmation_code": confirmation_code,
                 "organization": org_branding.branding_for_snapshot(org_id=org_id),
                 "issued_at": issued_at.isoformat(),
+                "tributary": integration_state(org_id=org_id),
                 "receiver": {
                     "name": receiver,
                     "rut": (receiver_rut or "").strip() or None,
@@ -364,6 +367,9 @@ def confirm_delivery(
                     "fittings": sum(int(u.get("fittings") or 0) for u in units),
                 },
                 "payment": payment_payload,
+                # P23 — observaciones de la recepción en obra: quedan
+                # selladas en el acta junto a la firma.
+                "observations": (observations or "").strip() or None,
             }
 
             storage = SupabaseDocumentStorage()

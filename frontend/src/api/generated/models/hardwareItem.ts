@@ -6,6 +6,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { HardwareComponent } from "./hardwareComponent";
+import type { HardwareSelectionPrice } from "./hardwareSelectionPrice";
+import type { MachiningDeclaration } from "./machiningDeclaration";
 import type { UnitEnum } from "./unitEnum";
 
 export interface HardwareItem {
@@ -17,4 +19,38 @@ export interface HardwareItem {
   /** @nullable */
   leaf_id: string | null;
   contents: HardwareComponent[];
+  /** @nullable */
+  class_label?: string | null;
+  /** @nullable */
+  handle_model_sku?: string | null;
+  /** @nullable */
+  handle_model_name?: string | null;
+  /** @nullable */
+  handle_color_sku?: string | null;
+  /** @nullable */
+  handle_color_name?: string | null;
+  option_skus?: string[];
+  option_names?: string[];
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,10}(?:\.\d{0,2})?$
+   */
+  handle_height_mm?: string | null;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,10}(?:\.\d{0,2})?$
+   */
+  cost_clp?: string | null;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,9}(?:\.\d{0,3})?$
+   */
+  weight_kg?: string | null;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,10}(?:\.\d{0,2})?$
+   */
+  price_delta_clp?: string | null;
+  price_deltas?: HardwareSelectionPrice[];
+  machining?: MachiningDeclaration[];
 }

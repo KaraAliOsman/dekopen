@@ -24,4 +24,9 @@ export interface JobRun {
   completed_at: string | null;
   /** @nullable */
   ai_job_id?: string | null;
+  label?: string;
+  /** @nullable */
+  actor?: string | null;
+  /** @nullable */
+  object_label?: string | null;
 }

@@ -1,22 +1,15 @@
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
 
-import { aiJobList } from "../../api/generated/dekopen";
 import type { AiJob } from "../../api/generated/models/aiJob";
-import { Orb, orbStateFor } from "./Orb";
+import { Orb } from "./Orb";
+import { useAssistantContext } from "./assistantContext";
+import { PRESSING_JOB_STATES, useAssistantPresence } from "./useAssistantPresence";
 
-const PRIORITY: Record<string, number> = {
-  WAITING_FOR_APPROVAL: 0,
-  WAITING_FOR_USER: 1,
-  RUNNING: 2,
-  PLANNING: 3,
-  QUEUED: 4,
-  FAILED_RETRYABLE: 5,
-};
-
-/** The orb in the topbar mirrors the org's most-pressing AI job: a waiting
- * decision outranks work in flight, which outranks a queued round. Polls
- * gently — the point is ambient awareness, not a ticker. */
+/** El lanzador del asistente en la barra superior: el Orb refleja el trabajo
+ * del CONTEXTO actual (useAssistantPresence) y la insignia lateral sigue
+ * llevando al trabajo vivo más apremiante de la organización — una decisión
+ * pendiente o una ronda en vuelo nunca queda inalcanzable aunque el usuario
+ * esté en otra pantalla. */
 export function AiPresence({
   organizationId,
   size = 22,
@@ -24,29 +17,18 @@ export function AiPresence({
 }: {
   organizationId: string | null;
   size?: number;
-  /** The job the orb currently advertises — the click target must reach it. */
+  /** El job que la insignia anuncia — el objetivo del clic debe alcanzarlo. */
   onActiveJob?: (job: AiJob | null) => void;
 }): JSX.Element {
-  const query = useQuery({
-    queryKey: ["ai", "presence", organizationId],
-    enabled: Boolean(organizationId),
-    staleTime: 10_000,
-    refetchInterval: 15_000,
-    queryFn: async () => {
-      const response = await aiJobList(
-        {},
-        { headers: { "X-Organization-ID": organizationId ?? "" } },
-      );
-      if (response.status !== 200) return [] as AiJob[];
-      return response.data as AiJob[];
-    },
+  const { surface, refs } = useAssistantContext();
+  const { job, orbState, pressingJob } = useAssistantPresence({
+    organizationId,
+    surface,
+    refs,
   });
-  const jobs = query.data ?? [];
-  const active = jobs
-    .filter((job) => job.state in PRIORITY)
-    .sort((a, b) => (PRIORITY[a.state] ?? 9) - (PRIORITY[b.state] ?? 9))[0];
+  const active = job && PRESSING_JOB_STATES.has(String(job.state)) ? job : pressingJob;
   useEffect(() => {
     onActiveJob?.(active ?? null);
   }, [active, onActiveJob]);
-  return <Orb state={orbStateFor(active?.state)} size={size} />;
+  return <Orb state={orbState} size={size} />;
 }

@@ -6,10 +6,14 @@ import { ApiError } from "../api/apiMutator";
 import { jobsList, jobsRetry } from "../api/generated/dekopen";
 import type { JobRun } from "../api/generated/models";
 import { useAuthSession } from "../auth/AuthSessionProvider";
+import { AiActivityPanel } from "../features/assistant/AiActivityPanel";
+import { FailureCollapse } from "../features/assistant/FailureCollapse";
 import { jobErrorKey } from "../features/jobs/jobError";
 import { formatDateTime } from "../format";
 import { EmptyState, PageHeader } from "../ui";
+import { StatusChip } from "../ui/StatusChip";
 import { t, tDynamic, type TranslationKey } from "../i18n/es-CL";
+import { domainLabel } from "../i18n/domainLabels";
 
 const STATE_KEYS: Record<string, TranslationKey> = {
   QUEUED: "jobs.state.QUEUED",
@@ -21,8 +25,52 @@ const STATE_KEYS: Record<string, TranslationKey> = {
 
 const TERMINAL_RETRYABLE = new Set(["FAILED", "CANCELED"]);
 
-function typeLabel(type: string): string {
-  return tDynamic("jobs.type", type);
+function typeLabel(job: JobRun): string {
+  // §P17 — el backend ya sirve la etiqueta en español del registro; el
+  // i18n local cubre tipos antiguos y el nombre técnico queda de último
+  // recurso (nunca un token crudo cuando hay etiqueta).
+  if (job.label) return job.label;
+  const label = tDynamic("jobs.type", job.type);
+  return label === job.type ? job.type : label;
+}
+
+/** §P17 — duración legible: de «Empezó» a «Terminó», o el tiempo en cola. */
+function durationLabel(job: JobRun): string {
+  const start = job.started_at ? Date.parse(job.started_at) : null;
+  const end = job.completed_at ? Date.parse(job.completed_at) : null;
+  const from = start ?? Date.parse(job.created_at);
+  const to = end ?? Date.now();
+  const seconds = Math.max(0, Math.round((to - from) / 1000));
+  if (seconds < 90) return t("jobs.duration.seconds").replace("{count}", String(seconds));
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return t("jobs.duration.minutes").replace("{count}", String(minutes));
+  const hours = Math.floor(minutes / 60);
+  return t("jobs.duration.hours")
+    .replace("{count}", String(hours))
+    .replace("{rest}", String(minutes % 60));
+}
+
+/** §P17 — el resultado del trabajo en una sola línea legible: el código o
+ * el paso que produjo, nunca el JSON crudo. */
+function resultLabel(result: JobRun["result"]): string {
+  if (result === null || result === undefined || typeof result !== "object") {
+    return "—";
+  }
+  const record = result as Record<string, unknown>;
+  for (const key of ["revision_code", "order_code", "project_code", "next_step", "status"]) {
+    const value = record[key];
+    if (typeof value === "string" && value !== "") {
+      // El resultado "status" viene del dominio que ejecutó el trabajo
+      // (envíos SENT/SKIPPED/FAILED/QUEUED): sale por domainLabels, no crudo.
+      if (key === "status") {
+        const label = domainLabel("CollectionReminderSendResponseStatusEnum", value).label;
+        return label === value ? value : label;
+      }
+      return value;
+    }
+    if (typeof value === "number") return String(value);
+  }
+  return "—";
 }
 
 interface JobFailure {
@@ -51,6 +99,10 @@ const PAGE_SIZE = 100;
 
 export function JobsPage(): JSX.Element {
   const org = useAuthSession().me?.active_organization;
+  // Espejo de _JOB_READERS — para roles de piso la página declara el aviso
+  // de permiso en vez de disparar una consulta que el contrato rechaza.
+  const canReadJobs =
+    org?.role === "OWNER" || org?.role === "ESTIMATOR" || org?.role === "WORKSHOP_MANAGER";
   const [params, setParams] = useSearchParams();
   const [notice, setNotice] = useState("");
   const client = useQueryClient();
@@ -59,7 +111,12 @@ export function JobsPage(): JSX.Element {
 
   const query = useQuery<JobRun[]>({
     queryKey: ["jobs", "list", org?.id, stateFilter, pages],
-    enabled: org !== undefined,
+    enabled: canReadJobs,
+    // Un 403 es decisión del contrato (rol sin lectura): reintentar solo
+    // alarga el "Cargando…" antes del aviso de permiso. Errores transitorios
+    // sí reintentan una vez.
+    retry: (failureCount, error) =>
+      !(error instanceof ApiError && error.status === 403) && failureCount < 1,
     // A running job is a living row — poll fast while anything can still
     // move; idle keeps a slow beat so jobs started elsewhere still appear.
     refetchInterval: (result) =>
@@ -144,73 +201,108 @@ export function JobsPage(): JSX.Element {
       />
 
       {notice !== "" && <p role="status">{notice}</p>}
-      {query.isPending ? (
+      {org !== undefined && !canReadJobs ? (
+        <p role="alert">{t("jobs.denied")}</p>
+      ) : query.isPending ? (
         <p role="status">{t("dashboard.attentionLoading")}</p>
       ) : query.isError ? (
-        <p role="alert">{t("jobs.error")}</p>
+        <p role="alert">
+          {query.error instanceof ApiError && query.error.status === 403
+            ? t("jobs.denied")
+            : t("jobs.error")}
+        </p>
       ) : items.length === 0 ? (
         <EmptyState title={t("jobs.empty")} />
       ) : (
-        <ul className="jobs-list">
-          {items.map((job) => {
-            const failure = jobFailure(job.error);
-            const failureKey = failure ? jobErrorKey(failure.detail) : null;
-            return (
-              <li key={job.id} className="job-row" data-state={job.state.toLowerCase()}>
-                <div className="job-row-main">
-                  <strong>{typeLabel(job.type)}</strong>
-                  <span className="status-chip" data-status={job.state.toLowerCase()}>
-                    {t(STATE_KEYS[job.state] ?? "jobs.state.QUEUED")}
-                  </span>
-                  {job.ai_job_id ? (
-                    <Link
-                      className="ui-button ui-button--small ui-button--ghost"
-                      to={`/assistant?job=${job.ai_job_id}`}
-                    >
-                      {t("jobs.openAssistant")}
-                    </Link>
-                  ) : null}
-                </div>
-                <div className="job-row-meta">
-                  <span>
-                    {t("jobs.attempt")
-                      .replace("{attempt}", String(job.attempt))
-                      .replace("{max}", String(job.max_attempts))}
-                  </span>
-                  <span>{t("jobs.progress").replace("{percent}", job.progress)}</span>
-                  <time dateTime={job.created_at}>{formatDateTime(job.created_at)}</time>
-                </div>
-                {job.state === "FAILED" && failure !== null && failureKey !== null && (
-                  <p className="job-row-error">
-                    {t(failureKey)}
-                    {/* A snake_case domain code is a useful diagnostic tail;
-                        exception text (IntegrityError:, tracebacks) is not —
-                        it never reaches the user. */}
-                    {/^[a-z0-9_]+$/.test(failure.detail) && failure.detail !== failureKey && (
-                      <>
-                        {" "}
-                        <code className="job-row-code">{failure.detail}</code>
-                      </>
-                    )}
-                  </p>
-                )}
-                {TERMINAL_RETRYABLE.has(job.state) && (
-                  <button
-                    type="button"
-                    className="ui-button ui-button--small"
-                    disabled={retry.isPending}
-                    onClick={() => {
-                      setNotice("");
-                      retry.mutate(job.id);
-                    }}
-                  >
-                    {retry.isPending ? t("jobs.retrying") : t("jobs.retry")}
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <div className="jobs-table-wrap">
+          <table className="jobs-table">
+            <thead>
+              <tr>
+                <th scope="col">{t("jobs.col.type")}</th>
+                <th scope="col">{t("jobs.col.object")}</th>
+                <th scope="col">{t("jobs.col.state")}</th>
+                <th scope="col">{t("jobs.col.duration")}</th>
+                <th scope="col">{t("jobs.col.actor")}</th>
+                <th scope="col">{t("jobs.col.result")}</th>
+                <th scope="col" aria-label={t("jobs.col.actions")} />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((job) => {
+                const failure = jobFailure(job.error);
+                const failureKey = failure ? jobErrorKey(failure.detail) : null;
+                // El código técnico solo se pliega cuando es un token
+                // snake_case útil — nunca trazas ni excepciones.
+                const detailCode =
+                  failure && /^[a-z0-9_]+$/.test(failure.detail) ? failure.detail : null;
+                return (
+                  <tr key={job.id} data-state={job.state.toLowerCase()}>
+                    <td>
+                      <strong>{typeLabel(job)}</strong>
+                    </td>
+                    <td>
+                      {job.object_label ?? "—"}
+                      <time className="jobs-table__time" dateTime={job.created_at}>
+                        {formatDateTime(job.created_at)}
+                      </time>
+                    </td>
+                    <td>
+                      <StatusChip enumName="JobRunStateEnum" value={job.state} />
+                    </td>
+                    <td className="jobs-table__num">{durationLabel(job)}</td>
+                    <td>{job.actor ?? t("jobs.actor.system")}</td>
+                    <td>
+                      {job.state === "FAILED" && failure !== null ? (
+                        <FailureCollapse
+                          message={failureKey ? t(failureKey) : t("jobs.fail.generic")}
+                          code={detailCode}
+                          attempts={job.attempt}
+                          onRetry={
+                            TERMINAL_RETRYABLE.has(job.state)
+                              ? () => {
+                                  setNotice("");
+                                  retry.mutate(job.id);
+                                }
+                              : undefined
+                          }
+                          retryBusy={retry.isPending}
+                        />
+                      ) : job.state === "SUCCEEDED" ? (
+                        resultLabel(job.result)
+                      ) : job.state === "RUNNING" || job.state === "QUEUED" ? (
+                        t("jobs.progress").replace("{percent}", job.progress)
+                      ) : TERMINAL_RETRYABLE.has(job.state) ? (
+                        <button
+                          type="button"
+                          className="ui-button ui-button--small"
+                          disabled={retry.isPending}
+                          onClick={() => {
+                            setNotice("");
+                            retry.mutate(job.id);
+                          }}
+                        >
+                          {retry.isPending ? t("jobs.retrying") : t("jobs.retry")}
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="jobs-table__actions">
+                      {job.ai_job_id ? (
+                        <Link
+                          className="ui-button ui-button--small ui-button--ghost"
+                          to={`/assistant?job=${job.ai_job_id}`}
+                        >
+                          {t("jobs.openAssistant")}
+                        </Link>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
       {!query.isPending && !query.isError && hasMore && (
         <button
@@ -222,6 +314,7 @@ export function JobsPage(): JSX.Element {
           {query.isFetching ? t("dashboard.attentionLoading") : t("jobs.loadMore")}
         </button>
       )}
+      {org != null && <AiActivityPanel orgId={org.id} isOwner={org.role === "OWNER"} />}
     </section>
   );
 }

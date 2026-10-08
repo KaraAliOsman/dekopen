@@ -119,6 +119,14 @@ def _patch_env(monkeypatch, storage, *, snapshot=None, count=0, collected="0"):
     monkeypatch.setattr(invoices, "SupabaseDocumentStorage", lambda: storage)
     monkeypatch.setattr(invoices.transaction, "atomic", _noop)
     monkeypatch.setattr(invoices, "documentary_backend", _noop)
+    # P11 — la leyenda tributaria sella el estado SII de la org al emitir;
+    # en unidad ese estado es un stub honesto «no certificado».
+    monkeypatch.setattr(
+        invoices,
+        "integration_state",
+        lambda *, org_id: {"adapter": "none", "certified": False,
+                           "certificate": False, "caf_available": False},
+    )
     return one_calls
 
 

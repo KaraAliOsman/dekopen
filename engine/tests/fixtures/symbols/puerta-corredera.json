@@ -1,0 +1,145 @@
+{
+  "id": "puerta-corredera",
+  "name": "Puerta corredera — umbral + flecha",
+  "box": {
+    "x": 0,
+    "y": 0,
+    "w": 1000,
+    "h": 1600
+  },
+  "input": {
+    "kind": "leaves",
+    "unit": "DOOR",
+    "leaves": [
+      {
+        "movement": "SLIDE",
+        "hinge_side": "NONE",
+        "direction": null,
+        "leaf_role": "SINGLE",
+        "handle_mm": 1050,
+        "slot": "PRIMARY",
+        "axis_offset_mm": null
+      }
+    ]
+  },
+  "views": {
+    "interior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "sill",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": true,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "handle",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": "top",
+              "at_mm": "1050"
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 0 1600 H 1000",
+              "dash": null
+            },
+            {
+              "d": "M 356 800 H 644 M 579.2 753.92 L 644 800 L 579.2 846.08 M 420.8 753.92 L 356 800 L 420.8 846.08",
+              "dash": null
+            },
+            {
+              "d": "M 491 26 H 509 M 500 17 V 35",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    },
+    "exterior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "sill",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": true,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "handle",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": "top",
+              "at_mm": "1050"
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 0 1600 H 1000",
+              "dash": null
+            },
+            {
+              "d": "M 356 800 H 644 M 579.2 753.92 L 644 800 L 579.2 846.08 M 420.8 753.92 L 356 800 L 420.8 846.08",
+              "dash": null
+            },
+            {
+              "d": "M 491 26 H 509 M 500 17 V 35",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

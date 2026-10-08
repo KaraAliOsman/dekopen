@@ -1,0 +1,230 @@
+{
+  "id": "door-double",
+  "name": "Puerta doble",
+  "box": {
+    "x": 0,
+    "y": 0,
+    "w": 1600,
+    "h": 1400
+  },
+  "input": {
+    "kind": "leaves",
+    "unit": "DOOR",
+    "leaves": [
+      {
+        "movement": "TURN",
+        "hinge_side": "LEFT",
+        "direction": "INWARD",
+        "leaf_role": "ACTIVE",
+        "handle_mm": 1050,
+        "slot": null,
+        "axis_offset_mm": null
+      },
+      {
+        "movement": "TURN",
+        "hinge_side": "RIGHT",
+        "direction": "INWARD",
+        "leaf_role": "PASSIVE",
+        "handle_mm": null,
+        "slot": null,
+        "axis_offset_mm": null
+      }
+    ]
+  },
+  "views": {
+    "interior": {
+      "stiles": 1,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "sill",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "tri",
+              "hinge": "LEFT",
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "handle",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": "right",
+              "at_mm": "1050"
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 0 1400 H 800",
+              "dash": null
+            },
+            {
+              "d": "M 160 168 L 640 593.6 L 160 1232",
+              "dash": null
+            },
+            {
+              "d": "M 765 350 H 783 M 774 341 V 359",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "sill",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "tri",
+              "hinge": "RIGHT",
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 800 1400 H 1600",
+              "dash": null
+            },
+            {
+              "d": "M 1440 168 L 960 593.6 L 1440 1232",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    },
+    "exterior": {
+      "stiles": 1,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "sill",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "tri",
+              "hinge": "LEFT",
+              "apex_at": "0.4",
+              "dash": true,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "handle",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": "right",
+              "at_mm": "1050"
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 0 1400 H 800",
+              "dash": null
+            },
+            {
+              "d": "M 160 168 L 640 593.6 L 160 1232",
+              "dash": "6 3"
+            },
+            {
+              "d": "M 765 350 H 783 M 774 341 V 359",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "sill",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "tri",
+              "hinge": "RIGHT",
+              "apex_at": "0.4",
+              "dash": true,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 800 1400 H 1600",
+              "dash": null
+            },
+            {
+              "d": "M 1440 168 L 960 593.6 L 1440 1232",
+              "dash": "6 3"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

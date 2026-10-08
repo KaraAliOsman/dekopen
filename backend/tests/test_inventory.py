@@ -32,7 +32,7 @@ def test_list_stock_returns_view_rows() -> None:
     }
 
     def fake_rows(query, params=()):
-        if "order_requirement_lines" in query:
+        if "order_requirement_lines" in query or "RESERVATION" in query:
             return []
         return [stock_row]
 
@@ -42,6 +42,7 @@ def test_list_stock_returns_view_rows() -> None:
         output = service.list_stock(org_id=org_id)
     assert output["items"][0]["available_qty"] == Decimal("800.00")
     assert output["items"][0]["incoming_qty"] == Decimal(0)
+    assert output["items"][0]["reserved_by"] == []
 
 
 def test_list_stock_incoming_keys_by_spec_variant() -> None:
@@ -70,6 +71,8 @@ def test_list_stock_incoming_keys_by_spec_variant() -> None:
     )
 
     def fake_rows(query, params=()):
+        if "RESERVATION" in query:
+            return []
         if "order_requirement_lines" in query:
             return [{"line_snapshot": line_snapshot, "open_qty": Decimal(2)}]
         return [stock_row]
@@ -147,6 +150,8 @@ def test_receive_order_rejects_unknown_line() -> None:
 
     with patch("inventory.service.rows", return_value=[]), patch(
         "inventory.service.one", side_effect=fake_one
+    ), patch(
+        "inventory.service.next_human_code", return_value="REC-000001"
     ), patch("inventory.service.transaction.atomic", return_value=_atomic()), patch(
         "inventory.service.documentary_backend", return_value=_atomic()
     ):
@@ -195,6 +200,8 @@ def test_receive_order_takes_receipt_key_lock() -> None:
     with patch("inventory.service.rows", side_effect=fake_rows), patch(
         "inventory.service.one",
         return_value={"id": order_id, "status": "DRAFT"},
+    ), patch(
+        "inventory.service.next_human_code", return_value="REC-000001"
     ), patch("inventory.service.transaction.atomic", return_value=_atomic()), patch(
         "inventory.service.documentary_backend", return_value=_atomic()
     ):
@@ -281,6 +288,189 @@ def test_record_movement_type_gate() -> None:
             note="x",
         )
     assert error.value.code == "movement_type_not_allowed"
+
+
+def test_list_stock_reads_open_lines_under_backend_role() -> None:
+    """Causa raíz del error de sección rota: order_requirement_lines no tiene
+    grant SELECT para `authenticated` — la lectura de entrantes debe correr
+    dentro de documentary_backend() o el endpoint cae (42501 → 409)."""
+    org_id = uuid4()
+    state = {"backend": False}
+    calls: list[tuple[bool, str]] = []
+
+    @contextmanager
+    def fake_backend():
+        state["backend"] = True
+        try:
+            yield
+        finally:
+            state["backend"] = False
+
+    def fake_rows(query, params=()):
+        calls.append((state["backend"], query))
+        return []
+
+    with patch(
+        "inventory.service.documentary_backend", side_effect=fake_backend
+    ), patch("inventory.service.rows", side_effect=fake_rows):
+        service.list_stock(org_id=org_id)
+    # La vista corre bajo el rol del caller (authenticated) — nunca dentro
+    # del cambio de rol backend.
+    assert any(
+        "inventory_stock" in query for _, query in calls
+    ), "la consulta de stock debe emitirse"
+    assert all(
+        not backend for backend, query in calls if "inventory_stock" in query
+    )
+    # Y la lectura de entrantes cruza el rol: sin el cambio, 42501 rompía la
+    # sección «Stock de materiales» en /purchasing.
+    assert any(
+        backend for backend, query in calls if "order_requirement_lines" in query
+    )
+    # La reserva por OT lee el libro (inventory_movements + orders) — ambas
+    # tienen grant SELECT a authenticated: corre bajo el rol del caller.
+    assert any("RESERVATION" in query for _, query in calls)
+    assert all(
+        not backend for backend, query in calls if "RESERVATION" in query
+    )
+
+
+def _receipt_mocks(order_id, line_id, prior_good=None):
+    """Fixture SQL compartido para receive_order: una OC SENT con una línea
+    de 10 unidades y el historial de recepción indicado."""
+
+    def fake_rows(query, params=()):
+        if "pg_advisory" in query or "receipt_key = " in query:
+            return []
+        if "order_requirement_lines" in query and "receipt_lines" not in query:
+            return [
+                {
+                    "id": line_id,
+                    "quantity": Decimal("10"),
+                    "line_snapshot": '{"purchasing_sku": "SKU-1"}',
+                }
+            ]
+        if "order_receipt_lines" in query:
+            return prior_good or []
+        return []
+
+    def fake_one(query, params, code=None):
+        if "FOR UPDATE" in query:
+            return {"id": order_id, "status": "SENT"}
+        if "fulfilled" in query.lower():
+            return {"fulfilled": False}
+        return {"id": uuid4(), "receipt_code": "REC-000001"}
+
+    return fake_rows, fake_one
+
+
+def test_receive_order_over_receipt_requires_confirmation() -> None:
+    org_id, order_id, line_id = uuid4(), uuid4(), uuid4()
+    fake_rows, fake_one = _receipt_mocks(
+        order_id, line_id,
+        prior_good=[{"order_line_id": line_id, "good_qty": Decimal("9")}],
+    )
+    with patch("inventory.service.rows", side_effect=fake_rows), patch(
+        "inventory.service.one", side_effect=fake_one
+    ), patch(
+        "inventory.service.next_human_code", return_value="REC-000001"
+    ), patch("inventory.service.transaction.atomic", return_value=_atomic()), patch(
+        "inventory.service.documentary_backend", return_value=_atomic()
+    ):
+        with pytest.raises(DocumentaryError) as error:
+            service.receive_order(
+                org_id=org_id,
+                actor_id=uuid4(),
+                order_id=order_id,
+                receipt_key="r-over",
+                note=None,
+                lines=[
+                    {
+                        "order_line_id": str(line_id),
+                        "received_qty": Decimal("4"),
+                        "damaged_qty": Decimal("0"),
+                    }
+                ],
+            )
+    assert error.value.code == "receipt_over_received"
+    assert error.value.extra["order_line_ids"] == [str(line_id)]
+
+
+def test_receive_order_over_receipt_with_confirmation() -> None:
+    org_id, order_id, line_id = uuid4(), uuid4(), uuid4()
+    fake_rows, fake_one = _receipt_mocks(
+        order_id, line_id,
+        prior_good=[{"order_line_id": line_id, "good_qty": Decimal("9")}],
+    )
+    with patch("inventory.service.rows", side_effect=fake_rows), patch(
+        "inventory.service.one", side_effect=fake_one
+    ), patch(
+        "inventory.service.next_human_code", return_value="REC-000001"
+    ), patch("inventory.service.transaction.atomic", return_value=_atomic()), patch(
+        "inventory.service.documentary_backend", return_value=_atomic()
+    ), patch(
+        "inventory.service.order_receiving",
+        return_value={"order": {}, "lines": [], "receipts": []},
+    ):
+        output, created = service.receive_order(
+            org_id=org_id,
+            actor_id=uuid4(),
+            order_id=order_id,
+            receipt_key="r-over-ok",
+            note=None,
+            supplier_delivery_ref="GD-7781",
+            supplier_delivery_date="2026-10-06",
+            allow_over_receipt=True,
+            lines=[
+                {
+                    "order_line_id": str(line_id),
+                    "received_qty": Decimal("4"),
+                    "damaged_qty": Decimal("0"),
+                }
+            ],
+        )
+    assert created is True
+
+
+def test_receive_order_stores_supplier_delivery() -> None:
+    """La guía del proveedor queda en el INSERT del encabezado."""
+    org_id, order_id, line_id = uuid4(), uuid4(), uuid4()
+    fake_rows, fake_one = _receipt_mocks(order_id, line_id)
+    captured = {}
+
+    def capture_one(query, params, code=None):
+        if "order_receipts" in query and "INSERT" in query.upper():
+            captured["params"] = params
+        return fake_one(query, params, code)
+
+    with patch("inventory.service.rows", side_effect=fake_rows), patch(
+        "inventory.service.one", side_effect=capture_one
+    ), patch(
+        "inventory.service.next_human_code", return_value="REC-000001"
+    ), patch("inventory.service.transaction.atomic", return_value=_atomic()), patch(
+        "inventory.service.documentary_backend", return_value=_atomic()
+    ), patch(
+        "inventory.service.order_receiving",
+        return_value={"order": {}, "lines": [], "receipts": []},
+    ):
+        service.receive_order(
+            org_id=org_id,
+            actor_id=uuid4(),
+            order_id=order_id,
+            receipt_key="r-guia",
+            note=None,
+            supplier_delivery_ref="GD-7781",
+            supplier_delivery_date="2026-10-05",
+            lines=[
+                {
+                    "order_line_id": str(line_id),
+                    "received_qty": Decimal("2"),
+                    "damaged_qty": Decimal("0"),
+                }
+            ],
+        )
+    assert "GD-7781" in captured["params"]
+    assert "2026-10-05" in captured["params"]
 
 
 @contextmanager
@@ -370,6 +560,7 @@ def _remnant_row(remnant_id, order_id):
 
     return {
         "id": remnant_id,
+        "remnant_code": "RT-000001",
         "kind": "BAR",
         "stock_authority_id": uuid4(),
         "sheet_workshop_sku": None,
@@ -986,7 +1177,7 @@ def test_remnant_label_returns_qr_and_identity() -> None:
 
     # Identity is the authority's commercial SKU, not the internal psi UUID.
     assert output["identity"] == "PROF-60-W"
-    assert f"DEKOPEN|REMNANT|{remnant_id}" == output["qr_payload"]
+    assert "DEKOPEN|REMNANT|RT-000001" == output["qr_payload"]
     assert "<svg" in output["qr_svg"]
     assert output["remnant"]["id"] == str(remnant_id)
 
@@ -1000,3 +1191,240 @@ def test_remnant_label_missing_remant_raises() -> None:
     with patch("inventory.remnants.one", side_effect=missing):
         with pytest.raises(DocumentaryError):
             remnants.remnant_label(org_id=uuid4(), remnant_id=uuid4())
+
+
+def _remnant_state(remnant_id, *, status="AVAILABLE", order_id=None, rack="A-01"):
+    from datetime import datetime, timezone
+
+    return {
+        "id": remnant_id,
+        "remnant_code": "RT-000042",
+        "kind": "BAR",
+        "stock_authority_id": uuid4(),
+        "sheet_workshop_sku": None,
+        "physical_stock_identity": uuid4(),
+        "material": "PVC",
+        "color": "WHITE",
+        "length_mm": Decimal("1500.00"),
+        "width_mm": None,
+        "height_mm": None,
+        "status": status,
+        "origin": "PRODUCTION",
+        "origin_order_id": order_id,
+        "reserved_order_id": order_id if status == "RESERVED" else None,
+        "consumed_order_id": None,
+        "rack_location": rack,
+        "notes": None,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+
+
+def test_scrap_remnant_requires_reason() -> None:
+    from inventory import remnants
+
+    with pytest.raises(DocumentaryError) as error:
+        remnants.scrap_remnant(
+            org_id=uuid4(), remnant_id=uuid4(), actor_id=uuid4(), reason="  "
+        )
+    assert error.value.code == "remnant_scrap_reason_required"
+
+
+def test_scrap_remnant_writes_reason_to_ledger() -> None:
+    from inventory import remnants
+
+    org_id, remnant_id = uuid4(), uuid4()
+    state = _remnant_state(remnant_id)
+    inserts = []
+    reads = {"count": 0}
+
+    def fake_one(query, params=(), code=None):
+        reads["count"] += 1
+        return state if reads["count"] == 1 else {**state, "status": "SCRAPPED"}
+
+    def fake_rows(query, params=()):
+        inserts.append((query, params))
+        return [{"id": remnant_id}]
+
+    with patch("inventory.remnants.one", side_effect=fake_one), patch(
+        "inventory.remnants.rows", side_effect=fake_rows
+    ), patch("inventory.remnants.transaction.atomic", return_value=_atomic()), patch(
+        "inventory.remnants.documentary_backend", return_value=_atomic()
+    ):
+        output = remnants.scrap_remnant(
+            org_id=org_id, remnant_id=remnant_id, actor_id=uuid4(),
+            reason="Se cortó más corto del útil", actor_label="jefe@taller.cl",
+        )
+    assert output["status"] == "SCRAPPED"
+    ledger = [p for q, p in inserts if "inventory_movements" in q]
+    assert ledger, "el desecho deja huella en el libro de movimientos"
+    params = ledger[0]
+    assert "Se cortó más corto del útil" in params
+    assert "jefe@taller.cl" in params
+
+
+def test_move_remnant_writes_move_ledger() -> None:
+    from inventory import remnants
+
+    org_id, remnant_id = uuid4(), uuid4()
+    state = _remnant_state(remnant_id, rack="A-01")
+    inserts = []
+
+    def fake_one(query, params=(), code=None):
+        return state
+
+    def fake_rows(query, params=()):
+        inserts.append((query, params))
+        return [{"id": remnant_id}]
+
+    with patch("inventory.remnants.one", side_effect=fake_one), patch(
+        "inventory.remnants.rows", side_effect=fake_rows
+    ), patch("inventory.remnants.transaction.atomic", return_value=_atomic()), patch(
+        "inventory.remnants.documentary_backend", return_value=_atomic()
+    ):
+        remnants.move_remnant(
+            org_id=org_id, remnant_id=remnant_id, rack_location="B-07",
+            actor_id=uuid4(), actor_label="bodega@taller.cl",
+        )
+    ledger = [p for q, p in inserts if "inventory_movements" in q]
+    assert ledger
+    assert "B-07" in ledger[0] and "Desde A-01" in ledger[0]
+
+
+def test_move_remnant_rejects_scrapped() -> None:
+    from inventory import remnants
+
+    org_id, remnant_id = uuid4(), uuid4()
+    state = _remnant_state(remnant_id, status="SCRAPPED")
+    with patch("inventory.remnants.one", return_value=state), patch(
+        "inventory.remnants.transaction.atomic", return_value=_atomic()
+    ), patch("inventory.remnants.documentary_backend", return_value=_atomic()):
+        with pytest.raises(DocumentaryError) as error:
+            remnants.move_remnant(
+                org_id=org_id, remnant_id=remnant_id, rack_location="B-07",
+                actor_id=uuid4(),
+            )
+    assert error.value.code == "remnant_not_movable"
+
+
+def test_reserve_remnant_for_order_requires_work_order() -> None:
+    from inventory import remnants
+
+    org_id, remnant_id, order_id = uuid4(), uuid4(), uuid4()
+
+    def fake_one(query, params=(), code=None):
+        if "public.orders" in query:
+            return {"id": order_id, "order_type": "SUPPLIER_PROFILE_PO", "status": "SENT"}
+        return _remnant_state(remnant_id)
+
+    with patch("inventory.remnants.one", side_effect=fake_one), patch(
+        "inventory.remnants.transaction.atomic", return_value=_atomic()
+    ), patch("inventory.remnants.documentary_backend", return_value=_atomic()):
+        with pytest.raises(DocumentaryError) as error:
+            remnants.reserve_remnant_for_order(
+                org_id=org_id, remnant_id=remnant_id, order_id=order_id,
+                actor_id=uuid4(),
+            )
+    assert error.value.code == "remnant_reserve_work_order_required"
+
+
+def test_reserve_remnant_for_order_books_available() -> None:
+    from inventory import remnants
+
+    org_id, remnant_id, order_id = uuid4(), uuid4(), uuid4()
+    writes = []
+    remnant_reads = []
+
+    def fake_one(query, params=(), code=None):
+        if "public.orders" in query:
+            return {"id": order_id, "order_type": "WORKSHOP_OT", "status": "RELEASED"}
+        remnant_reads.append(query)
+        if len(remnant_reads) == 1:
+            return _remnant_state(remnant_id)
+        return _remnant_state(remnant_id, status="RESERVED", order_id=order_id)
+
+    def fake_rows(query, params=()):
+        writes.append(query)
+        return [{"id": remnant_id}]
+
+    with patch("inventory.remnants.one", side_effect=fake_one), patch(
+        "inventory.remnants.rows", side_effect=fake_rows
+    ), patch("inventory.remnants.transaction.atomic", return_value=_atomic()), patch(
+        "inventory.remnants.documentary_backend", return_value=_atomic()
+    ):
+        output = remnants.reserve_remnant_for_order(
+            org_id=org_id, remnant_id=remnant_id, order_id=order_id,
+            actor_id=uuid4(), actor_label="compras@taller.cl",
+        )
+    assert output["status"] == "RESERVED"
+    assert any("inventory_movements" in q for q in writes)
+
+
+def test_reserve_remnant_for_order_rejects_reserved() -> None:
+    from inventory import remnants
+
+    org_id, remnant_id, order_id = uuid4(), uuid4(), uuid4()
+
+    def fake_one(query, params=(), code=None):
+        if "public.orders" in query:
+            return {"id": order_id, "order_type": "WORKSHOP_OT", "status": "RELEASED"}
+        return _remnant_state(remnant_id, status="RESERVED", order_id=uuid4())
+
+    with patch("inventory.remnants.one", side_effect=fake_one), patch(
+        "inventory.remnants.transaction.atomic", return_value=_atomic()
+    ), patch("inventory.remnants.documentary_backend", return_value=_atomic()):
+        with pytest.raises(DocumentaryError) as error:
+            remnants.reserve_remnant_for_order(
+                org_id=org_id, remnant_id=remnant_id, order_id=order_id,
+                actor_id=uuid4(),
+            )
+    assert error.value.code == "remnant_unavailable"
+
+
+def test_record_produced_remnants_stores_authority_psi() -> None:
+    """Un retazo producido hereda la psi de su autoridad — sin ella el pool de
+    cobertura no lo veía (regresión P15)."""
+    from inventory import remnants
+
+    org_id, order_id, authority_id, psi = uuid4(), uuid4(), uuid4(), uuid4()
+    calls = []
+
+    def fake_rows(query, params=()):
+        calls.append((query, params))
+        if "profile_purchase_mappings" in query:
+            return [{"physical_stock_identity": psi}]
+        return [{"id": uuid4()}]
+
+    with patch("inventory.remnants.rows", side_effect=fake_rows), patch(
+        "inventory.remnants.next_human_code", return_value="RT-000099"
+    ):
+        inserted = remnants.record_produced_remnants(
+            org_id=org_id, order_id=order_id,
+            produced_bars=[{"stock_authority_id": authority_id, "remainder_mm": 1450}],
+            produced_sheets=[],
+        )
+    assert inserted == 1
+    inserts = [p for q, p in calls if "INSERT INTO public.inventory_remnants" in q]
+    assert inserts and str(psi) in inserts[0]
+
+
+def test_list_remnants_stock_identity_resolves_authority() -> None:
+    """El filtro stock_identity encuentra retazos antiguos cuya psi sólo vive
+    en la autoridad de compra (regresión P15)."""
+    from inventory import remnants
+
+    seen = []
+
+    def fake_rows(query, params=()):
+        seen.append(query)
+        return []
+
+    with patch("inventory.remnants.rows", side_effect=fake_rows), patch(
+        "inventory.remnants.one",
+        side_effect=lambda *a, **k: {"remnant_alert_days": 30},
+    ):
+        remnants.list_remnants(org_id=uuid4(), stock_identity="abc-psi")
+    query = seen[0]
+    assert "profile_purchase_mappings" in query
+    assert "reinforcement_articles" in query
+    assert "sheet_workshop_sku" in query

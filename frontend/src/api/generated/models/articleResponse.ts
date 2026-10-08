@@ -69,4 +69,8 @@ export interface ArticleResponse {
   readonly section_revised_at: string | null;
   /** @nullable */
   readonly section_revised_by: string | null;
+  /** @nullable */
+  reviewed_by_label?: string | null;
+  /** @nullable */
+  section_revised_by_label?: string | null;
 }

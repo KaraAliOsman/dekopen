@@ -5,8 +5,8 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import type { CurrencyEnum } from "./currencyEnum";
 import type { ExtraChargeRequest } from "./extraChargeRequest";
+import type { PricingCurrencyEnum } from "./pricingCurrencyEnum";
 import type { PricingModeEnum } from "./pricingModeEnum";
 import type { SegmentEnum } from "./segmentEnum";
 
@@ -18,7 +18,7 @@ export interface PriceRequestRequest {
    * @maxLength 100
    */
   context_code?: string;
-  currency: CurrencyEnum;
+  currency: PricingCurrencyEnum;
   effective_date: string;
   /** @nullable */
   fx_snapshot_id?: string | null;
@@ -26,6 +26,8 @@ export interface PriceRequestRequest {
   discount_pct?: string;
   /** @pattern ^-?\d{0,2}(?:\.\d{0,4})?$ */
   target_margin?: string;
+  /** @pattern ^-?\d{0,2}(?:\.\d{0,4})?$ */
+  margin_pct?: string;
   segment?: SegmentEnum;
   /** @maxItems 10 */
   extras?: ExtraChargeRequest[];

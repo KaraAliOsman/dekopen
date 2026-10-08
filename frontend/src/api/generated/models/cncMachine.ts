@@ -29,4 +29,14 @@ export interface CncMachine {
   units: string;
   encoding: string;
   active: boolean;
+  machine_type?: string;
+  /** @nullable */
+  axes_count?: number | null;
+  /** @nullable */
+  travel_x_mm?: string | null;
+  /** @nullable */
+  travel_y_mm?: string | null;
+  /** @nullable */
+  travel_z_mm?: string | null;
+  emitter_implemented?: boolean;
 }

@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     "jobs.apps.JobsConfig",
     "inventory.apps.InventoryConfig",
     "production.apps.ProductionConfig",
+    "field.apps.FieldConfig",
     "analytics.apps.AnalyticsConfig",
     "portal.apps.PortalConfig",
     "billing.apps.BillingConfig",
@@ -76,6 +77,7 @@ INSTALLED_APPS = [
     "ingest.apps.IngestConfig",
     "search.apps.SearchConfig",
     "automations.apps.AutomationsConfig",
+    "mail.apps.MailConfig",
 ]
 
 MIDDLEWARE = [
@@ -134,10 +136,28 @@ SPECTACULAR_SETTINGS = {
             "OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER", "OPERATOR",
         ],
         "AiAgentHistoryRoleEnum": ["user", "agent"],
+        # §IA3 — distinct 'mode' enums across AI serializers would otherwise
+        # collide: the run mode, the per-route serving mode and the overall
+        # provider mode are three different value sets.
+        "AiAgentRunModeEnum": ["new", "resume"],
+        "AiRouteModeEnum": ["live", "test", "unconfigured"],
+        "AiProviderModeEnum": ["live", "test", "partial", "unconfigured"],
         "QcResultEnum": ["PASS", "FAIL"],
         "UnitEnum": ["kit"],
         "PurchaseUnitEnum": ["BAR"],
         "MaterialEnum": ["PVC", "ALUMINIUM"],
+        "ExtraKindEnum": [
+            "SILL", "FRAME_EXTENSION", "COVER_TRIM", "MOSQUITO_SCREEN",
+            "VENTILATOR",
+        ],
+        "ServiceKindEnum": [
+            "INSTALLATION", "SEALING", "REMOVAL", "SCAFFOLDING", "FREIGHT",
+        ],
+        "SystemFamilyEnum": [
+            "CASEMENT", "SLIDING", "LIFT_SLIDE", "DOOR", "FACADE_FIXED",
+        ],
+        "EdgesEnum": ["top", "right", "bottom", "left"],
+        "PieceOriginEnum": ["PRODUCT", "EXTRA"],
         "CutMaterialEnum": ["PVC", "ALUMINIUM", "STEEL"],
         "InspectorRuleIdEnum": [f"R{i:02d}" for i in range(1, 15)],
         "DrainFixRuleIdEnum": ["R07"],
@@ -145,13 +165,30 @@ SPECTACULAR_SETTINGS = {
         "WhiteColorEnum": ["WHITE"],
         "PaymentStatusEnum": ["NO_DEAL", "PENDING", "PARTIAL", "PAID"],
         "PaymentKindEnum": ["ANTICIPO", "PARCIAL", "SALDO"],
+        # P22 — 'kind' aparece en pagos y en el tipo de cliente: el del
+        # cliente es persona natural vs empresa (etiquetas incluidas para
+        # que el hash del override coincida con el ChoiceField).
+        "ClientKindEnum": [("PERSON", "Persona natural"), ("COMPANY", "Empresa")],
+        "OrgCurrencyEnum": ["CLP", "USD", "UF"],
+        "PricingCurrencyEnum": ["CLP", "USD"],
         "VerticalReferenceEnum": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"],
-        "KitOpeningTypeEnum": ["AWNING", "DOOR", "SLIDING", "TILT_TURN", "TURN"],
+        # P05 — sliding travel and door handedness share the LEFT/RIGHT
+        # value set: keep one component name for both serializer fields.
+        "SlidingTravelEnum": ["LEFT", "RIGHT"],
+        "KitOpeningTypeEnum": [
+            "AWNING", "BOTTOM_HUNG", "DOOR", "FALLEBA", "SLIDING", "TILT",
+            "TILT_TURN", "TURN",
+            # D08 — advanced-typology kit families.
+            "LIFT_SLIDE", "PARALLEL_SLIDE", "FOLD", "PIVOT",
+            "VERTICAL_SLIDE", "DOOR_SLIDING",
+        ],
         "ImportOpeningTypeEnum": [
             "AWNING", "DOOR_ENTRY", "FIXED", "SLIDING_2L",
             "TILT_TURN_LEFT", "TILT_TURN_RIGHT", "TURN_LEFT", "TURN_RIGHT",
         ],
-        "SiiEnvioStatusEnum": ["PENDING", "ACCEPTED", "REJECTED"],
+        # P11 — «aceptado con reparos» es un veredicto propio del SII, no un
+        # detalle: lo lleva el enum del envío.
+        "SiiEnvioStatusEnum": ["PENDING", "ACCEPTED", "OBSERVED", "REJECTED"],
         "OrderStatusEnum": [
             "DRAFT",
             "SENT",
@@ -163,6 +200,26 @@ SPECTACULAR_SETTINGS = {
         "SectionSourceEnum": ["POLYGON", "DXF_REFERENCE"],
         "BarAuthoritySourceEnum": ["PROFILE", "REINFORCEMENT"],
         "WorkCenterKindEnum": ["CUT", "ASSEMBLY", "GLAZING", "QC", "PACK"],
+        # P18 — 'code' también choca entre reglas de montaje y separadores;
+        # y los enums térmicos comparten nombres entre write/response.
+        "MountingRuleCodeEnum": ["EN_VANO", "PREMARCO", "SOBRE_VANO", "TRASLAPADO", "RENOVACION"],
+        "SpacerCodeEnum": ["ALUMINIUM", "WARM_EDGE"],
+        "FrameMemberGroupEnum": ["ALL", "FRAME", "SASH", "MULLION", "COUPLER", "THRESHOLD"],
+        "ThermalZoneEnum": ["A", "B", "C", "D", "E", "F", "G", "H", "I"],
+        "ThermalUseEnum": ["RESIDENTIAL", "EQUIPMENT"],
+        "ThermalOrientationEnum": ["N", "OP", "S", "OGT", "ROOF"],
+        # 'orientation' chocaría con el OrientationEnum de montaje
+        # (EXTERIOR_*) — nombre propio para el grupo cardinal OGUC.
+        "OrientationGroupEnum": ["N", "OP", "S", "OGT"],
+        "ThermalVerdictEnum": ["COMPLIES", "FAILS", "INSUFFICIENT_DATA", "NO_REQUIREMENT"],
+        "UwStatusEnum": ["OK", "UNKNOWN"],
+        "ThermalAlternativeKindEnum": ["GLASS", "SYSTEM"],
+        # P23 — tres «kind» distintos en el API de terreno: cuadrilla,
+        # tipo de incidencia y tipo de ticket postventa.
+        "FieldCrewKindEnum": ["VEHICLE", "TEAM"],
+        "SiteIncidentKindEnum": ["DAMAGE", "WRONG_MEASURE", "MISSING", "ADJUSTMENT"],
+        "SiteIncidentResolutionEnum": ["REMAKE", "PURCHASE", "SERVICE", "NONE"],
+        "ServiceTicketKindEnum": ["WARRANTY", "SERVICE"],
     },
     "TITLE": "Dekopen API",
     "DESCRIPTION": "Authenticated tenant and engine API boundary.",

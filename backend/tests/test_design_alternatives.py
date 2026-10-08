@@ -100,6 +100,16 @@ def test_alternatives_carry_engine_metrics(monkeypatch):
                     "glass_sku": "GLASS-4MM",
                 },
                 {
+                    # Two modules share the 2400 mm envelope so the operable
+                    # leaf lands inside the casement kit's declared envelope.
+                    "label": "Fijo + abatible",
+                    "rationale": "ventilación segura",
+                    "openings": ["FIXED", "TURN_LEFT"],
+                    "glass_sku": "GLASS-4MM",
+                },
+                {
+                    # A sliding leaf on a casement-family system must be
+                    # refused, not fabricated (D01 family separation).
                     "label": "Corredera",
                     "rationale": "sin barrido",
                     "openings": ["SLIDING_2L"],
@@ -110,7 +120,9 @@ def test_alternatives_carry_engine_metrics(monkeypatch):
         },
     )
     out = _call()
-    assert out["rejected"] == []
+    assert out["rejected"] == [
+        {"label": "Corredera", "reasons": ["typology_family_incompatible"]}
+    ]
     assert len(out["alternatives"]) == 2
     fixed, sliding = out["alternatives"]
     assert fixed["label"] == "Paño fijo"
@@ -123,8 +135,8 @@ def test_alternatives_carry_engine_metrics(monkeypatch):
     module = fixed["product"]["assembly"]["modules"][0]
     assert module["width_mm"] == "2400.00"
     assert module["tree"]["opening_type"] == "FIXED"
-    assert sliding["product"]["assembly"]["couplings"] == []
-    assert sliding["metrics"]["openings"] == ["SLIDING_2L"]
+    assert sliding["metrics"]["module_count"] == 2
+    assert sliding["metrics"]["openings"] == ["FIXED", "TURN_LEFT"]
 
 
 def test_bow_alternative_gets_share_widths_and_couplings(monkeypatch):

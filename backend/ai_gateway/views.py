@@ -9,13 +9,16 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ai_gateway import invocations
 from ai_gateway import service
 from ai_gateway import jobs
+from ai_gateway import status as ai_status
 from ai_gateway.metrics import ai_metrics
 from ai_gateway.assist import ask, list_turns
 from ai_gateway.context import _ContextError, stable_refs
 from ai_gateway.providers import ProviderError
 from ai_gateway.serializers import (
+    AiActivitySerializer,
     AiAgentAcceptedSerializer,
     AiAgentRequestSerializer,
     AiAskRequestSerializer,
@@ -29,6 +32,11 @@ from ai_gateway.serializers import (
     AiJobOutcomeSerializer,
     AiJobSerializer,
     AiMetricsSerializer,
+    AiOpsContractSerializer,
+    AiProviderCheckSerializer,
+    AiProviderStatusSerializer,
+    AiSettingsSerializer,
+    AiSettingsWriteSerializer,
 )
 from ai_gateway.context import REQUIRED_REFS as AGENT_REQUIRED_REFS
 from authentication.errors import ContractAPIException, contract_error
@@ -100,8 +108,12 @@ class AiInvokeView(APIView):
                 "ai_capability_forbidden",
                 "Esa capacidad se usa desde su propia superficie.",
             )
-        with documentary_scope(request, _CALLERS) as (token, _, org_id):
-            try:
+        # §IA3 — the except clause sits OUTSIDE documentary_scope so the
+        # doomed request transaction has already rolled back when the
+        # invocation log records the failed/blocked call (the entry rides
+        # `error.invocation` out of service.invoke).
+        try:
+            with documentary_scope(request, _CALLERS) as (token, _, org_id):
                 return Response(
                     service.invoke(
                         org_id=org_id,
@@ -114,12 +126,16 @@ class AiInvokeView(APIView):
                         tool_name=None,
                     )
                 )
-            except ProviderError as error:
-                raise contract_error(
-                    503,
-                    error.code,
-                    _provider_message(error.code),
-                ) from None
+        except ProviderError as error:
+            invocations.record_attached(error)
+            raise contract_error(
+                503,
+                error.code,
+                _provider_message(error.code),
+            ) from None
+        except ContractAPIException as error:
+            invocations.record_attached(error)
+            raise
 
 
 class AiAskView(APIView):
@@ -136,8 +152,8 @@ class AiAskView(APIView):
     )
     def post(self, request):
         data = validate(AiAskRequestSerializer, request.data)
-        with documentary_scope(request, _CALLERS) as (token, _, org_id):
-            try:
+        try:
+            with documentary_scope(request, _CALLERS) as (token, _, org_id):
                 return Response(
                     ask(
                         org_id=org_id,
@@ -148,12 +164,16 @@ class AiAskView(APIView):
                         operation_key=str(data["operation_key"]),
                     )
                 )
-            except ProviderError as error:
-                raise contract_error(
-                    503,
-                    error.code,
-                    _provider_message(error.code),
-                ) from None
+        except ProviderError as error:
+            invocations.record_attached(error)
+            raise contract_error(
+                503,
+                error.code,
+                _provider_message(error.code),
+            ) from None
+        except ContractAPIException as error:
+            invocations.record_attached(error)
+            raise
 
     @extend_schema(
         operation_id="ai_ask_thread",
@@ -653,6 +673,25 @@ class AiJobOutcomeView(APIView):
             return Response(result)
 
 
+class AiOpsContractView(APIView):
+    """IA2 §1 — el registro tipado de ops expuesto como documento de
+    contrato: el mismo texto que el prompt, el validador y el TS
+    generado. Cualquier cliente puede descubrir las ops en runtime en
+    vez de adivinarlas."""
+
+    @extend_schema(
+        operation_id="ai_ops_contract",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        responses={200: AiOpsContractSerializer, **ERRORS},
+        tags=["ai"],
+    )
+    def get(self, request):
+        from projects.ops_registry import contract_document
+
+        with documentary_scope(request, _AGENT_CALLERS) as (_, _, _org_id):
+            return Response(contract_document())
+
+
 class AiMetricsView(APIView):
     """§08 measurement — org-level AI metrics over the trailing window."""
 
@@ -680,3 +719,141 @@ class AiMetricsView(APIView):
             )
         with documentary_scope(request, _AGENT_CALLERS) as (_, _, org_id):
             return Response(ai_metrics(org_id=org_id, days=days))
+
+
+# ------------------------------------------------------------------ §IA3 —
+# Provider status, owner settings, connection probe and the invocation
+# activity feed — the surfaces that let an owner see the real provider
+# working without reading logs.
+
+_OWNER = ("OWNER",)
+
+
+class AiProviderStatusView(APIView):
+    """Compact serving-mode read — every member may see whether the org's
+    AI answers come from the real provider or the explicit test mode (the
+    "Modo de prueba" badge reads this). Provider/model stay sealed: the
+    response carries only mode + mock, never the key."""
+
+    @extend_schema(
+        operation_id="ai_provider_status",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        responses={200: AiProviderStatusSerializer, **ERRORS},
+        tags=["ai"],
+    )
+    def get(self, request):
+        with documentary_scope(request, _CALLERS) as (_, _, _org_id):
+            return Response(ai_status.member_status())
+
+
+class AiSettingsView(APIView):
+    """Settings › Inteligencia artificial — OWNER only: capability routes,
+    the monthly credit budget and this month's consumption."""
+
+    @extend_schema(
+        operation_id="ai_settings",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        responses={200: AiSettingsSerializer, **ERRORS},
+        tags=["ai"],
+    )
+    def get(self, request):
+        with documentary_scope(request, _OWNER) as (_, _, org_id):
+            return Response(ai_status.ai_settings(org_id))
+
+    @extend_schema(
+        operation_id="ai_settings_update",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=AiSettingsWriteSerializer,
+        responses={200: AiSettingsSerializer, **ERRORS},
+        tags=["ai"],
+    )
+    def put(self, request):
+        data = validate(AiSettingsWriteSerializer, request.data)
+        with documentary_scope(request, _OWNER) as (token, _, org_id):
+            try:
+                ai_status.save_budget(
+                    org_id,
+                    token.user_id,
+                    data.get("monthly_credit_budget"),
+                )
+            except ValueError:
+                raise contract_error(
+                    400,
+                    "ai_budget_invalid",
+                    "El presupuesto mensual no es válido.",
+                ) from None
+            return Response(ai_status.ai_settings(org_id))
+
+
+class AiProviderCheckView(APIView):
+    """"Probar conexión" — one minimal live call against the cheapest
+    enabled route, recorded as kind='probe'. OWNER only."""
+
+    @extend_schema(
+        operation_id="ai_provider_check",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: AiProviderCheckSerializer, **ERRORS},
+        tags=["ai"],
+    )
+    def post(self, request):
+        with documentary_scope(request, _OWNER) as (token, _, org_id):
+            return Response(ai_status.probe(org_id, token.user_id))
+
+
+class AiActivityView(APIView):
+    """The org's invocation log — the /jobs panel's AI activity source.
+    OWNER reads it; rows are content-free (no prompts, no outputs)."""
+
+    @extend_schema(
+        operation_id="ai_activity",
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                "capability", OpenApiTypes.STR, OpenApiParameter.QUERY
+            ),
+            OpenApiParameter(
+                "status",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                enum=["ok", "error", "blocked"],
+            ),
+            OpenApiParameter(
+                "before",
+                OpenApiTypes.DATETIME,
+                OpenApiParameter.QUERY,
+                description="Keyset cursor — rows strictly older than this "
+                "created_at (pass the last row's created_at).",
+            ),
+            OpenApiParameter(
+                "limit", OpenApiTypes.INT, OpenApiParameter.QUERY
+            ),
+        ],
+        responses={200: AiActivitySerializer, **ERRORS},
+        tags=["ai"],
+    )
+    def get(self, request):
+        capability = str(request.query_params.get("capability") or "")[:100]
+        state = str(request.query_params.get("status") or "")
+        if state and state not in ("ok", "error", "blocked"):
+            raise contract_error(
+                400, "ai_activity_filter_invalid", "El filtro no es válido."
+            )
+        before = str(request.query_params.get("before") or "")[:80]
+        try:
+            limit = int(request.query_params.get("limit") or 50)
+        except (TypeError, ValueError):
+            limit = 50
+        limit = max(1, min(limit, 100))
+        with documentary_scope(request, _OWNER) as (_, _, org_id):
+            return Response(
+                {
+                    "items": invocations.activity(
+                        org_id,
+                        capability=capability or None,
+                        status=state or None,
+                        limit=limit,
+                        before=before or None,
+                    )
+                }
+            )

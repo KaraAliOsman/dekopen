@@ -6,6 +6,7 @@ import { makeBowProduct, wrapTreeAsProduct } from "./productEditing";
 import type { IntentNode } from "./intentEditing";
 import { resolveMembers } from "./members";
 import { buildScene3D, type BoxSolid, type ShapeSolid } from "./Product3DScene";
+import { explodeLifts, leafPose } from "./leafPose";
 
 const members = resolveMembers(undefined);
 
@@ -411,14 +412,16 @@ describe("buildScene3D", () => {
       assembly: { modules: [module], couplings: [] },
     } as ProductJson;
     const scene = buildScene3D(product, members);
-    // Both leaves translating swaps their slots and reveals no aperture;
-    // only the inner-rail leaf carries a slide motion (one pitch over).
+    // Only the primary leaf animates — riel 0 es el más exterior, so S2
+    // (track 1) is the room-side leaf that slides over it; moving both
+    // would swap slots and reveal no aperture.
     const slides = scene.modules[0]!.leaves.filter((leaf) => leaf.kind === "slide");
     expect(slides).toHaveLength(1);
-    expect(slides[0]!.leafId).toBe("b1:0");
-    // leaf0 (60..672, leafW 612) slides right until its edge meets the bay
-    // edge at 1140 — travel 468 stacks it on leaf1's slot, opening the
-    // left half of the aperture.
+    expect(slides[0]!.leafId).toBe("b1:1");
+    // leaf1 (leafX 528, leafW 612) slides left until its edge meets the
+    // bay edge at 60 — travel 468 stacks it over leaf0's slot, opening
+    // the right half of the aperture.
+    expect(slides[0]!.dir).toBe(-1);
     expect(slides[0]!.travel).toBeCloseTo(468, 5);
   });
 
@@ -725,5 +728,264 @@ describe("buildScene3D", () => {
       const tracks = scene.modules[0]!.solids.filter((solid) => solid.surface === "track");
       expect(tracks).toHaveLength(2);
     });
+
+    it("orders riel 0 as the exterior rail — leaf depth follows its declared track", () => {
+      const base = makeBowProduct({ moduleCount: 1, widthMm: 1200, heightMm: 1400, angleDeg: 0 });
+      const bay: IntentNode = {
+        id: "b1",
+        type: "BAY",
+        opening_type: "SLIDING",
+        glass_thickness_mm: "4.00",
+        sliding_layout: {
+          tracks: 2,
+          panels: [
+            { slot: "S1", kind: "MOVING", track: 0 },
+            { slot: "S2", kind: "MOVING", track: 1 },
+          ],
+        },
+      };
+      const module = {
+        ...base.assembly.modules[0]!,
+        tree: { id: "r", type: "ROOT" as const, children: [bay] },
+      };
+      const product = { ...base, assembly: { modules: [module], couplings: [] } } as ProductJson;
+      const scene = buildScene3D(product, members);
+      const meanZ = (leafId: string): number => {
+        const zeds = scene.modules[0]!.solids.filter(
+          (solid) => solid.leafId === leafId && solid.surface === "sash",
+        ).map((solid) => (solid.kind === "box" ? solid.center[2] : 0));
+        return zeds.reduce((acc, z) => acc + z, 0) / zeds.length;
+      };
+      // riel 0 es el más exterior — the outer-rail leaf seats deeper
+      // (smaller z, toward the street) than the room-side leaf.
+      expect(meanZ("b1:0")).toBeLessThan(meanZ("b1:1"));
+    });
+  });
+});
+
+/* ---------- P19 — spec-form openings pose and carry hardware exactly as
+ * declared: every leaf gets its own sash + motion + fittings, the slide
+ * honours `travel`, and nothing sits outside the frame volume closed. */
+describe("P19 spec-form pose fidelity", () => {
+  function specProduct(tree: IntentNode, widthMm = 900, heightMm = 1400): ProductJson {
+    const base = makeBowProduct({ moduleCount: 1, widthMm, heightMm, angleDeg: 0 });
+    const module = { ...base.assembly.modules[0]!, tree } as (typeof base.assembly.modules)[number];
+    return { ...base, assembly: { modules: [module], couplings: [] } } as ProductJson;
+  }
+
+  const xs = (solid: import("./Product3DScene").Solid3D): number =>
+    solid.kind === "box" ? solid.center[0] : Number.POSITIVE_INFINITY;
+
+  it("poses a spec TURN leaf on its declared hinge edge, handle on the closing side", () => {
+    const product = specProduct({
+      id: "b1",
+      type: "BAY",
+      opening: { movement: "TURN", hinge_side: "LEFT", direction: "INWARD" },
+      glass_thickness_mm: "4.00",
+    });
+    const scene = buildScene3D(product, members);
+    const module = scene.modules[0]!;
+    const swing = module.leaves.find((leaf) => leaf.kind === "swing");
+    expect(swing).toBeDefined();
+    expect(swing!.dir).toBe(-1);
+    // The hinge sits at the leaf's left edge — inside the frame, never
+    // at the leaf's centre.
+    const leafBoxes = module.solids.filter(
+      (solid) => solid.leafId === swing!.leafId && solid.kind === "box",
+    ) as BoxSolid[];
+    const minX = Math.min(...leafBoxes.map((solid) => solid.center[0] - solid.size[0] / 2));
+    expect(swing!.pivot).toBeCloseTo(minX, 5);
+    // The handle mounts opposite the hinge (closing side, DIN).
+    const handle = module.solids.filter((solid) => solid.surface === "handle");
+    expect(handle.length).toBeGreaterThan(0);
+    expect(Math.min(...handle.map(xs))).toBeGreaterThan(swing!.pivot + 200);
+    // Detail anchor for the camera preset rides the handle mount.
+    expect(swing!.detail).toBeDefined();
+  });
+
+  it("poses a spec pair leaf-by-leaf — handle on the ACTIVE, inversor on the PASSIVE", () => {
+    const product = specProduct(
+      {
+        id: "b1",
+        type: "BAY",
+        leaves: [
+          {
+            slot: "L1",
+            opening: {
+              movement: "TURN",
+              hinge_side: "LEFT",
+              direction: "INWARD",
+              leaf_role: "ACTIVE",
+            },
+          },
+          {
+            slot: "L2",
+            opening: {
+              movement: "TURN",
+              hinge_side: "RIGHT",
+              direction: "INWARD",
+              leaf_role: "PASSIVE",
+            },
+          },
+        ],
+        glass_thickness_mm: "4.00",
+      },
+      1400,
+    );
+    const scene = buildScene3D(product, members);
+    const module = scene.modules[0]!;
+    const swings = module.leaves.filter((leaf) => leaf.kind === "swing");
+    expect(swings).toHaveLength(2);
+    const [left, right] = swings;
+    // Each leaf swings on its own outer hinge — left leaf pivots its left
+    // edge, right leaf its right edge, both opening the pair's centre.
+    expect(left!.dir).toBe(-1);
+    expect(right!.dir).toBe(1);
+    expect(left!.pivot).toBeLessThan(right!.pivot);
+    // Falleba cues on the passive leaf (2 bolt blocks); the ACTIVE leaf
+    // carries the lever cluster — the passive never shows the handle.
+    const activeHandles = module.solids.filter(
+      (solid) => solid.surface === "handle" && solid.leafId === "b1:0",
+    );
+    const passiveHandles = module.solids.filter(
+      (solid) => solid.surface === "handle" && solid.leafId === "b1:1",
+    );
+    expect(activeHandles.length).toBeGreaterThanOrEqual(3);
+    expect(passiveHandles.length).toBeLessThan(activeHandles.length);
+    // The passive leaf carries the inversor astragal on its meeting edge —
+    // one extra sash-surface bar beyond its ring.
+    const passiveSash = module.solids.filter(
+      (solid) => solid.surface === "sash" && solid.leafId === "b1:1" && solid.kind === "box",
+    );
+    expect(passiveSash.length).toBeGreaterThan(4);
+  });
+
+  it("poses a spec DOOR on its declared hand over a threshold", () => {
+    const product = specProduct(
+      {
+        id: "b1",
+        type: "BAY",
+        unit_kind: "DOOR",
+        opening: { movement: "TURN", hinge_side: "RIGHT", direction: "INWARD" },
+        glass_thickness_mm: "4.00",
+      },
+      900,
+      2100,
+    );
+    const scene = buildScene3D(product, members);
+    const module = scene.modules[0]!;
+    const swing = module.leaves.find((leaf) => leaf.kind === "swing");
+    expect(swing).toBeDefined();
+    expect(swing!.dir).toBe(1);
+    // A door leaf closes on the declared threshold — the frame is 3-sided
+    // and the bottom member is a threshold bar, exactly like the legacy
+    // DOOR_ENTRY path.
+    expect(module.solids.some((solid) => solid.surface === "threshold")).toBe(true);
+    // Door hardware = escutcheon plates + lever cluster, more parts than
+    // a window lever.
+    const handle = module.solids.filter((solid) => solid.surface === "handle");
+    expect(handle.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("keeps a pivot door closed rather than fabricating an edge swing", () => {
+    // D08: a PIVOT_V leaf rotates on its declared `axis_offset_mm`, not on
+    // the jamb edge — the view emits no motion before posing a lie.
+    const product = specProduct(
+      {
+        id: "b1",
+        type: "BAY",
+        unit_kind: "DOOR",
+        opening: { movement: "PIVOT_V" },
+        glass_thickness_mm: "4.00",
+      },
+      1200,
+      2100,
+    );
+    const scene = buildScene3D(product, members);
+    expect(scene.modules[0]!.leaves).toHaveLength(0);
+  });
+
+  it("tips a bottom-hung leaf ~10° on its bottom axis", () => {
+    const product = specProduct({
+      id: "b1",
+      type: "BAY",
+      opening: { movement: "BOTTOM_HUNG", hinge_side: "BOTTOM", direction: "INWARD" },
+      glass_thickness_mm: "4.00",
+    });
+    const scene = buildScene3D(product, members);
+    const module = scene.modules[0]!;
+    const tilt = module.leaves.find((leaf) => leaf.kind === "tilt");
+    expect(tilt).toBeDefined();
+    expect(tilt!.dir).toBe(1);
+    // Pivot = the leaf's bottom edge in module space — the leaf's top
+    // edge tips toward the room.
+    const leafBoxes = module.solids.filter(
+      (solid) => solid.leafId === tilt!.leafId && solid.kind === "box",
+    ) as BoxSolid[];
+    const minY = Math.min(...leafBoxes.map((solid) => solid.center[1] - solid.size[1] / 2));
+    expect(tilt!.pivot).toBeCloseTo(minY, 5);
+    // The oscilobatiente vent stays ~10° — no override rad.
+    expect(tilt!.rad).toBeUndefined();
+  });
+
+  it("slides the declared travel direction, never the inferred convention", () => {
+    const product = specProduct(
+      {
+        id: "b1",
+        type: "BAY",
+        opening_type: "SLIDING",
+        glass_thickness_mm: "4.00",
+        sliding_layout: {
+          tracks: 2,
+          panels: [
+            { slot: "S1", kind: "MOVING", track: 0 },
+            // S2 declares LEFT — the convention for index 1 of 3 would
+            // infer RIGHT, so a -1 direction proves the declared value wins.
+            { slot: "S2", kind: "MOVING", track: 1, travel: "LEFT" },
+            { slot: "S3", kind: "MOVING", track: 0 },
+          ],
+        },
+      },
+      1800,
+    );
+    const scene = buildScene3D(product, members);
+    const slides = scene.modules[0]!.leaves.filter((leaf) => leaf.kind === "slide");
+    expect(slides).toHaveLength(1);
+    expect(slides[0]!.leafId).toBe("b1:1");
+    expect(slides[0]!.dir).toBe(-1);
+    // The pose stays inside the frame volume — leaf x-extent + the slide
+    // offset never crosses the bay's inner aperture bounds.
+    const pose = leafPose(slides[0]!, 1, false);
+    const leafBoxes = scene.modules[0]!.solids.filter(
+      (solid) => solid.leafId === "b1:1" && solid.kind === "box",
+    ) as BoxSolid[];
+    const minX = Math.min(...leafBoxes.map((solid) => solid.center[0] - solid.size[0] / 2));
+    expect(minX + pose.tiltPos[0]).toBeGreaterThanOrEqual(60 - 0.5);
+  });
+
+  it("anchors despiece parts to the leaf's closed z-seats", () => {
+    const product = specProduct({
+      id: "b1",
+      type: "BAY",
+      opening_type: "TILT_TURN_LEFT",
+      glass_thickness_mm: "4.00",
+    });
+    const scene = buildScene3D(product, members);
+    const motion = scene.modules[0]!.leaves[0]!;
+    expect(motion.partZ.sash).toBeGreaterThan(0);
+    expect(motion.partZ.glazing).toBeGreaterThan(0);
+    // A tilt_turn leaf keeps both pivots — the side hinge for TURN and
+    // the bottom rail for the vent pose.
+    expect(motion.kind).toBe("tilt_turn");
+    expect(motion.tiltPivot).toBeDefined();
+  });
+
+  it("orders despiece parts in room-side disassembly order", () => {
+    // From inside the room the junquillo comes off first (travels most),
+    // then the pane, then the sash — axial separation in the glazing axis.
+    const lifts = explodeLifts(70, 1);
+    expect(lifts.bead).toBeGreaterThan(lifts.glazing);
+    expect(lifts.glazing).toBeGreaterThan(lifts.sash);
+    expect(lifts.sash).toBeGreaterThan(0);
   });
 });

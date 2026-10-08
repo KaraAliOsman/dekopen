@@ -149,7 +149,7 @@ describe("CutPlanView", () => {
     const aside = container.querySelector(".cutplan-detail") as Element;
     expect(aside.textContent).toContain("M-60 · B1-1");
     expect(aside.textContent).toContain("Marco");
-    expect(aside.textContent).toContain("2000 mm");
+    expect(aside.textContent).toContain("2 000 mm");
     // member key = interchangeable spec (location+role+sku+measure+angles)
     // — M-01 (2000 mm) and M-02 (3035 mm) are different physical pieces.
     const members = container.querySelectorAll(".is-member");
@@ -166,6 +166,6 @@ describe("CutPlanView", () => {
     expect(nest.classList.contains("is-selected")).toBe(true);
     const aside = container.querySelector(".cutplan-detail") as Element;
     expect(aside.textContent).toContain("VID-4MM · S1-2");
-    expect(aside.textContent).toContain("1400×1000");
+    expect(aside.textContent).toContain("1 400×1 000");
   });
 });

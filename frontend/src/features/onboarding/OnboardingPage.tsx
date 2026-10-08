@@ -13,6 +13,10 @@ import {
   catalogSystemList,
   clientsCreate,
   clientsList,
+  organizationSettingsCommercialUpdate,
+  organizationSettingsCompanyUpdate,
+  organizationSettingsDocumentsUpdate,
+  organizationSettingsRead,
   projectsCreate,
   projectsList,
   type catalogSystemListResponse,
@@ -20,13 +24,15 @@ import {
 import type { SystemResponse } from "../../api/generated/models/systemResponse";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { roleLabel } from "../../app/shellUtils";
+import { Wordmark } from "../../brand";
 import { t } from "../../i18n/es-CL";
-import { EmptyState, StatusBadge } from "../../ui";
+import { EmptyState, StatusBadge, Stepper } from "../../ui";
 
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 type OnboardingState = {
   step?: Step;
+  configDone?: boolean;
   systemId?: string | null;
   dataChoice?: "demo" | "real" | null;
   clientId?: string | null;
@@ -54,6 +60,7 @@ function readState(orgId: string): OnboardingState {
 
 const STEP_LABELS = [
   "onboarding.stepIdentity",
+  "onboarding.stepConfig",
   "onboarding.stepSystem",
   "onboarding.stepData",
   "onboarding.stepClient",
@@ -87,6 +94,216 @@ function stepIsDone(
   }
 }
 
+/** P22 — configuración inicial: Empresa, Comercial y Documentos con los
+ * valores sugeridos del §11 editables antes de crear el primer proyecto. */
+function ConfigStep({ orgId, onDone }: { orgId: string; onDone: () => void }): JSX.Element {
+  const [form, setForm] = useState({
+    name: "",
+    tax_id: "",
+    currency: "CLP",
+    tax_rate_pct: "0.19",
+    doc_validity_days: "15",
+    default_margin_pct: "0.35",
+    doc_paper_size: "LETTER",
+    doc_terms_pago: "Anticipo 50 %, saldo contra entrega.",
+    doc_terms_garantia: "Garantía según condiciones comerciales informadas.",
+  });
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestOptions = { headers: { "X-Organization-ID": orgId } };
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await organizationSettingsRead(requestOptions);
+        if (response.status !== 200) return;
+        const company = response.data.company as Record<string, string>;
+        const commercial = response.data.commercial as Record<string, string>;
+        const documents = response.data.documents as Record<string, string | boolean>;
+        const terms = (documents.doc_terms ?? {}) as Record<string, string>;
+        setForm((previous) => ({
+          ...previous,
+          name: company.name ?? previous.name,
+          tax_id: company.tax_id ?? "",
+          currency: commercial.currency ?? "CLP",
+          tax_rate_pct: commercial.tax_rate_pct ?? "0.19",
+          doc_validity_days: String(commercial.doc_validity_days ?? 15),
+          default_margin_pct: commercial.default_margin_pct ?? "0.35",
+          doc_paper_size: (documents.doc_paper_size as string) ?? "LETTER",
+          doc_terms_pago: terms.pago || previous.doc_terms_pago,
+          doc_terms_garantia: terms.garantia || previous.doc_terms_garantia,
+        }));
+      } finally {
+        setLoaded(true);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
+
+  async function save(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const [company, commercial, documents] = await Promise.all([
+        organizationSettingsCompanyUpdate(
+          {
+            name: form.name.trim(),
+            tax_id: form.tax_id.trim() || undefined,
+          },
+          requestOptions,
+        ),
+        organizationSettingsCommercialUpdate(
+          {
+            currency: form.currency as "CLP" | "USD" | "UF",
+            tax_rate_pct: form.tax_rate_pct.trim() || undefined,
+            doc_validity_days: Number.parseInt(form.doc_validity_days, 10) || 15,
+            default_margin_pct: form.default_margin_pct.trim() || undefined,
+          },
+          requestOptions,
+        ),
+        organizationSettingsDocumentsUpdate(
+          {
+            doc_paper_size: form.doc_paper_size as "LETTER" | "LEGAL" | "A4",
+            doc_terms: {
+              ...(form.doc_terms_pago.trim() ? { pago: form.doc_terms_pago.trim() } : {}),
+              ...(form.doc_terms_garantia.trim()
+                ? { garantia: form.doc_terms_garantia.trim() }
+                : {}),
+            },
+          },
+          requestOptions,
+        ),
+      ]);
+      if (company.status !== 200) throw new ApiError(company.status, company.data);
+      if (commercial.status !== 200) throw new ApiError(commercial.status, commercial.data);
+      if (documents.status !== 200) throw new ApiError(documents.status, documents.data);
+      onDone();
+    } catch {
+      setError(t("onboarding.configSaveError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!loaded) {
+    return (
+      <div className="onboarding-card">
+        <h2>{t("onboarding.configTitle")}</h2>
+        <p className="onboarding-hint">{t("projects.loading")}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="onboarding-card">
+      <h2>{t("onboarding.configTitle")}</h2>
+      <p className="onboarding-hint">{t("onboarding.configHint")}</p>
+      {error && <p className="form-error">{error}</p>}
+      <form noValidate onSubmit={save}>
+        <label>
+          {t("onboarding.configName")}
+          <input
+            maxLength={255}
+            value={form.name}
+            onChange={(event) => setForm((p) => ({ ...p, name: event.target.value }))}
+          />
+          <span className="onboarding-hint">{t("onboarding.configDefault")}</span>
+        </label>
+        <label>
+          {t("onboarding.configRut")}
+          <input
+            maxLength={16}
+            value={form.tax_id}
+            onChange={(event) => setForm((p) => ({ ...p, tax_id: event.target.value }))}
+            placeholder="76.123.456-7"
+          />
+          <span className="onboarding-hint">{t("onboarding.configOptional")}</span>
+        </label>
+        <label>
+          {t("onboarding.configCurrency")}
+          <select
+            value={form.currency}
+            onChange={(event) => setForm((p) => ({ ...p, currency: event.target.value }))}
+          >
+            <option value="CLP">CLP</option>
+            <option value="USD">USD</option>
+            <option value="UF">UF</option>
+          </select>
+          <span className="onboarding-hint">{t("onboarding.configDefault")}</span>
+        </label>
+        <label>
+          {t("onboarding.configTax")}
+          <input
+            inputMode="decimal"
+            maxLength={8}
+            value={form.tax_rate_pct}
+            onChange={(event) => setForm((p) => ({ ...p, tax_rate_pct: event.target.value }))}
+          />
+          <span className="onboarding-hint">{t("onboarding.configTaxHint")}</span>
+        </label>
+        <label>
+          {t("onboarding.configValidity")}
+          <input
+            inputMode="numeric"
+            maxLength={3}
+            value={form.doc_validity_days}
+            onChange={(event) => setForm((p) => ({ ...p, doc_validity_days: event.target.value }))}
+          />
+          <span className="onboarding-hint">{t("onboarding.configDefault")}</span>
+        </label>
+        <label>
+          {t("onboarding.configMargin")}
+          <input
+            inputMode="decimal"
+            maxLength={8}
+            value={form.default_margin_pct}
+            onChange={(event) => setForm((p) => ({ ...p, default_margin_pct: event.target.value }))}
+          />
+          <span className="onboarding-hint">{t("onboarding.configMarginHint")}</span>
+        </label>
+        <label>
+          {t("onboarding.configPaper")}
+          <select
+            value={form.doc_paper_size}
+            onChange={(event) => setForm((p) => ({ ...p, doc_paper_size: event.target.value }))}
+          >
+            <option value="LETTER">{t("settings.docPaperLetter")}</option>
+            <option value="LEGAL">{t("settings.docPaperLegal")}</option>
+            <option value="A4">{t("settings.docPaperA4")}</option>
+          </select>
+          <span className="onboarding-hint">{t("onboarding.configDefault")}</span>
+        </label>
+        <label>
+          {t("onboarding.configTermsPago")}
+          <textarea
+            maxLength={4000}
+            rows={2}
+            value={form.doc_terms_pago}
+            onChange={(event) => setForm((p) => ({ ...p, doc_terms_pago: event.target.value }))}
+          />
+        </label>
+        <label>
+          {t("onboarding.configTermsGarantia")}
+          <textarea
+            maxLength={4000}
+            rows={2}
+            value={form.doc_terms_garantia}
+            onChange={(event) => setForm((p) => ({ ...p, doc_terms_garantia: event.target.value }))}
+          />
+        </label>
+        <div className="onboarding-actions">
+          <button className="primary-action" disabled={busy} type="submit">
+            {t("onboarding.configSave")}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function OnboardingPage(): JSX.Element {
   const auth = useAuthSession();
   const org = auth.me?.active_organization;
@@ -95,6 +312,7 @@ export function OnboardingPage(): JSX.Element {
   const queryClient = useQueryClient();
 
   const [step, setStep] = useState<Step>(0);
+  const [configDone, setConfigDone] = useState(false);
   const [systemId, setSystemId] = useState<string | null>(null);
   const [dataChoice, setDataChoice] = useState<"demo" | "real" | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
@@ -118,6 +336,7 @@ export function OnboardingPage(): JSX.Element {
     restoredOrgRef.current = orgId;
     const saved = readState(orgId);
     setStep(saved.step ?? 0);
+    setConfigDone(saved.configDone ?? false);
     setSystemId(saved.systemId ?? null);
     setDataChoice(saved.dataChoice ?? null);
     setClientId(saved.clientId ?? null);
@@ -136,6 +355,7 @@ export function OnboardingPage(): JSX.Element {
       storageKey(orgId),
       JSON.stringify({
         step,
+        configDone,
         systemId,
         dataChoice,
         clientId,
@@ -149,6 +369,7 @@ export function OnboardingPage(): JSX.Element {
     orgId,
     restoredFor,
     step,
+    configDone,
     systemId,
     dataChoice,
     clientId,
@@ -176,7 +397,13 @@ export function OnboardingPage(): JSX.Element {
     },
   });
 
-  const done = { system: systemId !== null, data: dataChoice !== null, clientId, projectId };
+  const done = {
+    config: configDone,
+    system: systemId !== null,
+    data: dataChoice !== null,
+    clientId,
+    projectId,
+  };
   const currentDone = stepIsDone(step, done);
   const lastStep = (STEP_LABELS.length - 1) as Step;
   const canWrite = org?.role === "OWNER" || org?.role === "ESTIMATOR";
@@ -201,7 +428,7 @@ export function OnboardingPage(): JSX.Element {
     const norm = (value: string | undefined): string => (value ?? "").trim().toLowerCase();
     try {
       if (kind === "client") {
-        const response = await clientsList(options);
+        const response = await clientsList(undefined, options);
         if (response.status !== 200) return null;
         const matches = response.data.items.filter(
           (entry) =>
@@ -246,7 +473,7 @@ export function OnboardingPage(): JSX.Element {
       );
       if (response.status !== 201) throw new ApiError(response.status, response.data);
       setClientId(response.data.id);
-      setStep(4);
+      setStep(5);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status < 500) {
         setError(t(caught.status === 422 ? "projects.invalid" : "onboarding.saveError"));
@@ -258,7 +485,7 @@ export function OnboardingPage(): JSX.Element {
         });
         if (adopted) {
           setClientId(adopted);
-          setStep(4);
+          setStep(5);
         } else {
           setError(t("onboarding.saveError"));
         }
@@ -286,7 +513,7 @@ export function OnboardingPage(): JSX.Element {
       if (response.status !== 201) throw new ApiError(response.status, response.data);
       setProjectId(response.data.id);
       void queryClient.invalidateQueries({ queryKey: ["project-switcher"] });
-      setStep(5);
+      setStep(6);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status < 500) {
         setError(
@@ -301,7 +528,7 @@ export function OnboardingPage(): JSX.Element {
         if (adopted) {
           setProjectId(adopted);
           void queryClient.invalidateQueries({ queryKey: ["project-switcher"] });
-          setStep(5);
+          setStep(6);
         } else {
           setError(t("onboarding.saveError"));
         }
@@ -314,29 +541,26 @@ export function OnboardingPage(): JSX.Element {
   return (
     <section className="onboarding" aria-labelledby="onboarding-title">
       <header className="onboarding-head">
+        <div className="onboarding-brand">
+          <Wordmark size={14} />
+          <span className="brand-os">{t("app.brandOs")}</span>
+        </div>
         <p className="eyebrow">{t("onboarding.eyebrow")}</p>
         <h1 id="onboarding-title">{t("onboarding.title")}</h1>
         <p className="onboarding-sub">{t("onboarding.subtitle")}</p>
       </header>
 
-      <ol className="onboarding-steps" aria-label={t("onboarding.title")}>
-        {STEP_LABELS.map((label, index) => {
+      <Stepper
+        onStep={(key) => setStep(Number(key) as Step)}
+        steps={STEP_LABELS.map((label, index) => {
           const n = index as Step;
-          const state = stepIsDone(n, done) ? "done" : n === step ? "current" : "pending";
-          return (
-            <li key={label} className={`onboarding-step is-${state}`}>
-              <button
-                type="button"
-                onClick={() => setStep(n)}
-                aria-current={n === step ? "step" : undefined}
-              >
-                <span className="onboarding-step__index">{index + 1}</span>
-                {t(label)}
-              </button>
-            </li>
-          );
+          return {
+            key: String(index),
+            label: t(label),
+            state: stepIsDone(n, done) ? "done" : n === step ? "current" : "pending",
+          };
         })}
-      </ol>
+      />
 
       <div className="onboarding-panel">
         {step === 0 && org && (
@@ -359,7 +583,17 @@ export function OnboardingPage(): JSX.Element {
           </div>
         )}
 
-        {step === 1 && (
+        {step === 1 && org && (
+          <ConfigStep
+            orgId={org.id}
+            onDone={() => {
+              setConfigDone(true);
+              setStep(2);
+            }}
+          />
+        )}
+
+        {step === 2 && (
           <div className="onboarding-card">
             <h2>{t("onboarding.systemTitle")}</h2>
             <p className="auth-hint">{t("onboarding.systemDescription")}</p>
@@ -421,7 +655,7 @@ export function OnboardingPage(): JSX.Element {
           </div>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <div className="onboarding-card">
             <h2>{t("onboarding.dataTitle")}</h2>
             <p className="auth-hint">{t("onboarding.dataDescription")}</p>
@@ -462,7 +696,7 @@ export function OnboardingPage(): JSX.Element {
           </div>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <div className="onboarding-card">
             <h2>{t("onboarding.clientTitle")}</h2>
             <p className="auth-hint">{t("onboarding.clientDescription")}</p>
@@ -471,7 +705,7 @@ export function OnboardingPage(): JSX.Element {
                 <StatusBadge tone="success" label={t("onboarding.clientSaved")} /> {clientName}
               </p>
             ) : canWrite ? (
-              <form className="auth-form" onSubmit={(event) => void createClient(event)}>
+              <form noValidate className="auth-form" onSubmit={(event) => void createClient(event)}>
                 <label htmlFor="onb-client-name">{t("clients.name")}</label>
                 <input
                   id="onb-client-name"
@@ -534,7 +768,7 @@ export function OnboardingPage(): JSX.Element {
           </div>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <div className="onboarding-card">
             <h2>{t("onboarding.projectTitle")}</h2>
             <p className="auth-hint">{t("onboarding.projectDescription")}</p>
@@ -543,7 +777,11 @@ export function OnboardingPage(): JSX.Element {
                 <StatusBadge tone="success" label={t("onboarding.projectSaved")} /> {projectName}
               </p>
             ) : canWrite ? (
-              <form className="auth-form" onSubmit={(event) => void createProject(event)}>
+              <form
+                noValidate
+                className="auth-form"
+                onSubmit={(event) => void createProject(event)}
+              >
                 <label htmlFor="onb-project-name">{t("projects.name")}</label>
                 <input
                   id="onb-project-name"
@@ -584,7 +822,7 @@ export function OnboardingPage(): JSX.Element {
           </div>
         )}
 
-        {step === 5 && (
+        {step === 6 && (
           <div className="onboarding-card">
             <h2>{t("onboarding.positionTitle")}</h2>
             <p className="auth-hint">{t("onboarding.positionDescription")}</p>
@@ -604,7 +842,7 @@ export function OnboardingPage(): JSX.Element {
           </div>
         )}
 
-        {step === 6 && (
+        {step === 7 && (
           <div className="onboarding-card">
             <h2>{t("onboarding.quoteTitle")}</h2>
             <p className="auth-hint">{t("onboarding.quoteDescription")}</p>

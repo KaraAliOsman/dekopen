@@ -4,6 +4,7 @@ import type {
   KitChoice,
   ProfileSection,
 } from "../../api/generated/models";
+import type { MemberFinish } from "./finishes";
 
 /** Drawing hierarchy resolved from the catalog: member face widths and the
  * system's rebate/overlap geometry. Everything optional — the demo/DOM paths
@@ -20,6 +21,15 @@ export interface MemberSpec {
   /** Declared catalog cross-section; absent means the renderer must stay
    * approximate — never a fabricated declaration. */
   section?: ProfileSection | null;
+  /** D05: the picked finish's per-face render record — exterior swatch on the
+   * street face, interior on the room face. Unstamped specs keep the
+   * material's token colors (binary-era finishes). */
+  finish?: MemberFinish;
+  /** P06: declared joint-deflection envelope (degrees, over |angle|).
+   * Both set or both absent — absent is UNKNOWN: the catalog never stated
+   * the range and no compatibility check can honestly run. */
+  angleMinDeg?: number | null;
+  angleMaxDeg?: number | null;
 }
 
 export interface MemberGeometry {
@@ -81,12 +91,16 @@ export function resolveMembers(options: DesignOptions | undefined): MemberGeomet
   const couplers = new Map<string, MemberSpec>();
   for (const item of options?.coupler_profiles ?? []) {
     const faceWidth = Number(item.face_width_mm);
+    const angleMin = Number(item.angle_min_deg);
+    const angleMax = Number(item.angle_max_deg);
     couplers.set(item.sku, {
       sku: item.sku,
       name: item.name,
       material: item.material,
       faceWidthMm: Number.isFinite(faceWidth) && faceWidth > 0 ? faceWidth : FALLBACK.mullion,
       section: item.section ?? null,
+      angleMinDeg: item.angle_min_deg != null && Number.isFinite(angleMin) ? angleMin : null,
+      angleMaxDeg: item.angle_max_deg != null && Number.isFinite(angleMax) ? angleMax : null,
     });
   }
   const beads = new Map<string, MemberSpec>();
@@ -157,6 +171,30 @@ export function resolveMembers(options: DesignOptions | undefined): MemberGeomet
   };
 }
 
+/** P06 — does this coupler physically close a joint of `angleDeg`? Mirrors
+ * the engine check: the envelope compares over |angle| (the profile mounted
+ * mirrored serves the ± case) and an undeclared envelope is UNKNOWN — the
+ * coupler stays offerable but unverifiable, never rejected by the editor. */
+export function couplerFitsAngle(spec: MemberSpec | null | undefined, angleDeg: number): boolean {
+  if (!spec) return true;
+  if (spec.angleMinDeg == null || spec.angleMaxDeg == null) return true;
+  const magnitude = Math.abs(angleDeg);
+  return magnitude >= spec.angleMinDeg && magnitude <= spec.angleMaxDeg;
+}
+
+/** P06 — the smallest edit that fits the envelope, for guidance text:
+ * nearest admissible magnitude in the coupler's declared band. */
+export function nearestCompatibleAngle(
+  spec: MemberSpec | null | undefined,
+  angleDeg: number,
+): number | null {
+  if (!spec || spec.angleMinDeg == null || spec.angleMaxDeg == null) return null;
+  const magnitude = Math.abs(angleDeg);
+  if (magnitude > spec.angleMaxDeg) return spec.angleMaxDeg;
+  if (magnitude < spec.angleMinDeg) return spec.angleMinDeg;
+  return magnitude;
+}
+
 /** Same resolved geometry, different declared material — surfaces that only
  * know the sealed finish (portal thumbnails) re-skin the neutral member set
  * instead of drawing every window as white PVC. */
@@ -167,6 +205,23 @@ export function reSkinMembers(base: MemberGeometry, material: string): MemberGeo
     ...base,
     frame: { ...base.frame, material },
     sash: { ...base.sash, material },
+    mullionV: spec(base.mullionV),
+    mullionH: spec(base.mullionH),
+    threshold: spec(base.threshold),
+    beadSpecFor: (glassThicknessMm) => spec(base.beadSpecFor(glassThicknessMm)),
+    couplerFor: (sku) => spec(base.couplerFor(sku)),
+  };
+}
+
+/** Same resolved geometry stamped with the picked finish — the position's
+ * one finish applies to every member (frame, sash, mullions, coupler,
+ * threshold, beads), so a shared spec is stamped uniformly. */
+export function tintMembers(base: MemberGeometry, finish: MemberFinish): MemberGeometry {
+  const spec = (item: MemberSpec | null): MemberSpec | null => (item ? { ...item, finish } : item);
+  return {
+    ...base,
+    frame: { ...base.frame, finish },
+    sash: { ...base.sash, finish },
     mullionV: spec(base.mullionV),
     mullionH: spec(base.mullionH),
     threshold: spec(base.threshold),

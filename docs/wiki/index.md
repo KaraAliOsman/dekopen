@@ -8,6 +8,8 @@ Content-oriented map of durable project knowledge.
 - [Schema / agent protocol](SCHEMA.md) — ingest, query, lint and session-bootstrap rules.
 - [Change log](log.md) — append-only chronology.
 
+- [Design constitution](../design/CONSTITUCION.md) - mandatory UI/product quality source for v1 work.
+
 ## Product direction
 
 - [Owner decisions](decisions/owner-decisions.md) — durable product and engineering decisions extracted from project conversations.

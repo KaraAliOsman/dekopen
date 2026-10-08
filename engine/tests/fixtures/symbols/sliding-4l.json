@@ -1,0 +1,229 @@
+{
+  "id": "sliding-4l",
+  "name": "Corredera 4 hojas",
+  "box": {
+    "x": 0,
+    "y": 0,
+    "w": 3200,
+    "h": 1200
+  },
+  "input": {
+    "kind": "sliding",
+    "unit": "WINDOW",
+    "tracks": 2,
+    "panels": [
+      {
+        "slot": "S1",
+        "kind": "MOVING",
+        "track": 0,
+        "travel": "RIGHT"
+      },
+      {
+        "slot": "S2",
+        "kind": "MOVING",
+        "track": 1,
+        "travel": "RIGHT"
+      },
+      {
+        "slot": "S3",
+        "kind": "MOVING",
+        "track": 0,
+        "travel": "LEFT"
+      },
+      {
+        "slot": "S4",
+        "kind": "MOVING",
+        "track": 1,
+        "travel": "LEFT"
+      }
+    ]
+  },
+  "views": {
+    "interior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 284.8 600 H 515.2 M 463.36 563.14 L 515.2 600 L 463.36 636.86",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 1084.8 600 H 1315.2 M 1263.36 563.14 L 1315.2 600 L 1263.36 636.86",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "LEFT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 2115.2 600 H 1884.8 M 1936.64 563.14 L 1884.8 600 L 1936.64 636.86",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "LEFT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 2915.2 600 H 2684.8 M 2736.64 563.14 L 2684.8 600 L 2736.64 636.86",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    },
+    "exterior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 284.8 600 H 515.2 M 463.36 563.14 L 515.2 600 L 463.36 636.86",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 1084.8 600 H 1315.2 M 1263.36 563.14 L 1315.2 600 L 1263.36 636.86",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "LEFT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 2115.2 600 H 1884.8 M 1936.64 563.14 L 1884.8 600 L 1936.64 636.86",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "LEFT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 2915.2 600 H 2684.8 M 2736.64 563.14 L 2684.8 600 L 2736.64 636.86",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

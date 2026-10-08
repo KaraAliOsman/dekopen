@@ -5,13 +5,15 @@
  * evidence stored at seal time, never recomputed client-side. */
 
 import { fmtMm } from "../../format";
-import { t } from "../../i18n/es-CL";
+import { t, tOptional } from "../../i18n/es-CL";
+import { domainLabel } from "../../i18n/domainLabels";
 import {
   opFaceLabel,
   opKindLabel,
   opReferenceLabel,
   remnantStatusLabel,
   stockKindLabel,
+  traceNoteLabel,
 } from "./labels";
 import type {
   ProductionOrderTracePlan,
@@ -27,6 +29,20 @@ type TraceBar = {
   source?: string;
   cuts?: Array<Record<string, unknown>>;
 };
+
+/** Origen de barra/lámina sellado en la traza — NEW/REMNANT llegan como
+ * códigos del motor y se etiquetan aquí, nunca en crudo. */
+function traceSourceLabel(source: string | undefined): string {
+  if (source === "REMNANT") return t("production.traceSourceRemnant");
+  if (!source || source === "NEW") return t("production.traceSourceNew");
+  return source;
+}
+
+/** Acabado declarado en el sistema — códigos conocidos se etiquetan; un
+ * código propio del taller se muestra tal cual (es dato, no inglés). */
+function finishLabel(code: string): string {
+  return tOptional(`projects.color.${code}`) ?? code;
+}
 
 type TraceSheet = {
   sheet_index?: number;
@@ -47,6 +63,7 @@ type TraceMovement = {
 
 type TraceRemnant = {
   id?: string;
+  remnant_code?: string;
   kind?: string;
   status?: string;
   length_mm?: string;
@@ -121,10 +138,10 @@ export function TracePlan({ plan }: { plan: ProductionOrderTracePlan }) {
                 <td>{bar.bar_index ?? index + 1}</td>
                 <td>
                   {bar.commercial_sku ?? "—"}
-                  {bar.material ? ` · ${bar.material}` : ""}
-                  {bar.color ? ` · ${bar.color}` : ""}
+                  {bar.material ? ` · ${domainLabel("CutMaterialEnum", bar.material).label}` : ""}
+                  {bar.color ? ` · ${finishLabel(bar.color)}` : ""}
                 </td>
-                <td>{bar.source ?? "NEW"}</td>
+                <td>{traceSourceLabel(bar.source)}</td>
                 <td>{bar.cuts?.length ?? 0}</td>
               </tr>
             ))}
@@ -146,7 +163,7 @@ export function TracePlan({ plan }: { plan: ProductionOrderTracePlan }) {
               <tr key={sheet.sheet_index ?? index}>
                 <td>{sheet.sheet_index ?? index + 1}</td>
                 <td>{sheet.workshop_sku ?? "—"}</td>
-                <td>{sheet.source ?? "NEW"}</td>
+                <td>{traceSourceLabel(sheet.source)}</td>
                 <td>{sheet.pieces?.length ?? 0}</td>
               </tr>
             ))}
@@ -178,10 +195,14 @@ export function TraceStock({ stock }: { stock: ProductionOrderTraceStock }) {
           <tbody>
             {movements.map((movement) => (
               <tr key={movement.id}>
-                <td>{movement.movement_type}</td>
+                <td>
+                  {movement.movement_type
+                    ? domainLabel("InventoryMovementMovementTypeEnum", movement.movement_type).label
+                    : "—"}
+                </td>
                 <td>{movement.sku}</td>
                 <td>{movement.quantity}</td>
-                <td>{movement.note ?? "—"}</td>
+                <td title={movement.note ?? undefined}>{traceNoteLabel(movement.note)}</td>
               </tr>
             ))}
           </tbody>
@@ -191,6 +212,7 @@ export function TraceStock({ stock }: { stock: ProductionOrderTraceStock }) {
         <ul className="production-trace-remnants">
           {remnants.map((remnant) => (
             <li key={remnant.id}>
+              {remnant.remnant_code ? <strong>{remnant.remnant_code} · </strong> : null}
               {remnant.rack_location ? <strong>{remnant.rack_location} · </strong> : null}
               {stockKindLabel(remnant.kind)} · {remnantStatusLabel(remnant.status)}
               {remnant.length_mm ? ` · ${fmtMm(remnant.length_mm)} mm` : ""}
@@ -239,7 +261,9 @@ export function TracePieceMatches({
               : ""}
             {match.location?.position_code ? ` · ${match.location.position_code}` : ""}
             {match.location?.location_code ? ` · ${match.location.location_code}` : ""}
-            {match.location?.piece?.role ? ` · ${match.location.piece.role}` : ""}
+            {match.location?.piece?.role
+              ? ` · ${domainLabel("CatalogItemRoleEnum", match.location.piece.role).label}`
+              : ""}
             {match.location?.piece?.length_mm
               ? ` · ${fmtMm(match.location.piece.length_mm)} mm`
               : ""}
@@ -253,10 +277,10 @@ export function TracePieceMatches({
                     {op.member_label ? `${op.member_label} · ` : ""}
                     {op.sequence_no ? `${op.sequence_no}. ` : ""}
                     {opKindLabel(op.kind)}
-                    {op.u_mm ? ` · u ${op.u_mm} mm` : ""}
+                    {op.u_mm ? ` · u ${fmtMm(op.u_mm)} mm` : ""}
                     {op.reference ? ` · ${opReferenceLabel(op.reference)}` : ""}
                     {op.face ? ` · ${opFaceLabel(op.face)}` : ""}
-                    {op.depth_mm ? ` · ${op.depth_mm} mm` : ""}
+                    {op.depth_mm ? ` · ${fmtMm(op.depth_mm)} mm` : ""}
                     {op.tool_id ? ` · ${op.tool_id}` : ""}
                   </li>
                 ))}

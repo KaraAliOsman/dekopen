@@ -8,6 +8,7 @@ export default [
       "playwright-report/**",
       "src/**/*.ts",
       "src/**/*.tsx",
+      "scripts/**/*.ts",
       "orval.config.ts",
       "vite.config.ts",
       "tailwind.config.ts",

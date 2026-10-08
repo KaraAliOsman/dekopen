@@ -24,7 +24,9 @@ from authentication.rls import authenticated_rls_context
 from authentication.tenancy import MembershipRepository, resolve_tenant_context
 from authentication.types import VerifiedSupabaseToken
 from backend.tests.test_engine_api import g1_request, g4_request
-from dekopen_engine import ProfileRole
+from dekopen_engine import IncompatibleTypologyError, ProfileRole
+from dekopen_engine.openings import spec_options_from_capabilities
+from engine.tests.catalog import demo_60_params
 from engine_api.repository import SystemNotFound, SystemParamsRepository
 
 pytestmark = pytest.mark.rls_integration
@@ -333,7 +335,12 @@ def test_real_bearer_and_db_adapter_preserve_engine_geometry(
         widths = {piece["bay_id"]: piece["width_mm"] for piece in result["glasses"]}
         assert widths == {"bay_fixed": "830.00", "bay_ob": "696.00"}
     assert [item["kit_sku"] for item in result["hardware_items"]] == ([] if case == "G1" else ["KIT-TILT-TURN"])
-    assert set(result) == {"profile_cuts", "reinforcements", "glasses", "panels", "hardware_items", "leaf_weights", "fittings", "calculation_hash"}
+    assert set(result) == {
+        "profile_cuts", "reinforcements", "glasses", "panels", "hardware_items",
+        "leaf_weights", "fittings", "calculation_hash",
+        "finish_class", "finish_key", "finish_label", "color_surcharges",
+        "extra_lines",
+    }
     assert_no_context()
 
 
@@ -372,6 +379,62 @@ def test_engine_system_discovery_is_rls_visible_and_deterministic(
         "code": "DEMO_60",
         "name": "Sistema Demo 60mm PVC — referencia sintética",
         "is_demo": True,
+        "system_family": "CASEMENT",
+        "allowed_openings": [
+            "AWNING", "DOOR_DOUBLE", "DOOR_ENTRY", "FIXED",
+            "TILT_TURN_LEFT", "TILT_TURN_RIGHT", "TURN_LEFT", "TURN_RIGHT",
+        ],
+        "typology_limits": [
+            {"opening_type": "AWNING", "min_leaf_width_mm": "400.00",
+             "max_leaf_width_mm": "1800.00", "min_leaf_height_mm": "350.00",
+             "max_leaf_height_mm": "1200.00", "max_leaf_weight_kg": "45.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "BOTTOM_HUNG", "min_leaf_width_mm": "400.00",
+             "max_leaf_width_mm": "1400.00", "min_leaf_height_mm": "500.00",
+             "max_leaf_height_mm": "1600.00", "max_leaf_weight_kg": "80.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "DOOR_DOUBLE", "min_leaf_width_mm": "500.00",
+             "max_leaf_width_mm": "900.00", "min_leaf_height_mm": "1700.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "120.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "DOOR_ENTRY", "min_leaf_width_mm": "600.00",
+             "max_leaf_width_mm": "1100.00", "min_leaf_height_mm": "1700.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "120.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "DOOR:TURN", "min_leaf_width_mm": "600.00",
+             "max_leaf_width_mm": "1100.00", "min_leaf_height_mm": "1700.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "120.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "TILT", "min_leaf_width_mm": "400.00",
+             "max_leaf_width_mm": "1600.00", "min_leaf_height_mm": "400.00",
+             "max_leaf_height_mm": "1200.00", "max_leaf_weight_kg": "60.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "TILT_TURN", "min_leaf_width_mm": "450.00",
+             "max_leaf_width_mm": "1600.00", "min_leaf_height_mm": "450.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "130.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "TILT_TURN_RIGHT", "min_leaf_width_mm": "450.00",
+             "max_leaf_width_mm": "1600.00", "min_leaf_height_mm": "450.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "130.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "TOP_HUNG", "min_leaf_width_mm": "400.00",
+             "max_leaf_width_mm": "1800.00", "min_leaf_height_mm": "350.00",
+             "max_leaf_height_mm": "1200.00", "max_leaf_weight_kg": "45.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "TURN", "min_leaf_width_mm": "350.00",
+             "max_leaf_width_mm": "1400.00", "min_leaf_height_mm": "400.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "100.00",
+             "max_aspect_ratio": "2.800", "source": "SEED_SYNTHETIC"},
+            {"opening_type": "TURN_LEFT", "min_leaf_width_mm": "350.00",
+             "max_leaf_width_mm": "1400.00", "min_leaf_height_mm": "400.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "100.00",
+             "max_aspect_ratio": "2.800", "source": "SEED_SYNTHETIC"},
+        ],
+        # The seeded DEMO_60 capability rows emit this exact offer; the
+        # option contract itself is unit-tested in engine tests.
+        "opening_options": spec_options_from_capabilities(
+            demo_60_params().opening_capabilities
+        ),
         "quote_ready": True,
         "readiness_reasons": [],
     }
@@ -380,7 +443,9 @@ def test_engine_system_discovery_is_rls_visible_and_deterministic(
         str(real_rows.systems[tenant]),
     }
     assert all(set(system) == {
-        "id", "code", "name", "is_demo", "quote_ready", "readiness_reasons",
+        "id", "code", "name", "is_demo", "system_family", "allowed_openings",
+        "typology_limits", "quote_ready", "readiness_reasons",
+        "opening_options",
     } for system in systems)
     own = next(system for system in systems if system["id"] == str(real_rows.systems[tenant]))
     assert own["quote_ready"] is False
@@ -432,7 +497,7 @@ def test_shot06_all_28_catalog_fields_reach_typed_engine(real_rows: RLSFixtures)
     expected_fields = expected.model_dump()
     actual_fields["available_hardware_kits"] = sorted(actual_fields["available_hardware_kits"], key=lambda k: k["sku"])
     expected_fields["available_hardware_kits"] = sorted(expected_fields["available_hardware_kits"], key=lambda k: k["sku"])
-    assert len(SystemParams.model_fields) == len(actual_fields) == 26
+    assert len(SystemParams.model_fields) == len(actual_fields) == 42
     # The demo seed declares the same synthetic per-article masses the engine
     # fixture carries — mass authority must reach the typed model
     # field-for-field rather than arriving through a fallback.
@@ -446,15 +511,57 @@ def test_shot06_all_28_catalog_fields_reach_typed_engine(real_rows: RLSFixtures)
         article["section"] = None
     for article in expected_fields["effective_profile_articles"].values():
         article["section"] = None
+    # P18: the seed rows carry provenance + review stamps; the engine
+    # fixture leaves them undeclared. Assert the typed fields deserialize,
+    # then normalize like the sections above.
+    assert any(
+        product["data_provenance"] is not None
+        for product in actual_fields["glass_products"].values()
+    )
+    for product in actual_fields["glass_products"].values():
+        product["data_provenance"] = None
+        product["verified"] = False
+    for product in expected_fields["glass_products"].values():
+        product["data_provenance"] = None
+        product["verified"] = False
     # The live seed owns kit identities independently of the engine's golden
     # fixture; the typed field is still present and populated in both paths.
     assert actual_fields.pop("available_hardware_kits")
     assert expected_fields.pop("available_hardware_kits")
+    # D06: the seed's sellable extras reach the typed model populated; the
+    # engine fixture predates the field (empty dict). The finishing profiles
+    # the extras saw are likewise seed-only rows — drop both sides' SILL/
+    # FRAME_EXTENSION/COVER_TRIM/SKIRT roles like the section normalization.
+    assert actual_fields.pop("extra_articles")
+    assert expected_fields.pop("extra_articles") == {}
+    from dekopen_engine.models import ProfileRole
+
+    for role in ("SILL", "FRAME_EXTENSION", "COVER_TRIM", "SKIRT"):
+        actual_fields["effective_profile_articles"].pop(ProfileRole(role), None)
+        expected_fields["effective_profile_articles"].pop(ProfileRole(role), None)
+    # Rule ordering is a repository presentation detail; compare contents.
+    def rule_key(rule: dict[str, object]) -> tuple[str, str, str]:
+        return (str(rule["role"]), str(rule["finish_class"]), str(rule["min_length_mm"]))
+    actual_fields["reinforcement_rules"] = sorted(actual_fields["reinforcement_rules"], key=rule_key)
+    expected_fields["reinforcement_rules"] = sorted(expected_fields["reinforcement_rules"], key=rule_key)
     assert actual_fields == expected_fields
-    for case in ("G5", "G6", "G7"):
+    for case in ("G6", "G7"):
         result = calculate_geometry(core_node(case), loaded)
         assert all(weight.total_weight_kg > Decimal("0") for weight in result.leaf_weights)
         assert result.hardware_items
+    # G5 is sliding: it now exercises the DEMO_CORREDERA_60 sibling —
+    # CASEMENT systems reject it by design.
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT id FROM public.profile_systems WHERE code='DEMO_CORREDERA_60'")
+        corredera_id = cursor.fetchone()[0]
+    with authenticated_rls_context(real_rows.tokens["A"].claims):
+        corredera = SystemParamsRepository().load_visible(
+            corredera_id, real_rows.organizations["A"])
+    result = calculate_geometry(core_node("G5"), corredera)
+    assert all(weight.total_weight_kg > Decimal("0") for weight in result.leaf_weights)
+    assert result.hardware_items
+    with pytest.raises(IncompatibleTypologyError):
+        calculate_geometry(core_node("G5"), loaded)
     assert_no_context()
 
 

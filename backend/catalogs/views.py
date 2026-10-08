@@ -29,19 +29,31 @@ from authentication.tenancy import (
     resolve_tenant_context,
 )
 from authentication.views import verified_request_token
-from catalogs import evidence, service
+from catalogs import evidence, mounting, service
+from projects.serializers import MountingRuleListResponseSerializer
 from catalogs.serializers import (
     EvidenceInputSerializer,
     EvidenceListSerializer,
     EvidenceReviewInputSerializer,
     EvidenceRowSerializer,
+    ArticleFichaSerializer,
     ArticleListSerializer,
     ArticleResponseSerializer,
     BeadListSerializer,
     BeadResponseSerializer,
     CatalogFilterSerializer,
+    ExtraArticleListSerializer,
+    ExtraArticleResponseSerializer,
+    FrameUfListSerializer,
+    FrameUfResponseSerializer,
     KitListSerializer,
     KitResponseSerializer,
+    PerformanceTestListSerializer,
+    PerformanceTestResponseSerializer,
+    ServiceArticleListSerializer,
+    ServiceArticleResponseSerializer,
+    SpacerListSerializer,
+    SpacerResponseSerializer,
     SystemListSerializer,
     SystemResponseSerializer,
     ProcessProfileOptionListSerializer,
@@ -126,6 +138,37 @@ WRITE_HEADERS = [*HEADERS, OpenApiParameter(
     "If-Match", OpenApiTypes.STR, OpenApiParameter.HEADER, required=True,
     description="Quoted revision from the most recently read catalog entity.",
 )]
+
+
+class MountingRuleCollectionView(APIView):
+    """D07 mounting rules for a system: read-only authority, org overrides
+    the global row of the same code."""
+    parser_classes = [CatalogJSONParser]
+
+    @extend_schema(
+        operation_id="mounting_rules_list",
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                "system_id", OpenApiTypes.UUID, OpenApiParameter.QUERY, required=True
+            ),
+        ],
+        responses={200: MountingRuleListResponseSerializer, **ERRORS},
+        tags=["catalogs"],
+    )
+    def get(self, request):
+        system_id = request.query_params.get("system_id")
+        if not system_id:
+            raise contract_error(
+                400, "catalog_validation_error", "catalogs.errors.validation"
+            )
+        with catalog_scope(request, roles=(*READ_ROLES, "INSTALLER")) as org_id:
+            return Response({
+                "items": [
+                    mounting.mounting_rule_public(row)
+                    for row in mounting.mounting_rules_for_system(org_id, system_id)
+                ]
+            })
 
 
 class CatalogCollectionView(APIView):
@@ -243,7 +286,7 @@ def _endpoint_classes(name, resource, response_serializer, list_serializer):
     detail = type(f"{name}DetailView", (CatalogDetailView,), attributes)
     filters = (
         []
-        if resource is service.SYSTEMS
+        if resource in (service.SYSTEMS, service.SPACERS)
         else [
             OpenApiParameter("system_id", OpenApiTypes.UUID, OpenApiParameter.QUERY),
         ]
@@ -341,6 +384,68 @@ KitCollectionView, KitDetailView = _endpoint_classes(
     KitListSerializer,
 )
 KitReviewView = _review_view("Kit", service.KITS, KitResponseSerializer)
+ExtraArticleCollectionView, ExtraArticleDetailView = _endpoint_classes(
+    "ExtraArticle",
+    service.EXTRA_ARTICLES,
+    ExtraArticleResponseSerializer,
+    ExtraArticleListSerializer,
+)
+ExtraArticleReviewView = _review_view(
+    "ExtraArticle", service.EXTRA_ARTICLES, ExtraArticleResponseSerializer
+)
+ServiceArticleCollectionView, ServiceArticleDetailView = _endpoint_classes(
+    "ServiceArticle",
+    service.SERVICE_ARTICLES,
+    ServiceArticleResponseSerializer,
+    ServiceArticleListSerializer,
+)
+ServiceArticleReviewView = _review_view(
+    "ServiceArticle", service.SERVICE_ARTICLES, ServiceArticleResponseSerializer
+)
+# P18 autoridades térmicas: Ψg por separador, Uf por grupo de miembro e
+# informes de ensayo del sistema — mismo CRUD + sello de revisión de P16.
+SpacerCollectionView, SpacerDetailView = _endpoint_classes(
+    "Spacer",
+    service.SPACERS,
+    SpacerResponseSerializer,
+    SpacerListSerializer,
+)
+SpacerReviewView = _review_view("Spacer", service.SPACERS, SpacerResponseSerializer)
+FrameUfCollectionView, FrameUfDetailView = _endpoint_classes(
+    "FrameUf",
+    service.FRAME_UF,
+    FrameUfResponseSerializer,
+    FrameUfListSerializer,
+)
+FrameUfReviewView = _review_view("FrameUf", service.FRAME_UF, FrameUfResponseSerializer)
+PerformanceTestCollectionView, PerformanceTestDetailView = _endpoint_classes(
+    "PerformanceTest",
+    service.PERFORMANCE_TESTS,
+    PerformanceTestResponseSerializer,
+    PerformanceTestListSerializer,
+)
+PerformanceTestReviewView = _review_view(
+    "PerformanceTest", service.PERFORMANCE_TESTS, PerformanceTestResponseSerializer
+)
+
+
+class ArticleFichaView(APIView):
+    """GET articles/<id>/ficha/ — the article's full technical ficha: row,
+    declared-section validations, evidence trail, purchase identities and
+    bound reinforcements. The same data a reviewer sees before stamping."""
+
+    @extend_schema(
+        operation_id="catalog_article_ficha",
+        parameters=HEADERS,
+        responses={200: ArticleFichaSerializer, **ERRORS},
+        tags=["catalogs"],
+    )
+    def get(self, request, row_id):
+        with catalog_scope(request, roles=READ_ROLES) as org_id:
+            output = ArticleFichaSerializer(
+                service.article_ficha(org_id, row_id)
+            ).data
+        return Response(output)
 
 
 class SystemWorkspaceView(APIView):

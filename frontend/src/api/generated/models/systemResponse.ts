@@ -9,6 +9,7 @@ import type { CatalogReadiness } from "./catalogReadiness";
 import type { DataProvenanceEnum } from "./dataProvenanceEnum";
 import type { MaterialEnum } from "./materialEnum";
 import type { RailTypeEnum } from "./railTypeEnum";
+import type { SystemFamilyEnum } from "./systemFamilyEnum";
 
 /**
  * Read-only provenance/review state — written only by import jobs and
@@ -99,6 +100,7 @@ export interface SystemResponse {
   finishes?: string[];
   /** @nullable */
   process_profile_id?: string | null;
+  readonly system_family: SystemFamilyEnum;
   readonly readiness: CatalogReadiness;
   readonly revision: string;
   read_only: boolean;

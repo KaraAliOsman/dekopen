@@ -33,16 +33,22 @@ from dekopen_engine.contour import (
     validate_contour,
 )
 from dekopen_engine.geometry import (
-    SlidingLayoutError,
+    DomainRejection,
     calculate_geometry,
     joint_adjustment_per_end,
     rebate_depth,
     reinforcement_cut_length,
     resolve_bead_rule,
     resolved_sliding_layout,
+    panel_travel,
+    travel_inferred,
 )
+from dekopen_engine.finishes import apply_color_surcharges
 from dekopen_engine.glass import derive_net_glass_thickness
-from dekopen_engine.hardware import NoCompatibleHardwareKit
+from dekopen_engine.hardware import (
+    HardwareSelectionError,
+    NoCompatibleHardwareKit,
+)
 from dekopen_engine.manufacturing_trace import (
     Axis,
     GeometryManufacturingTraceV1,
@@ -55,25 +61,43 @@ from dekopen_engine.manufacturing_trace import (
 )
 from dekopen_engine.models import (
     BayOpeningType,
+    ColorSelection,
     EffectiveProfileArticle,
     EngineModel,
     EngineResult,
+    ExtraSelection,
+    ExtraSuggestion,
     FittingPiece,
     GlassPiece,
     MaterialType,
     NodeType,
+    OpeningMovement,
+    OpeningSpec,
     ParametricNode,
     PlanPoint,
     ProfileCut,
     ProfileRole,
     ReinforcementPiece,
     SlidingPanelKind,
+    SlidingTravel,
     SystemParams,
+    UnitKind,
+)
+from dekopen_engine.models import EdgeSide as EdgeSide
+from dekopen_engine.extras import (
+    ModuleExtraContext,
+    OperableLeaf,
+    evaluate_position_extras,
 )
 from dekopen_engine.technical_facts import (
     GeometryComputation,
     InfillTechnicalFacts,
     OpeningTechnicalFacts,
+)
+from dekopen_engine.openings import (
+    resolve_opening_spec,
+    resolve_unit_kind,
+    spec_display_name_es,
 )
 from dekopen_engine.trig import cos_degrees, sin_degrees
 
@@ -110,6 +134,9 @@ class IssueCode(str, Enum):
     COUPLER_MODULE_UNKNOWN = "coupler_module_unknown"
     COUPLER_EDGE_INVALID = "coupler_edge_invalid"
     COUPLER_EDGE_CONFLICT = "coupler_edge_conflict"
+    # P06 — the picked coupler declares an angle envelope the joint's
+    # deflection does not fit (catalog authority, never a hardcoded band).
+    COUPLER_ANGLE_INCOMPATIBLE = "coupler_angle_incompatible"
     CONNECTION_TYPE_UNSUPPORTED = "connection_type_unsupported"
     ASSEMBLY_DISCONNECTED = "assembly_disconnected"
     STACKED_CYCLE = "stacked_cycle"
@@ -126,6 +153,14 @@ class IssueCode(str, Enum):
     HARDWARE_KIT_INCOMPATIBLE = "hardware_kit_incompatible"
     HARDWARE_KIT_OVERWEIGHT = "hardware_kit_overweight"
     HARDWARE_UNDECIDABLE = "hardware_undecidable"
+    HARDWARE_SELECTION_UNKNOWN = "hardware_selection_unknown"
+    HANDLE_HEIGHT_OUT_OF_RANGE = "handle_height_out_of_range"
+    TYPOLOGY_FAMILY_INCOMPATIBLE = "typology_family_incompatible"
+    LEAF_DIMENSIONAL_LIMIT = "leaf_dimensional_limit"
+    # D02 structured-glass rule findings surfaced on the bay that carries
+    # them — rule_code/severity live in params (rules are org data, so the
+    # finding's own code is the constant).
+    GLASS_SAFETY_FINDING = "glass_safety_finding"
 
 
 class ConnectionKind(str, Enum):
@@ -135,13 +170,6 @@ class ConnectionKind(str, Enum):
     STACKED = "STACKED"  # horizontal member — module on top of module
     TEE = "TEE"  # member landing mid-edge (declared; evaluated as unsupported)
     CORNER = "CORNER"  # framed corner assembly (declared; evaluated as unsupported)
-
-
-class EdgeSide(str, Enum):
-    LEFT = "left"
-    RIGHT = "right"
-    TOP = "top"
-    BOTTOM = "bottom"
 
 
 class CouplingDef(EngineModel):
@@ -240,6 +268,9 @@ class CoupledAssembly(EngineModel):
 class ProductModel(EngineModel):
     version: Literal["product-v2"]
     assembly: CoupledAssembly
+    # Declared position extras (D06) — sealed inside the parametric_tree
+    # so issued documents reproduce the accessories exactly.
+    extras: list[ExtraSelection] = Field(default_factory=list)
 
 
 class PlanModule(EngineModel):
@@ -272,22 +303,28 @@ class ProductIssue(EngineModel):
 
 class SlidingPanelFacts(EngineModel):
     """One evaluated sliding slot — the panel's declared kind, the rail it
-    rides, and the leaf id the BOM carries for it (moving panels only)."""
+    rides, its slide direction (resolved or declared), whether that
+    direction was merely inferred, and the leaf id the BOM carries for it
+    (moving panels only)."""
 
     slot: str
     kind: SlidingPanelKind
     track: int | None = None
+    travel: SlidingTravel | None = None
+    travel_inferred: bool = False
     leaf_id: str | None = None
 
 
 class SlidingLayoutFacts(EngineModel):
     """The sliding topology a module's bay evaluated to — rails plus every
     panel left→right. Meeting stiles are every adjacent pair; a pair where
-    one side is FIXED is the channel the moving leaf covers."""
+    one side is FIXED is the channel the moving leaf covers.
+    `primary_index` is the stacking choice: which panel opens first."""
 
     bay_id: str
     tracks: int
     panels: list[SlidingPanelFacts]
+    primary_index: int | None = None
 
 
 class ModuleEvaluation(EngineModel):
@@ -300,6 +337,9 @@ class ModuleEvaluation(EngineModel):
 class ProductEvaluation(EngineModel):
     status: ProductStatus
     issues: list[ProductIssue] = Field(default_factory=list)
+    # Catalogued companions the position qualifies for and has not
+    # selected (D06) — advisory; the user accepts or discards them.
+    extra_suggestions: list[ExtraSuggestion] = Field(default_factory=list)
     plan: PlanGeometry | None = None
     modules: list[ModuleEvaluation] = Field(default_factory=list)
     bom: EngineResult | None = None
@@ -929,13 +969,49 @@ _SLIDING_OPENINGS = {
 }
 
 
+def _resolved_spec_or_none(node: ParametricNode) -> "OpeningSpec | None":
+    """The node's resolved opening spec, or None when it declares none.
+
+    D03: product checks run on the canonical spec so nodes declared via
+    `opening`/`leaves` behave identically to legacy `opening_type`."""
+    try:
+        return resolve_opening_spec(node)
+    except ValueError:
+        return None
+
+
+def _node_is_fixed(node: ParametricNode) -> bool:
+    spec = _resolved_spec_or_none(node)
+    if spec is None:
+        return True
+    return all(
+        leaf.opening.movement is OpeningMovement.FIXED for leaf in spec.leaves
+    )
+
+
+def _node_is_sliding(node: ParametricNode) -> bool:
+    spec = _resolved_spec_or_none(node)
+    if spec is None:
+        return False
+    return any(
+        leaf.opening.movement is OpeningMovement.SLIDE for leaf in spec.leaves
+    )
+
+
+def _node_opening_label(node: ParametricNode) -> str:
+    spec = _resolved_spec_or_none(node)
+    if spec is not None:
+        return spec_display_name_es(spec)
+    return node.opening_type.value if node.opening_type is not None else ""
+
+
 def _sliding_facts(module: ProductModule) -> list[SlidingLayoutFacts]:
     """Resolved sliding topology per sliding bay — the editor's rail/panel
     inspector facts, independent of whether the BOM evaluated."""
     facts: list[SlidingLayoutFacts] = []
 
     def _visit(node: ParametricNode) -> None:
-        if node.type is NodeType.BAY and node.opening_type in _SLIDING_OPENINGS:
+        if node.type is NodeType.BAY and _node_is_sliding(node):
             try:
                 layout = resolved_sliding_layout(node)
             except ValueError:
@@ -945,11 +1021,14 @@ def _sliding_facts(module: ProductModule) -> list[SlidingLayoutFacts]:
                     SlidingLayoutFacts(
                         bay_id=node.id,
                         tracks=layout.tracks,
+                        primary_index=layout.primary_index,
                         panels=[
                             SlidingPanelFacts(
                                 slot=panel.slot,
                                 kind=panel.kind,
                                 track=panel.track,
+                                travel=panel_travel(panel, index, len(layout.panels)),
+                                travel_inferred=travel_inferred(panel),
                                 leaf_id=(
                                     f"{node.id}:L{index + 1}"
                                     if panel.kind is SlidingPanelKind.MOVING
@@ -965,6 +1044,122 @@ def _sliding_facts(module: ProductModule) -> list[SlidingLayoutFacts]:
 
     _visit(module.tree)
     return facts
+
+
+def _glass_safety_issues(module_id: str, result: EngineResult) -> list[ProductIssue]:
+    """BOM glass findings → one deduplicated issue per (rule, bay, leaf).
+
+    The piece keeps the full GlassSafetyFinding; the issue is the readable
+    pointer — a MANDATORY severity escalates to an error so a rule the org
+    made mandatory actually blocks, while the default NCh-135 WARNING stays
+    advisory."""
+    seen: set[tuple[str, str, str]] = set()
+    issues: list[ProductIssue] = []
+    for glass in result.glasses:
+        for finding in glass.safety_findings:
+            key = (finding.rule_code, glass.bay_id, glass.leaf_id or "")
+            if key in seen:
+                continue
+            seen.add(key)
+            params: dict[str, str] = {
+                "rule_code": finding.rule_code,
+                "bay_id": glass.bay_id,
+                "message": finding.message,
+            }
+            if glass.leaf_id is not None:
+                params["leaf_id"] = glass.leaf_id
+            if finding.required_safety is not None:
+                params["required_safety"] = finding.required_safety
+            if finding.source_ref is not None:
+                params["source_ref"] = finding.source_ref
+            issues.append(
+                ProductIssue(
+                    code=IssueCode.GLASS_SAFETY_FINDING.value,
+                    severity=(
+                        Severity.ERROR
+                        if finding.severity == "MANDATORY"
+                        else Severity.WARNING
+                    ),
+                    target=f"module:{module_id}",
+                    params=params,
+                )
+            )
+    return issues
+
+
+def _operable_leaves(tree: ParametricNode) -> tuple[OperableLeaf, ...]:
+    """Operable leaves a module's tree declares (D06 extra scope).
+
+    Sliding bays count their MOVING panels; hinged bays count their
+    non-FIXED spec leaves. The module's own evaluation already surfaces
+    real opening problems — an unresolvable declaration here just counts
+    no leaves.
+    """
+    leaves: list[OperableLeaf] = []
+
+    def _visit(node: ParametricNode) -> None:
+        if node.type is NodeType.BAY:
+            if _node_is_sliding(node):
+                try:
+                    layout = resolved_sliding_layout(node)
+                except ValueError:
+                    layout = None
+                if layout is not None:
+                    leaves.extend(
+                        OperableLeaf(bay_id=node.id, leaf_id=panel.slot)
+                        for panel in layout.panels
+                        if panel.kind is SlidingPanelKind.MOVING
+                    )
+            else:
+                spec = _resolved_spec_or_none(node)
+                if spec is not None:
+                    leaves.extend(
+                        OperableLeaf(bay_id=node.id, leaf_id=leaf.slot)
+                        for leaf in spec.leaves
+                        if leaf.opening.movement is not OpeningMovement.FIXED
+                    )
+        for child in node.children:
+            _visit(child)
+
+    _visit(tree)
+    return tuple(leaves)
+
+
+def _module_extra_contexts(
+    modules: list[ProductModule],
+    claimed_edges: set[tuple[str, EdgeSide]],
+    column_index: dict[str, int],
+) -> list[ModuleExtraContext]:
+    """Extras scope per module: exterior edges are the sides no coupling
+    claimed; unit kind comes off the unit's top node (ROOT wraps one)."""
+    contexts: list[ModuleExtraContext] = []
+    for module in modules:
+        top = (
+            module.tree.children[0]
+            if module.tree.type is NodeType.ROOT and len(module.tree.children) == 1
+            else module.tree
+        )
+        contexts.append(
+            ModuleExtraContext(
+                module_id=module.id,
+                column=column_index.get(module.id, 0),
+                width_mm=module.width_mm,
+                height_mm=module.height_mm,
+                exterior_sides=frozenset(
+                    side
+                    for side in EdgeSide
+                    if (module.id, side) not in claimed_edges
+                ),
+                operable_leaves=_operable_leaves(module.tree),
+                unit_kind=(
+                    resolve_unit_kind(top)
+                    if isinstance(top, ParametricNode)
+                    else UnitKind.WINDOW
+                ),
+                straight_framed=module.contour is None and module.frameless is None,
+            )
+        )
+    return contexts
 
 
 def _prefix_result(module_id: str, result: EngineResult) -> EngineResult:
@@ -1065,6 +1260,7 @@ def _evaluate_contour_module(
     params: SystemParams,
     *,
     is_foiled: bool,
+    color_selection: ColorSelection | None = None,
 ) -> tuple[EngineResult | None, list[ProductIssue], GeometryComputation | None]:
     """Evaluate a non-rectangular module: frame follows the contour, one
     inward-offset fill region per module.
@@ -1103,14 +1299,13 @@ def _evaluate_contour_module(
         )
         return None, issues, None
 
-    opening = leaf.opening_type or BayOpeningType.FIXED
-    if opening is not BayOpeningType.FIXED:
+    if not _node_is_fixed(leaf):
         issues.append(
             ProductIssue(
                 code=IssueCode.CONTOUR_OPENING_UNSUPPORTED.value,
                 severity=Severity.WARNING,
                 target=target,
-                params={"opening": opening.value},
+                params={"opening": _node_opening_label(leaf)},
             )
         )
         # The frame is still buildable; the operable leaf is not (v1).
@@ -1227,7 +1422,14 @@ def _evaluate_contour_module(
             )
         )
 
-    clearance_mm = params.glass_clearance_foil_mm if is_foiled else params.glass_clearance_white_mm
+    # D05: the resolved selection's declared clearance wins over the
+    # legacy foil/white pair.
+    if color_selection is not None:
+        clearance_mm = color_selection.glass_clearance_mm(params)
+    else:
+        clearance_mm = (
+            params.glass_clearance_foil_mm if is_foiled else params.glass_clearance_white_mm
+        )
     # Inward offset that lands exactly on the rect-path pocket math:
     # pocket = finished - 2*face + 2*rebate - 2*clearance.
     inset = frame.face_width_mm - rebate_depth(params) + clearance_mm
@@ -1465,14 +1667,13 @@ def _evaluate_frameless_module(
         )
         return None, issues
 
-    opening = leaf.opening_type or BayOpeningType.FIXED
-    if opening is not BayOpeningType.FIXED:
+    if not _node_is_fixed(leaf):
         issues.append(
             ProductIssue(
                 code=IssueCode.FRAMELESS_OPENING_UNSUPPORTED.value,
                 severity=Severity.WARNING,
                 target=target,
-                params={"opening": opening.value},
+                params={"opening": _node_opening_label(leaf)},
             )
         )
     if leaf.panel_article_sku is not None:
@@ -1591,13 +1792,14 @@ def contour_module_computation(
     params: SystemParams,
     *,
     is_foiled: bool = False,
+    color_selection: ColorSelection | None = None,
 ) -> tuple[GeometryComputation | None, list[ProductIssue]]:
     """Documentary-sealing entry for a contour module: the same evaluation
     the BOM path runs, returned as a GeometryComputation whose manufacturing
     trace carries the real contour members, glass polygon and bead sets
     instead of a rectangular approximation."""
     _result, issues, computation = _evaluate_contour_module(
-        module, params, is_foiled=is_foiled
+        module, params, is_foiled=is_foiled, color_selection=color_selection
     )
     return computation, issues
 
@@ -1766,6 +1968,7 @@ def evaluate_product(
     *,
     coupler_articles: dict[str, EffectiveProfileArticle] | None = None,
     is_foiled: bool = False,
+    color_selection: ColorSelection | None = None,
 ) -> ProductEvaluation:
     """Evaluate an assembly: plan geometry, per-module geometry, couplers, BOM."""
     assembly = product.assembly
@@ -1812,14 +2015,21 @@ def evaluate_product(
                 module_issues.extend(frameless_issues)
             elif module.contour is not None:
                 result, contour_issues, _computation = _evaluate_contour_module(
-                    module, params, is_foiled=is_foiled
+                    module,
+                    params,
+                    is_foiled=is_foiled,
+                    color_selection=color_selection,
                 )
                 module_issues.extend(contour_issues)
             else:
                 result = calculate_geometry(
-                    _top_with_module_dims(module), params, is_foiled=is_foiled
+                    _top_with_module_dims(module),
+                    params,
+                    is_foiled=is_foiled,
+                    color_selection=color_selection,
                 )
             if result is not None:
+                module_issues.extend(_glass_safety_issues(module.id, result))
                 aggregated.append(_prefix_result(module.id, result))
         except NoCompatibleHardwareKit as error:
             # The exception carries the failing envelope (leaf size vs kit
@@ -1848,7 +2058,19 @@ def evaluate_product(
                     params=issue_params,
                 )
             )
-        except SlidingLayoutError as error:
+        except DomainRejection as error:
+            module_issues.append(
+                ProductIssue(
+                    code=error.code,
+                    severity=Severity.ERROR,
+                    target=f"module:{module.id}",
+                    params={**error.params, "reason": str(error)},
+                )
+            )
+        except HardwareSelectionError as error:
+            # D04: a leaf picked a sellable datum the family never declared
+            # or a handle height outside its declared range — the issue
+            # names the field and the real bounds.
             module_issues.append(
                 ProductIssue(
                     code=error.code,
@@ -2019,6 +2241,32 @@ def evaluate_product(
                 )
             )
             continue
+        # P06 — declared angle envelope: the catalog states which joint
+        # deflections this coupler physically closes. Compared over
+        # |angle_deg| — the same profile mounted mirrored serves the ± case.
+        # An undeclared envelope stays UNKNOWN: no check can honestly run.
+        if (
+            article.coupler_angle_min_deg is not None
+            and article.coupler_angle_max_deg is not None
+            and not (
+                article.coupler_angle_min_deg
+                <= abs(coupling.angle_deg)
+                <= article.coupler_angle_max_deg
+            )
+        ):
+            issues.append(
+                ProductIssue(
+                    code=IssueCode.COUPLER_ANGLE_INCOMPATIBLE.value,
+                    severity=Severity.WARNING,
+                    target=target,
+                    params={
+                        "sku": article.sku,
+                        "angle_deg": str(coupling.angle_deg),
+                        "min_deg": str(article.coupler_angle_min_deg),
+                        "max_deg": str(article.coupler_angle_max_deg),
+                    },
+                )
+            )
         if coupling.kind is ConnectionKind.INLINE:
             if first.height_mm != second.height_mm:
                 issues.append(
@@ -2124,25 +2372,49 @@ def evaluate_product(
                         },
                     )
                 )
+        extras_eval = evaluate_position_extras(
+            product.extras,
+            params.extra_articles,
+            _module_extra_contexts(modules, claimed_edges, column_index),
+            system_family=params.system_family,
+        )
         bom = EngineResult(
             profile_cuts=[
                 cut for r in aggregated for cut in r.profile_cuts
             ]
-            + coupler_cuts,
+            + coupler_cuts
+            + extras_eval.cuts,
             reinforcements=[
                 piece for r in aggregated for piece in r.reinforcements
             ]
             + coupler_reinforcements,
             glasses=[piece for r in aggregated for piece in r.glasses],
             panels=[piece for r in aggregated for piece in r.panels],
-            fittings=[piece for r in aggregated for piece in r.fittings],
+            fittings=[piece for r in aggregated for piece in r.fittings]
+            + extras_eval.fittings,
             hardware_items=[
                 item for r in aggregated for item in r.hardware_items
             ],
             leaf_weights=[
                 weight for r in aggregated for weight in r.leaf_weights
             ],
+            extra_lines=extras_eval.lines,
         )
+        if color_selection is not None:
+            # D05: stamp the finish pair's identity + declared surcharges
+            # onto the merged BOM — the assembly's plan area is the M²
+            # basis (per-module totals are already inside it).
+            bom.finish_key = color_selection.stock_key()
+            bom.finish_label = color_selection.display_name()
+            bom.finish_class = color_selection.finish_class
+            bom.color_surcharges = apply_color_surcharges(
+                color_selection,
+                bom,
+                area_m2=(plan.width_mm * plan.height_mm) / Decimal("1000000"),
+            )
+        extra_suggestions = extras_eval.suggestions
+    else:
+        extra_suggestions = []
 
     if any(issue.severity is Severity.ERROR for issue in issues):
         status = ProductStatus.INVALID
@@ -2157,6 +2429,7 @@ def evaluate_product(
         plan=plan,
         modules=module_evals,
         bom=bom,
+        extra_suggestions=extra_suggestions,
     )
 
 

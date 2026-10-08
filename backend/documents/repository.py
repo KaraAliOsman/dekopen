@@ -110,6 +110,22 @@ def one(
     return result[0]
 
 
+def next_human_code(org_id: UUID | str, kind: str) -> str:
+    """Org-scoped human folio — 'OC-000123' purchase orders,
+    'RT-000045' remnants, 'REC-000012' purchase receipts.
+
+    private.next_human_code serializes concurrent allocations per org with
+    a transaction advisory lock, so two simultaneous inserts get distinct
+    consecutive codes; a rollback frees the lock without burning a number."""
+    return str(
+        one(
+            "SELECT private.next_human_code(%s::uuid, %s) AS code",
+            [str(org_id), kind],
+            code="human_code_allocation_failed",
+        )["code"]
+    )
+
+
 @contextmanager
 def documentary_backend() -> Iterator[None]:
     """Switch to the documentary role, restoring the caller's role on exit.
@@ -363,6 +379,7 @@ def load_purchase_authorities(
     *, system_id: UUID, org_id: UUID, color: str,
     profile_skus: set[str], reinforcement_skus: set[str], glass_skus: set[str],
     hardware_skus: set[str], panel_skus: set[str], fitting_skus: set[str],
+    reinforcement_colors: dict[str, str] | None = None,
 ) -> PurchaseAuthorities:
     def _by_sku(result: list[dict[str, object]], key: str) -> dict[str, list[dict]]:
         grouped: dict[str, list[dict]] = {}
@@ -386,8 +403,13 @@ def load_purchase_authorities(
                 "JOIN public.profile_articles article ON article.id=mapping.profile_article_id "
                 "JOIN public.cutting_profiles profile ON profile.id=mapping.cutting_profile_id "
                 "WHERE article.system_id=%s AND article.sku = ANY(%s) AND mapping.is_active "
+                # D05: the stocked bar is finish-keyed — one binding per
+                # (article, stock color); the requested key selects it. A
+                # NULL stock_color is a legacy color-agnostic bar that binds
+                # to whatever finish is requested.
+                "AND (mapping.stock_color IS NULL OR mapping.stock_color=%s) "
                 "AND (mapping.org_id IS NULL OR mapping.org_id=%s)",
-                [system_id, sorted(profile_skus), org_id],
+                [system_id, sorted(profile_skus), color, org_id],
             ),
             "workshop_sku",
         )
@@ -396,6 +418,10 @@ def load_purchase_authorities(
                 grouped.get(sku_value, []), org_id,
                 "profile_stock_binding_missing_or_ambiguous",
             )
+            if row["stock_color"] is None:
+                # Color-agnostic bar: the binding carries the requested
+                # finish — the purchase document names what it is buying for.
+                row = {**row, "stock_color": color}
             binding = _stock_binding(row, PhysicalSourceKind.PROFILE)
             if binding.color != color:
                 raise DocumentaryError("physical_stock_color_mismatch")
@@ -424,7 +450,10 @@ def load_purchase_authorities(
                 "reinforcement_stock_binding_missing_or_ambiguous",
             )
             binding = _stock_binding(row, PhysicalSourceKind.REINFORCEMENT)
-            if binding.color != color:
+            # D05: steel is stocked under its own declared color ('WHITE'
+            # in every seeded catalog) — compare against the color the
+            # resolved rule stamped on the cut pieces, not the bar finish.
+            if binding.color != (reinforcement_colors or {}).get(sku_value, color):
                 raise DocumentaryError("physical_stock_color_mismatch")
             stocks.append(binding)
 

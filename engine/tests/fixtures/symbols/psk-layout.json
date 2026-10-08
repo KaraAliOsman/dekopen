@@ -1,0 +1,152 @@
+{
+  "id": "psk-layout",
+  "name": "Osciloparalela (PSK) — layout con travel",
+  "box": {
+    "x": 0,
+    "y": 0,
+    "w": 2400,
+    "h": 1400
+  },
+  "input": {
+    "kind": "sliding",
+    "unit": "WINDOW",
+    "movement": "PARALLEL_SLIDE",
+    "tracks": 2,
+    "panels": [
+      {
+        "slot": "O1",
+        "kind": "FIXED",
+        "track": null,
+        "travel": null
+      },
+      {
+        "slot": "X1",
+        "kind": "MOVING",
+        "track": 0,
+        "travel": "RIGHT"
+      }
+    ]
+  },
+  "views": {
+    "interior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "none",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": []
+        },
+        {
+          "prims": [
+            {
+              "k": "tri",
+              "hinge": "BOTTOM",
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 1440 1232 L 1728 168 L 2160 1232",
+              "dash": null
+            },
+            {
+              "d": "M 1627.2 700 H 1972.8 M 1895.04 644.7 L 1972.8 700 L 1895.04 755.3",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    },
+    "exterior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "none",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": []
+        },
+        {
+          "prims": [
+            {
+              "k": "tri",
+              "hinge": "BOTTOM",
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 1440 1232 L 1728 168 L 2160 1232",
+              "dash": null
+            },
+            {
+              "d": "M 1627.2 700 H 1972.8 M 1895.04 644.7 L 1972.8 700 L 1895.04 755.3",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

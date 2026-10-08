@@ -1,0 +1,25 @@
+id: J02
+view: proyecto
+via: agent
+surface: project
+fixture: proyecto
+refs:
+  project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+prompt: "crea una corredera de 2 hojas de 1600 × 1100 para la cocina"
+expected: "add_position con las medidas declaradas (y la serie corredera o la aclaración por sistema), o la aclaración tipada."
+expect:
+  any:
+    # IA2 §1 — add_position existe; la propuesta viaja como paso ops.
+    - behavior:
+        ops_any: ["add_position"]
+    - behavior:
+        clarify_options: {min: 1}
+    - behavior:
+        asks_clarification: true
+    - behavior:
+        artifact:
+          kind: project_draft
+    - behavior:
+        steps_kinds_absent: [ops, batch_ops]
+        text_matches_any:
+          - "corredera|sliding|no\\s+(puedo|se puede|existe|admite)|incompat|manual"

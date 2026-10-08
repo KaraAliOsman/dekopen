@@ -139,9 +139,27 @@ def _summary(org_id: UUID) -> dict[str, Any]:
                      AND v.revision_code = p.current_revision
                      AND (a.status = 'APPROVED'
                           OR (a.status = 'PENDING' AND a.expires_at > now()))))
-                AS quotes_stale
+                AS quotes_stale,
+            -- P10: el cliente pidió ajustes sobre la revisión vigente y el
+            -- estimador todavía no le responde con un enlace nuevo.
+            (SELECT count(DISTINCT a.project_id) FROM public.customer_approvals a
+             JOIN public.project_versions v
+               ON v.id = a.project_version_id AND v.org_id = a.org_id
+             JOIN public.projects p
+               ON p.id = a.project_id AND p.org_id = a.org_id
+             WHERE a.org_id = %s AND a.status = 'CHANGES_REQUESTED'
+               AND p.status = 'QUOTED'
+               AND v.revision_code = p.current_revision
+               AND NOT EXISTS (
+                   SELECT 1 FROM public.customer_approvals newer
+                   WHERE newer.org_id = a.org_id
+                     AND newer.project_id = a.project_id
+                     AND newer.project_version_id = a.project_version_id
+                     AND newer.status = 'PENDING'
+                     AND newer.expires_at > now()))
+                AS quotes_changes
         """,
-        [str(org_id)] * 8,
+        [str(org_id)] * 9,
     )
     lead = one(
         """

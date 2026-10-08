@@ -28,19 +28,77 @@
     "system_id": "3067da09-3119-5ad0-a1d5-498cd2dfd753"
   },
   "response": {
-    "calculation_hash": "sha256:3c1b79dbbfdc4d20445412669763a31734ae04d9fd0ce700b24f1e91b86e1ee3",
-    "fittings": [],
+    "calculation_hash": "sha256:b461566ace7b37a4f1cf76a6aab3364a3bc67737172b5c97cda5a87e7e23acd9",
+    "color_surcharges": [],
+    "extra_lines": [],
+    "finish_class": null,
+    "finish_key": null,
+    "finish_label": null,
+    "fittings": [
+      {
+        "bay_id": null,
+        "kind": "REINFORCEMENT_SCREW",
+        "leaf_id": null,
+        "origin": "PRODUCT",
+        "qty": 32,
+        "sku": "TORNILLO-4X16"
+      },
+      {
+        "bay_id": "bay_2",
+        "kind": "REINFORCEMENT_SCREW",
+        "leaf_id": null,
+        "origin": "PRODUCT",
+        "qty": 12,
+        "sku": "TORNILLO-4X16"
+      }
+    ],
     "glasses": [
       {
         "area_m2": "0.8908",
         "article_sku": null,
         "bay_id": "bay_1",
+        "composition": {
+          "layers": [
+            {
+              "coating": null,
+              "coating_face": null,
+              "interlayer": null,
+              "panes": [
+                "4"
+              ],
+              "supplier_sku": null,
+              "tint": "CLEAR",
+              "treatment": null
+            },
+            {
+              "gas": "AIR",
+              "sealant": null,
+              "spacer": "ALUMINIUM",
+              "width_mm": "16.00"
+            },
+            {
+              "coating": null,
+              "coating_face": null,
+              "interlayer": null,
+              "panes": [
+                "4"
+              ],
+              "supplier_sku": null,
+              "tint": "CLEAR",
+              "treatment": null
+            }
+          ]
+        },
         "exposed_edges": null,
         "glass_spec": "4-16-4 Float Incoloro",
         "height_mm": "1310.00",
         "leaf_id": null,
+        "requires_exact_cut": false,
+        "safety_findings": [],
         "shape": null,
+        "surcharge_selections": [],
         "thickness_net_mm": "8.00",
+        "thickness_total_mm": "24.00",
         "weight_kg": "17.82",
         "width_mm": "680.00"
       },
@@ -48,12 +106,48 @@
         "area_m2": "0.6421",
         "article_sku": null,
         "bay_id": "bay_2",
+        "composition": {
+          "layers": [
+            {
+              "coating": null,
+              "coating_face": null,
+              "interlayer": null,
+              "panes": [
+                "4"
+              ],
+              "supplier_sku": null,
+              "tint": "CLEAR",
+              "treatment": null
+            },
+            {
+              "gas": "AIR",
+              "sealant": null,
+              "spacer": "ALUMINIUM",
+              "width_mm": "12.00"
+            },
+            {
+              "coating": null,
+              "coating_face": null,
+              "interlayer": null,
+              "panes": [
+                "4"
+              ],
+              "supplier_sku": null,
+              "tint": "CLEAR",
+              "treatment": null
+            }
+          ]
+        },
         "exposed_edges": null,
         "glass_spec": "4-12-4 Float Incoloro",
         "height_mm": "1176.00",
         "leaf_id": null,
+        "requires_exact_cut": false,
+        "safety_findings": [],
         "shape": null,
+        "surcharge_selections": [],
         "thickness_net_mm": "8.00",
+        "thickness_total_mm": "20.00",
         "weight_kg": "12.84",
         "width_mm": "546.00"
       }
@@ -61,12 +155,25 @@
     "hardware_items": [
       {
         "bay_id": "bay_2",
+        "class_label": null,
         "contents": [],
+        "cost_clp": null,
+        "handle_color_name": null,
+        "handle_color_sku": null,
+        "handle_height_mm": null,
+        "handle_model_name": null,
+        "handle_model_sku": null,
         "kit_sku": "KIT-TILT-TURN",
         "leaf_id": null,
+        "machining": [],
         "name": "Kit Vorne OB 100kg",
+        "option_names": [],
+        "option_skus": [],
+        "price_delta_clp": null,
+        "price_deltas": [],
         "qty": 1,
-        "unit": "kit"
+        "unit": "kit",
+        "weight_kg": "2.50"
       }
     ],
     "leaf_weights": [
@@ -76,8 +183,8 @@
         "infill_weight_kg": "12.84",
         "leaf_id": null,
         "pvc_weight_kg": "4.74",
-        "steel_weight_kg": "6.47",
-        "total_weight_kg": "26.55",
+        "steel_weight_kg": "4.30",
+        "total_weight_kg": "24.38",
         "weight_unknown_reasons": []
       }
     ],
@@ -90,6 +197,7 @@
         "leaf_id": null,
         "length_mm": "1506.00",
         "material": "PVC",
+        "origin": "PRODUCT",
         "qty": 2,
         "role": "FRAME",
         "sagitta_mm": null,
@@ -102,6 +210,7 @@
         "leaf_id": null,
         "length_mm": "1406.00",
         "material": "PVC",
+        "origin": "PRODUCT",
         "qty": 2,
         "role": "FRAME",
         "sagitta_mm": null,
@@ -114,6 +223,7 @@
         "leaf_id": null,
         "length_mm": "1280.00",
         "material": "PVC",
+        "origin": "PRODUCT",
         "qty": 1,
         "role": "MULLION_V",
         "sagitta_mm": null,
@@ -126,6 +236,7 @@
         "leaf_id": null,
         "length_mm": "672.00",
         "material": "PVC",
+        "origin": "PRODUCT",
         "qty": 2,
         "role": "SASH",
         "sagitta_mm": null,
@@ -138,6 +249,7 @@
         "leaf_id": null,
         "length_mm": "1302.00",
         "material": "PVC",
+        "origin": "PRODUCT",
         "qty": 2,
         "role": "SASH",
         "sagitta_mm": null,
@@ -150,6 +262,7 @@
         "leaf_id": null,
         "length_mm": "689.00",
         "material": "PVC",
+        "origin": "PRODUCT",
         "qty": 2,
         "role": "GLAZING_BEAD",
         "sagitta_mm": null,
@@ -162,6 +275,7 @@
         "leaf_id": null,
         "length_mm": "1319.00",
         "material": "PVC",
+        "origin": "PRODUCT",
         "qty": 2,
         "role": "GLAZING_BEAD",
         "sagitta_mm": null,
@@ -174,6 +288,7 @@
         "leaf_id": null,
         "length_mm": "555.00",
         "material": "PVC",
+        "origin": "PRODUCT",
         "qty": 2,
         "role": "GLAZING_BEAD",
         "sagitta_mm": null,
@@ -186,6 +301,7 @@
         "leaf_id": null,
         "length_mm": "1185.00",
         "material": "PVC",
+        "origin": "PRODUCT",
         "qty": 2,
         "role": "GLAZING_BEAD",
         "sagitta_mm": null,
@@ -221,16 +337,6 @@
         "qty": 1,
         "reinforcement_sku": null,
         "role": "MULLION_V",
-        "sagitta_mm": null
-      },
-      {
-        "bay_id": "bay_2",
-        "leaf_id": null,
-        "length_mm": "636.00",
-        "parent_profile_sku": "HOJA",
-        "qty": 2,
-        "reinforcement_sku": null,
-        "role": "SASH",
         "sagitta_mm": null
       },
       {

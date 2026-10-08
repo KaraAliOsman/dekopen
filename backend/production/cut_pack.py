@@ -10,22 +10,29 @@ from decimal import Decimal
 from html import escape
 from uuid import UUID
 
+import segno
 from documents.renderers import (
     _CATEGORY_ES,
-    _COLOR_ES,
+    finish_key_label,
     _CSS,
     _ROLE_ES,
+    _bar_assignments,
     _cldate,
+    _fmt_mm as _eng_fmt_mm,
     _cut_key,
     _cut_member_map,
-    _cut_piece_ids,
     _infill_code_map,
     _infill_key,
+    _join_codes,
     _location,
-    _member_op_marks,
+    _member_ops,
     _pct,
+    _claim_piece,  # noqa: F401 — re-exportado para pack.py
     _piece_labels,
+    _piece_pools,  # noqa: F401 — re-exportado para pack.py
+    _reinforcement_parents,
     _role_name,
+    _sheet_assignments,
     _table,
     _url_fetcher,
     _value,
@@ -40,41 +47,88 @@ from documents.repository import (
     rows,
 )
 
-from production.service import _decoded, _optimization_fingerprint
+from production.service import (
+    _BAR_DROP_STATIONS,
+    _STEP_LABELS,
+    _decoded,
+    _optimization_fingerprint,
+)
 
+
+_LABEL_PAPER = {"LETTER": "letter", "LEGAL": "legal", "A4": "a4"}
 
 _CSS_PACK = """
 @page { size: letter landscape; margin: 10mm 10mm 16mm;
         @bottom-center { content: element(titleblock); } }
+@page piece-labels { size: letter portrait; margin: 6mm;
+        @bottom-center { content: element(titleblock); } }
+@page label-roll { size: 100mm 50mm; margin: 0; }
+.labels-sheet { page: piece-labels; }
+.label-roll-sheet { page: label-roll; }
 .bar-svg { width: 100%; height: auto; display: block; }
 .bar-svg text { font-family: 'IBM Plex Mono', monospace; }
 .sheet-svg { display: block; margin: 0 auto; }
 .sheet-svg text { font-family: 'IBM Plex Mono', monospace; }
-.bar-block { break-inside: avoid; margin-bottom: 3.5mm; }
-.bar-block table th { font-size: 7pt; padding: 0.9mm 1.6mm; }
-.bar-block table td { font-size: 9.5pt; padding: 1mm 1.6mm; }
-.bar-cont th { background: #EEF3F2 !important; color: #465158 !important;
-               font-weight: 600; }
-.bar-head { display: flex; align-items: baseline; gap: 3mm; margin: 3mm 0 1mm; }
+.bar-block { break-inside: avoid; margin-bottom: 2.5mm; }
+.pack-legend { font-size: 8pt; color: #465158; margin: 0 0 1.5mm; }
+.bar-head { display: flex; align-items: baseline; gap: 3mm; margin: 2mm 0 0.5mm; }
 .bar-head h3 { margin: 0; }
 .bar-orient { display: flex; gap: 4mm; align-items: center;
-              font-size: 8pt; color: #465158; margin: 0 0 1mm; }
+              font-size: 8pt; color: #465158; margin: 0 0 0.5mm; }
 .bar-orient .conv { flex: 1; }
+.bar-foot { display: flex; gap: 5mm; align-items: baseline;
+            margin: 0.8mm 0 0; }
+.bar-foot .bar-balance { flex: 1 1 auto; }
+.bar-foot .bar-remnant { flex: 0 0 auto; text-align: right; }
 .bar-balance { font: 8.5pt 'IBM Plex Mono', monospace; color: #252D31;
-               margin: 1mm 0 0; }
+               margin: 0; }
 .bar-balance.ok { color: #075F5A; }
 .bar-balance.diff { color: #991B1B; font-weight: 600; }
-.bar-remnant { font-size: 8.5pt; color: #465158; margin-top: 0.6mm; }
+.bar-remnant { font-size: 8.5pt; color: #465158; }
 .section-svg { width: 16mm; height: 11mm; flex: none; }
 .pack-meta { display: flex; flex-wrap: wrap; gap: 4mm 7mm;
              font: 8.5pt 'IBM Plex Mono', monospace; margin: 2mm 0 4mm; }
 .pack-meta strong { color: #161C1F; }
 .badge { display: inline-block; padding: 0.4mm 2mm; border-radius: 1mm;
-         font-size: 7pt; font-weight: 600; letter-spacing: 0.4pt;
+         font-size: 8pt; font-weight: 600; letter-spacing: 0.4pt;
          text-transform: uppercase; }
+/* Legibilidad P13: dentro del pack el texto de cuerpo no baja de 8pt —
+   los encabezados de tabla del sistema (7pt) no aplican aquí. */
+.workshop th { font-size: 8pt; }
+/* Piso de impresión P13: en el pack ni una etiqueta baja de 8pt — la
+   franja del título corre fuera de <main> pero comparte esta hoja. */
+.tb-label, .sign-label { font-size: 8pt; }
 .badge-new { background: #E6F4F2; color: #075F5A; }
 .badge-remnant { background: #FDF1E3; color: #B25E09; }
 .qr { width: 22mm; height: 22mm; }
+.piece-label { display: inline-flex; gap: 1.6mm; padding: 1.4mm;
+               border: 0.35mm solid #161C1F; box-sizing: border-box;
+               width: 64.7mm; height: 38mm; break-inside: avoid;
+               overflow: hidden; line-height: 1.3; }
+/* La grilla va en flujo de línea (no flex): WeasyPrint no fragmenta un
+   contenedor flex entre páginas y un pack grande quedaría aplastado
+   en una sola plana. */
+.labels-grid { display: block; font-size: 0; line-height: 0; }
+.labels-grid .piece-label { vertical-align: top; margin: 0 2mm 2mm 0; }
+.label-roll .piece-label { width: 97mm; height: 47mm; margin: 1.5mm;
+                           page-break-after: always; }
+.piece-label .pl-qr { flex: none; width: 13.5mm; }
+.piece-label .pl-qr svg { width: 13.5mm; height: 13.5mm; display: block; }
+.label-roll .piece-label .pl-qr { width: 19mm; }
+.label-roll .piece-label .pl-qr svg { width: 19mm; height: 19mm; }
+.piece-label .pl-body { min-width: 0; }
+.piece-label .pl-code { font: 700 9.5pt 'IBM Plex Mono', monospace;
+                        color: #161C1F; }
+.label-roll .piece-label .pl-code { font-size: 12pt; }
+.piece-label .pl-line { font-size: 8pt; color: #252D31; line-height: 1.3;
+                        white-space: nowrap; overflow: hidden;
+                        text-overflow: ellipsis; }
+.label-roll .piece-label .pl-line { font-size: 9pt; }
+.piece-label .pl-next { font-size: 8pt; font-weight: 600; color: #075F5A; }
+.label-roll .piece-label .pl-next { font-size: 9pt; }
+.piece-label .pl-writein { font: 8pt 'IBM Plex Mono', monospace;
+                           color: #727D82; }
+.piece-label.remnant-label { background: #FDF1E3; }
 """
 
 _MATERIAL_ES = {
@@ -96,9 +150,9 @@ _ORIENTATION_ES = {
 
 
 def _fmt_mm(value: object) -> str:
-    """Printed mm without decorative decimals: 6000.00 → '6000',
-    1319.50 → '1319.5'. Internal data stays Decimal — only the glyph
-    is shortened."""
+    """Printed mm per §3.3 — thin-space grouping, comma decimal:
+    6000.00 → '6 000', 1319.50 → '1 319,5'. Internal data stays
+    Decimal — only the glyph changes."""
     text = _value(value)
     if text in ("", "—"):
         return "—"
@@ -106,7 +160,7 @@ def _fmt_mm(value: object) -> str:
         number = Decimal(str(value))
     except Exception:
         return text
-    out = format(number.normalize(), "f")
+    out = _eng_fmt_mm(number.normalize())
     return out if out else "0"
 
 
@@ -140,7 +194,9 @@ def _bar_svg(
     # regardless of the stock length.
     u = max(stock / span_mm, Decimal("4"))
     fs_code = u * Decimal("3.2")
-    fs_dim = u * Decimal("2.8")
+    # fs_dim imprime exactamente 3.0 mm (~8.5 pt) — el piso de legibilidad
+    # del encargo, fijo respecto al largo de la barra.
+    fs_dim = u * Decimal("3.0")
     fs_seq = u * Decimal("3.4")
     bar_h = u * Decimal("9")
     # Adaptive vertical budget: leaders exist only when a segment is too
@@ -299,7 +355,7 @@ def _bar_svg(
                 f'{escape(location)}{" " if position else ""}'
                 f'{escape(str(position))}</text>'
             )
-            dim_label = f'{_value(cut.get("length_mm"))} mm · {angles}'
+            dim_label = f'{_fmt_mm(cut.get("length_mm"))} mm · {angles}'
             dim_half = _est(dim_label, fs_dim) / 2
             dim_lane = next(
                 (
@@ -327,7 +383,12 @@ def _bar_svg(
                     f'font-weight="600">{seq}</text>'
                 )
             side = "above" if index % 2 == 0 else "below"
-            label = f"{seq} · {code} · {_value(cut.get('length_mm'))}"
+            # Secuencia + etiqueta + largo + ángulos — la fila de tabla que
+            # llevaba esto se retiró: el diagrama es la lista de corte.
+            label = (
+                f"{seq} · {code} · {_fmt_mm(cut.get('length_mm'))} mm · "
+                f"{_fmt_mm(cut.get('angle_left'))}°/{_fmt_mm(cut.get('angle_right'))}°"
+            )
             half = _est(label, fs_code) / 2
             lane = 0
             while (
@@ -387,7 +448,7 @@ def _bar_svg(
             # The full label only goes inside when the remainder can hold it —
             # a narrow tail otherwise bleeds its text over the last segment.
             # The mm value already prints in the bar's h3 line.
-            inside_label = f"{tag} {_value(remainder)} mm"
+            inside_label = f"{tag} {_fmt_mm(remainder)} mm"
             fits = _est(inside_label, fs_dim) <= remainder - u
             label = inside_label if fits else tag
             if fits:
@@ -399,7 +460,7 @@ def _bar_svg(
                     f'<text x="{cx}" y="{pad_top + bar_h / 2}" '
                     'text-anchor="middle" dominant-baseline="middle" '
                     f'fill="#161C1F" font-size="{fs_dim}">'
-                    f'{tag} {escape(_value(remainder))} mm</text>'
+                    f'{tag} {escape(_fmt_mm(remainder))} mm</text>'
                 )
             elif _est(label, fs_dim) <= remainder - u * Decimal("0.5"):
                 svg.append(
@@ -426,52 +487,9 @@ def _bar_svg(
     return "".join(svg)
 
 
-def _piece_pools(
-    piece_ids: dict[tuple[str, ...], dict[str, list[object]]],
-    labels: dict[str, dict[object, str]],
-) -> dict[tuple[str, ...], dict[str, list[object]]]:
-    """spec key → unit → member ids sorted by printed code. The pools are
-    consumed across the whole pack — a physical piece prints exactly once,
-    per its quantity."""
-    pools: dict[tuple[str, ...], dict[str, list[object]]] = {}
-    for key, units in piece_ids.items():
-        table = labels["member" if key[0] == "PROFILE" else "reinforcement"]
-        pools[key] = {
-            unit: sorted(
-                ids,
-                key=lambda entity_id: str(table.get(entity_id) or entity_id),
-            )
-            for unit, ids in units.items()
-        }
-    return pools
-
-
-def _claim_piece(
-    cut: dict[str, object],
-    pools: dict[tuple[str, ...], dict[str, list[object]]],
-    labels: dict[str, dict[object, str]],
-    cut_map: dict[tuple[str, ...], str],
-) -> tuple[str, object | None]:
-    """Physical piece code for one placed cut: consume the next member id
-    of the cut's spec inside its unit (unit_index = frozen repetition_index).
-    Falls back to the spec-group label for payloads frozen before the
-    identity fields existed."""
-    key = _cut_key(cut)
-    ids = pools.get(key, {}).get(str(cut.get("unit_index") or "")) or []
-    entity_id = ids.pop(0) if ids else None
-    table = labels["member" if key[0] == "PROFILE" else "reinforcement"]
-    code = table.get(entity_id) if entity_id is not None else None
-    if code is None:
-        code = cut_map.get(
-            key,
-            labels["member"].get(
-                cut.get("piece_id"),
-                labels["reinforcement"].get(
-                    cut.get("piece_id"), str(cut.get("piece_id") or "")[:10]
-                ),
-            ),
-        )
-    return code, entity_id
+# _piece_pools / _claim_piece live in documents.renderers — pack.py imports
+# them through this module; the top-level import re-export keeps that
+# contract stable.
 
 
 def _section_svg(section: object) -> str:
@@ -563,8 +581,16 @@ def _bar_context(
 
 _UNNEST_REASONS = {
     "shaped_glass_outline": "Vidrio con forma — corte por plantilla",
-    "no_declared_sheet": "Sin lámina declarada",
+    "no_declared_sheet": "Sin formato de lámina declarado en el catálogo",
     "piece_larger_than_usable_sheet": "Pieza mayor que la lámina útil",
+}
+
+_UNNEST_ACTIONS = {
+    "no_declared_sheet": "Catálogo › Vidrios › Formatos",
+    "piece_larger_than_usable_sheet": (
+        "Catálogo › Vidrios › Formatos o pedido a medida al proveedor"
+    ),
+    "shaped_glass_outline": "Mesa de corte por plantilla — plantilla en el DXF",
 }
 
 
@@ -572,6 +598,7 @@ def _sheet_svg(
     sheet: dict[str, object],
     labels: dict[str, dict[object, str]],
     infills: dict[tuple[str, str, str], str],
+    assignments: dict[tuple[object, object], tuple[str, object | None]] | None = None,
 ) -> str:
     sheet_w = _mm(sheet["sheet_width_mm"])
     sheet_h = _mm(sheet["sheet_height_mm"])
@@ -600,16 +627,29 @@ def _sheet_svg(
         x, y = _mm(placement["x_mm"]), _mm(placement["y_mm"])
         w, h = _mm(placement["width_mm"]), _mm(placement["height_mm"])
         location = _location(labels, placement.get("bay_id"), placement.get("leaf_id"))
-        code = infills.get(_infill_key(placement), str(placement.get("piece_id") or ""))
+        assigned = (assignments or {}).get(
+            (sheet.get("sheet_index"), placement.get("sequence"))
+        )
+        code = (assigned[0] if assigned and assigned[0] else None) or infills.get(
+            _infill_key(placement), str(placement.get("piece_id") or "")
+        )
         rotated = bool(placement.get("rotated"))
         # Print-size labels: a full-height piece earns ~5mm code text; fonts
-        # shrink with the smaller piece dimension so narrow panes stay legible.
-        fs_code = min(
-            h * Decimal("0.075"),
-            w * Decimal("0.9") / (Decimal("0.62") * Decimal(max(len(code), 1))),
+        # shrink with the smaller piece dimension so narrow panes stay
+        # legible — but never below the pack's 8pt print floor (≈2.84mm at
+        # the sheet's scale); a pane too small for the floor spills over
+        # its edge rather than printing unreadable.
+        min_font = Decimal("2.84") / scale
+        fs_code = max(
+            min(
+                h * Decimal("0.075"),
+                w * Decimal("0.9")
+                / (Decimal("0.62") * Decimal(max(len(code), 1))),
+            ),
+            min_font,
         )
-        fs_dim = fs_code * Decimal("0.8")
-        fs_loc = fs_code * Decimal("0.62")
+        fs_dim = max(fs_code * Decimal("0.8"), min_font)
+        fs_loc = max(fs_code * Decimal("0.62"), min_font)
         gap = fs_code * Decimal("1.15")
         svg.append(
             f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="#BFE6E0" '
@@ -621,7 +661,7 @@ def _sheet_svg(
             f'<text x="{x + w / 2}" y="{y + h / 2 + fs_dim}" text-anchor="middle" '
             'fill="#161C1F" '
             f'font-size="{fs_dim}">'
-            f'{_value(w)}×{_value(h)}</text>'
+            f'{_fmt_mm(w)}×{_fmt_mm(h)}</text>'
             f'<text x="{x + w / 2}" y="{y + h / 2 + gap + fs_dim}" '
             'text-anchor="middle" '
             f'fill="#4A5559" font-size="{fs_loc}">{escape(location)}</text>'
@@ -639,6 +679,210 @@ def _sheet_svg(
     return "".join(svg)
 
 
+def _piece_label_html(
+    *,
+    code: str,
+    order_code: str,
+    fp8: str,
+    line1: str,
+    line2: str,
+    next_station: str,
+    qr_payload: str | None = None,
+    remnant: bool = False,
+) -> str:
+    qr = (
+        f'<div class="pl-qr">{segno.make(qr_payload, error="m").svg_inline(border=1, scale=4)}</div>'
+        if qr_payload
+        else '<div class="pl-qr"></div>'
+    )
+    return (
+        f'<div class="piece-label{" remnant-label" if remnant else ""}">{qr}'
+        '<div class="pl-body">'
+        f'<div class="pl-code">{escape(code)}</div>'
+        f'<div class="pl-line">{escape(line1)}</div>'
+        f'<div class="pl-line">{escape(line2)}</div>'
+        f'<div class="pl-next">→ {escape(next_station)}</div>'
+        f'<div class="pl-writein">{escape(order_code)} · plan {escape(fp8)}</div>'
+        "</div></div>"
+    )
+
+
+def _cut_label_rows(
+    *,
+    bars: list[dict[str, object]],
+    sheets: list[dict[str, object]],
+    assignments: dict[tuple[object, object], tuple[str, object | None]],
+    sheet_assignments: dict[tuple[object, object], tuple[str, object | None]],
+    order_code: str,
+    fp8: str,
+    labels: dict[str, dict[object, str]],
+    next_station: dict[object, str],
+    default_station: str,
+    infill_station: str,
+    color_label: str,
+) -> str:
+    """One piece label per physical piece, printed in cut order: bars first
+    (bar, sequence), then sheet placements (sheet, sequence). Same codes as
+    the diagrams, the CSV and the DXF — that is the contract."""
+    out = []
+    for bar in bars:
+        for cut in [c for c in (bar.get("cuts") or []) if isinstance(c, dict)]:
+            code, entity_id = assignments.get(
+                (bar.get("bar_index"), cut.get("sequence")), ("", None)
+            )
+            role = _ROLE_ES.get(
+                _role_name(cut.get("role")), _value(cut.get("role"))
+            )
+            function = " · ".join(
+                part
+                for part in (
+                    _CATEGORY_ES.get(
+                        str(cut.get("source_kind")),
+                        _value(cut.get("source_kind")),
+                    ),
+                    role,
+                )
+                if part
+            )
+            station = (
+                next_station.get(entity_id)
+                if entity_id is not None
+                else None
+            ) or default_station
+            position = labels["position"].get(cut.get("source_position_id"), "")
+            location = _location(
+                labels, cut.get("bay_id"), cut.get("leaf_id")
+            )
+            angles = "/".join(
+                f"{_fmt_mm(cut.get(k))}°"
+                for k in ("angle_left", "angle_right")
+                if cut.get(k) not in (None, "")
+            ) or "—"
+            out.append(
+                _piece_label_html(
+                    code=code or "—",
+                    order_code=order_code,
+                    fp8=fp8,
+                    line1=(
+                        f"{position} {location}".strip()
+                        + f" · {function}"
+                    ),
+                    line2=(
+                        f"{_fmt_mm(cut.get('length_mm'))} mm · {angles} · "
+                        f"{color_label}"
+                    ),
+                    next_station=station,
+                    qr_payload=(
+                        f"DEKOPEN|{order_code}|{code}|{fp8}"
+                        if code
+                        else None
+                    ),
+                )
+            )
+    for sheet in sheets:
+        for piece in [
+            p for p in (sheet.get("placements") or []) if isinstance(p, dict)
+        ]:
+            code, _entity = sheet_assignments.get(
+                (sheet.get("sheet_index"), piece.get("sequence")), ("", None)
+            )
+            position = labels["position"].get(piece.get("source_position_id"), "")
+            location = _location(
+                labels, piece.get("bay_id"), piece.get("leaf_id")
+            )
+            out.append(
+                _piece_label_html(
+                    code=code or "—",
+                    order_code=order_code,
+                    fp8=fp8,
+                    line1=f"{position} {location}".strip() + " · Vidrio/panel",
+                    line2=(
+                        f"{_fmt_mm(piece.get('width_mm'))}×"
+                        f"{_fmt_mm(piece.get('height_mm'))} mm · lámina "
+                        f"{_value(sheet.get('sheet_index'))}"
+                    ),
+                    next_station=infill_station,
+                    qr_payload=(
+                        f"DEKOPEN|{order_code}|{code}|{fp8}"
+                        if code
+                        else None
+                    ),
+                )
+            )
+    return "".join(out)
+
+
+def _next_folio(
+    produced: dict[tuple[object, ...], list[str]], key: tuple[object, ...]
+) -> str | None:
+    """FIFO: a bar's remainder claims the oldest produced-remnant folio of
+    its (stock authority, length) — two identical drops never share a code."""
+    queue = produced.get(key)
+    if not queue:
+        return None
+    folio = queue.pop(0)
+    if not queue:
+        del produced[key]
+    return folio
+
+
+def _next_station_map(
+    snapshot: dict[str, object], payload: dict[str, object] | None
+) -> tuple[dict[object, str], str, str]:
+    """entity id → next station label after its bar/sheeter cut.
+
+    Members with machining ops route to the op's mapped station; plain
+    members follow the first non-cutting routing step (weld/crimp/assemble);
+    reinforcements ride with their host member; panes go to glazing. The
+    routing the order carries is the sealed ladder — never invented."""
+    routing = [
+        str(step) for step in ((payload or {}).get("routing") or [])
+    ]
+    operation_map = {
+        str(k): str(v)
+        for k, v in (
+            ((payload or {}).get("process_authority") or {}).get(
+                "operation_station_map"
+            )
+            or {}
+        ).items()
+    }
+    after_cut = next(
+        (code for code in routing if code not in _BAR_DROP_STATIONS),
+        "",
+    )
+    member_ops = _member_ops(snapshot)
+    stations: dict[object, str] = {}
+    for member_id, kinds in member_ops.items():
+        station = operation_map.get(kinds[0]) if kinds else None
+        stations[member_id] = _STEP_LABELS.get(
+            str(station) if station else (after_cut or "ASSEMBLE"),
+            str(station) if station else (after_cut or "Armado"),
+        )
+    # Reinforcements follow the member they reinforce.
+    manufacturing = snapshot.get("manufacturing")
+    if isinstance(manufacturing, list):
+        for fact in manufacturing:
+            if not isinstance(fact, dict):
+                continue
+            for item in fact.get("reinforcements") or []:
+                if not isinstance(item, dict):
+                    continue
+                parent = item.get("parent_member_id")
+                stations[item.get("reinforcement_id")] = stations.get(
+                    parent,
+                    _STEP_LABELS.get(after_cut or "ASSEMBLE", after_cut or "Armado"),
+                )
+    default_member = _STEP_LABELS.get(
+        after_cut or "ASSEMBLE", after_cut or "Armado"
+    )
+    infill_station = _STEP_LABELS.get(
+        "GLAZE" if "GLAZE" in routing else (after_cut or "QC"),
+        "Vidriado y paneles",
+    )
+    return stations, default_member, infill_station
+
+
 def _pack_html(
     *,
     order: dict[str, object],
@@ -650,12 +894,17 @@ def _pack_html(
     bar_meta: dict[str, dict[str, object]],
     remnant_racks: dict[str, str],
     fingerprint: str,
+    produced_folios: dict[tuple[object, ...], list[str]] | None = None,
+    payload: dict[str, object] | None = None,
+    label_format: str = "GRID",
+    label_paper: str = "LETTER",
 ) -> str:
     order_code = _value(order["order_code"])
-    short_fp = fingerprint[:16]
-    qr_payload = f"DEKOPEN|{order_code}|CUTPACK|{short_fp}"
-    import segno
-
+    # El QR lleva 16 hex de huella — suficiente colisión cero para verificar
+    # el plan en taller; el pie imprime 8, la forma "abreviada" §3.3.
+    qr_fp = fingerprint[:16]
+    short_fp = fingerprint[:8]
+    qr_payload = f"DEKOPEN|{order_code}|CUTPACK|{qr_fp}"
     qr_svg = segno.make(qr_payload, error="m").svg_inline(border=2, scale=6)
     bars = [b for b in (optimization.get("bars") or {}).get("workshop_cut_plan") or []
             if isinstance(b, dict)]
@@ -671,8 +920,46 @@ def _pack_html(
     strategy = _value(optimization.get("applied_strategy")
                       or optimization.get("strategy"))
 
-    pools = _piece_pools(_cut_piece_ids(snapshot), labels)
-    op_marks = _member_op_marks(snapshot)
+    assignments = _bar_assignments(snapshot, labels, cut_map, bars)
+    default_pos = ""
+    positions = snapshot.get("positions") or []
+    if positions and isinstance(positions[0], dict):
+        default_pos = str(positions[0].get("id") or "")
+    sheet_assign = _sheet_assignments(
+        snapshot, labels, sheets, default_position=default_pos
+    )
+    parents = _reinforcement_parents(snapshot, labels)
+    next_stations, default_station, infill_station = _next_station_map(
+        snapshot, payload
+    )
+    produced = produced_folios or {}
+    # Folio RT- por retazo producido, asignado una sola vez: la línea de
+    # cierre de la barra y la etiqueta de retazo imprimen el mismo código.
+    bar_folio: dict[object, str] = {}
+    for bar in bars:
+        remainder = _mm(bar.get("remainder_mm") or "0")
+        if remainder <= 0 or not bar.get("remainder_reusable"):
+            continue
+        folio = _next_folio(
+            produced,
+            ("BAR", str(bar.get("stock_authority_id") or ""), str(remainder)),
+        )
+        if folio:
+            bar_folio[bar.get("bar_index")] = folio
+    sheet_folio_produced: dict[tuple[object, int], str] = {}
+    for sheet in sheets:
+        for index, rem in enumerate(sheet.get("produced_remnants") or []):
+            if not isinstance(rem, dict):
+                continue
+            folio = _next_folio(
+                produced,
+                ("SHEET", str(sheet.get("workshop_sku") or ""),
+                 str(_mm(rem.get("width_mm") or "0")),
+                 str(_mm(rem.get("height_mm") or "0"))),
+            )
+            if folio:
+                sheet_folio_produced[(sheet.get("sheet_index"), index)] = folio
+    color_label = finish_key_label(optimization.get("color"))
 
     body = (
         '<div class="titleblock">'
@@ -688,10 +975,10 @@ def _pack_html(
         '<div class="masthead"><span class="brand">DEKOPEN<span class="mark">'
         "</span></span>"
         f'<div class="meta"><strong>{escape(order_code)}</strong><br/>'
-        f'Pack de corte · {escape(short_fp)}</div></div>'
+        'Pack de corte</div></div>'
         '<div class="rule-stack"></div>'
         '<div class="pack-meta">'
-        f'<span>Color: <strong>{escape(_COLOR_ES.get(str(optimization.get("color")), _value(optimization.get("color"))))}</strong></span>'
+        f'<span>Color: <strong>{escape(color_label)}</strong></span>'
         f'<span>Unidades: <strong>{_value(optimization.get("units"))}</strong></span>'
         f'<span>Estrategia: <strong>{escape(strategy)}</strong></span>'
         f'<span>Barras nuevas: <strong>{_value(stats.get("bars_new", metrics.get("bars")))}</strong></span>'
@@ -704,14 +991,23 @@ def _pack_html(
         "</div>"
     )
     if bars:
-        first = True
+        body += (
+            "<h2>Lista de corte</h2>"
+            '<p class="pack-legend">Convenciones — extremo inicial a la '
+            "izquierda, alimentación →; ángulos izq/der medidos sobre ese "
+            "extremo, visto desde arriba; la marca blanca de esquina indica "
+            "extremo ingleteado; disco y despuntes se descontan por barra en "
+            "su cierre. La misma etiqueta de pieza va en el CSV, el DXF y la "
+            "etiqueta impresa.</p>"
+        )
         for bar in bars:
             source = str(bar.get("source") or "NEW")
             remnant_id = str(bar.get("remnant_id") or "")
             rack = remnant_racks.get(remnant_id)
+            remnant_folio = _value(bar.get("remnant_code"))
             badge = (
-                '<span class="badge badge-remnant">retazo RET-'
-                + escape(remnant_id[:8].upper())
+                '<span class="badge badge-remnant">retazo'
+                + (f" {escape(remnant_folio)}" if remnant_folio != "—" else "")
                 + (f" · rack {escape(rack)}" if rack else "")
                 + "</span>"
                 if source == "REMNANT"
@@ -720,13 +1016,12 @@ def _pack_html(
             sku = _value(bar.get("commercial_sku"))
             meta = bar_meta.get(sku) or {}
             section = _section_svg(meta.get("section"))
-            article = _value(meta.get("name")) or _value(meta.get("article_sku"))
+            article = str(meta.get("name") or meta.get("article_sku") or "")
             material = _MATERIAL_ES.get(
                 str(bar.get("material")), _value(bar.get("material"))
             )
-            color = _COLOR_ES.get(str(bar.get("color")), _value(bar.get("color")))
+            color = finish_key_label(bar.get("color"))
             stock = _mm(bar.get("stock_length_mm"))
-            kerf = _mm(bar.get("kerf_mm") or "0")
             head_trim = _mm(bar.get("head_trim_mm") or "0")
             tail_trim = _mm(bar.get("tail_trim_mm") or "0")
             remainder = _mm(bar.get("remainder_mm") or "0")
@@ -739,50 +1034,13 @@ def _pack_html(
             )
             accounted = pieces_mm + kerf_total + head_trim + tail_trim + remainder
             diff = stock - accounted
-            codes: list[str] = []
-            rows_data: list[list[object]] = []
-            for index, cut in enumerate(cuts):
-                code, entity_id = _claim_piece(cut, pools, labels, cut_map)
-                codes.append(code)
-                notes = []
-                if cut.get("sagitta_mm") not in (None, "", "0", "0.00"):
-                    notes.append(f"sagitta {_fmt_mm(cut.get('sagitta_mm'))} mm")
-                if entity_id is not None and op_marks.get(str(entity_id)):
-                    notes.append("lleva mecanizado")
-                function = " · ".join(
-                    part
-                    for part in (
-                        _CATEGORY_ES.get(
-                            str(cut.get("source_kind")),
-                            _value(cut.get("source_kind")),
-                        ),
-                        _ROLE_ES.get(
-                            _role_name(cut.get("role")),
-                            _value(cut.get("role")),
-                        ),
-                    )
-                    if part
-                )
-                rows_data.append(
-                    [
-                        cut.get("sequence") or index + 1,
-                        code,
-                        function,
-                        _location(labels, cut.get("bay_id"), cut.get("leaf_id")),
-                        _fmt_mm(cut.get("length_mm")),
-                        f"{_fmt_mm(cut.get('angle_left'))}°",
-                        f"{_fmt_mm(cut.get('angle_right'))}°",
-                        " · ".join(notes) if notes else "—",
-                    ]
-                )
-            convention = (
-                "Extremo inicial a la izquierda; alimentación →. "
-                "Ángulos izq/der medidos sobre ese extremo, visto desde "
-                "arriba; marca de esquina = extremo ingleteado. "
-                f"Disco {_fmt_mm(kerf)} mm · despuntes "
-                f"{_fmt_mm(head_trim)}/{_fmt_mm(tail_trim)} mm."
-            )
-            orient_bits = [convention]
+            codes = [
+                assignments.get(
+                    (bar.get("bar_index"), cut.get("sequence")), ("", None)
+                )[0]
+                for cut in cuts
+            ]
+            orient_bits: list[str] = []
             if section:
                 orient_bits.append(
                     "Sección declarada — "
@@ -796,40 +1054,38 @@ def _pack_html(
             remnant_line = ""
             if remainder > 0:
                 if bar.get("remainder_reusable"):
+                    folio = bar_folio.get(bar.get("bar_index"))
                     remnant_line = (
-                        f"Retazo {_fmt_mm(remainder)} mm recuperable — "
-                        "etiquetar y devolver a stock."
+                        f"Retazo {_fmt_mm(remainder)} mm → "
+                        + (
+                            f"{folio} · devolver a stock."
+                            if folio
+                            else "stock de retazos (folio RT- al cerrar el corte)."
+                        )
                     )
                 else:
                     remnant_line = (
-                        f"Cola {_fmt_mm(remainder)} mm — desecho, no "
+                        f"Cola {_fmt_mm(remainder)} mm → desecho, no "
                         "retorna a stock."
                     )
             body += (
                 '<div class="bar-block">'
-                + ("<h2>Plan de barras</h2>" if first else "")
                 + '<div class="bar-head"><h3>'
                 + f"Barra {_value(bar.get('bar_index'))} · "
                 f"{escape(sku)}{' — ' + escape(article) if article else ''} · "
                 f"{escape(material)} · {escape(color)} · "
                 f"{_fmt_mm(stock)} mm</h3>{badge}"
                 f'<span class="muted">aprovechamiento '
-                f"{_pct(bar.get('yield_pct'))}%</span></div>"
-                + f'<div class="bar-orient">{section}'
-                f'<span class="conv">{escape(" ".join(orient_bits))}</span>'
-                "</div>"
-                + _bar_svg(bar, labels, cut_map, codes)
-                + _table(
-                    ["Sec.", "Pieza", "Función", "Vano / hoja", "Corte mm",
-                     "∠ izq.", "∠ der.", "Obs."],
-                    rows_data,
-                    ["", "", "", "", "dimension", "dimension", "dimension", ""],
-                    thead_extra=(
-                        f'<tr class="bar-cont"><th colspan="8">Tabla de cortes — '
-                        f"Barra {_value(bar.get('bar_index'))} · "
-                        f"{escape(sku)}</th></tr>"
-                    ),
+                f"{_pct(bar.get('yield_pct'))} %</span></div>"
+                + (
+                    f'<div class="bar-orient">{section}'
+                    f'<span class="conv">{escape(" ".join(orient_bits))}</span>'
+                    "</div>"
+                    if orient_bits
+                    else ""
                 )
+                + _bar_svg(bar, labels, cut_map, codes)
+                + '<div class="bar-foot">'
                 + (
                     f'<div class="bar-balance {"ok" if diff == 0 else "diff"}">'
                     f"{_fmt_mm(stock)} mm = {_fmt_mm(pieces_mm)} mm piezas "
@@ -848,15 +1104,117 @@ def _pack_html(
                     if remnant_line
                     else ""
                 )
-                + "</div>"
+                + "</div></div>"
             )
-            first = False
+        # Vista agrupada — misma física agrupada por spec para sierras
+        # manuales; cada grupo lista las etiquetas exactas que lo componen.
+        groups: dict[tuple[object, ...], dict[str, object]] = {}
+        for bar in bars:
+            for cut in [
+                c for c in (bar.get("cuts") or []) if isinstance(c, dict)
+            ]:
+                key = (
+                    str(bar.get("commercial_sku") or ""),
+                    _cut_key(cut),
+                )
+                entry = groups.setdefault(
+                    key,
+                    {
+                        "cut": cut,
+                        "sku": str(bar.get("commercial_sku") or ""),
+                        "codes": [],
+                        "bars": set(),
+                        "qty": 0,
+                    },
+                )
+                entry["codes"].append(
+                    assignments.get(
+                        (bar.get("bar_index"), cut.get("sequence")),
+                        ("", None),
+                    )[0]
+                )
+                entry["bars"].add(str(bar.get("bar_index") or ""))
+                entry["qty"] += 1
+        group_rows = []
+        for (sku, _key), entry in groups.items():
+            cut = entry["cut"]
+            notes = []
+            if cut.get("sagitta_mm") not in (None, "", "0", "0.00"):
+                notes.append(f"sagitta {_fmt_mm(cut.get('sagitta_mm'))} mm")
+            group_rows.append(
+                [
+                    sku,
+                    _fmt_mm(cut.get("length_mm")),
+                    f"{_fmt_mm(cut.get('angle_left'))}°",
+                    f"{_fmt_mm(cut.get('angle_right'))}°",
+                    entry["qty"],
+                    _join_codes([c for c in entry["codes"] if c]),
+                    ", ".join(sorted(entry["bars"], key=lambda b: int(b or 0))),
+                    " · ".join(notes) if notes else "—",
+                ]
+            )
+        group_rows.sort(key=lambda r: (str(r[0]), str(r[1])))
+        body += (
+            "<h2>Cortes agrupados — sierra manual</h2>"
+            '<p class="pack-legend">Cortes idénticos agregados con su '
+            "cantidad; cada grupo mantiene la lista exacta de etiquetas — "
+            "la trazabilidad no se pierde al agrupar.</p>"
+            + _table(
+                ["Perfil", "Corte mm", "∠ izq.", "∠ der.", "Cantidad",
+                 "Etiquetas", "Barras", "Notas"],
+                group_rows,
+                ["", "dimension", "dimension", "dimension", "", "", "", ""],
+            )
+        )
+        # Refuerzos y junquillos — la relación a su pieza padre en una sola
+        # sección para la mesa de acero y la gualandera.
+        detail_rows = []
+        for bar in bars:
+            for cut in [
+                c for c in (bar.get("cuts") or []) if isinstance(c, dict)
+            ]:
+                kind = str(cut.get("source_kind") or "")
+                role = _role_name(cut.get("role"))
+                if kind != "REINFORCEMENT" and role != "GLAZING_BEAD":
+                    continue
+                code, entity_id = assignments.get(
+                    (bar.get("bar_index"), cut.get("sequence")), ("", None)
+                )
+                parent = (
+                    parents.get(entity_id, "—")
+                    if kind == "REINFORCEMENT"
+                    else _location(
+                        labels, cut.get("bay_id"), cut.get("leaf_id")
+                    )
+                )
+                detail_rows.append(
+                    [
+                        code or "—",
+                        "Refuerzo" if kind == "REINFORCEMENT" else "Junquillo",
+                        parent,
+                        _fmt_mm(cut.get("length_mm")),
+                        f"{_fmt_mm(cut.get('angle_left'))}°",
+                        f"{_fmt_mm(cut.get('angle_right'))}°",
+                        f"Barra {_value(bar.get('bar_index'))}",
+                    ]
+                )
+        if detail_rows:
+            body += (
+                "<h2>Refuerzos y junquillos</h2>"
+                + _table(
+                    ["Etiqueta", "Tipo", "Pieza padre", "Corte mm",
+                     "∠ izq.", "∠ der.", "Barra"],
+                    detail_rows,
+                    ["", "", "", "dimension", "dimension", "dimension", ""],
+                )
+            )
     if sheets:
         first = True
         for sheet in sheets:
             # The h2 rides inside the first block — break-after:avoid is
             # unreliable across pages in WeasyPrint, while an inline-level
             # box is atomic by construction.
+            sheet_folio = _value(sheet.get("remnant_code"))
             body += (
                 '<div class="bar-block">'
                 + ("<h2>Plan de láminas</h2>" if first else "")
@@ -864,8 +1222,14 @@ def _pack_html(
                 f"{escape(_value(sheet.get('purchasing_sku')))} · "
                 f"{_fmt_mm(sheet.get('sheet_width_mm'))}×"
                 f"{_fmt_mm(sheet.get('sheet_height_mm'))} mm · "
-                f"aprovechamiento {_pct(sheet.get('yield_pct'))}%</h3>"
-                + _sheet_svg(sheet, labels, infills)
+                f"aprovechamiento {_pct(sheet.get('yield_pct'))} %"
+                + (
+                    f" · retazo {escape(sheet_folio)}"
+                    if sheet_folio != "—"
+                    else ""
+                )
+                + "</h3>"
+                + _sheet_svg(sheet, labels, infills, sheet_assign)
                 + "</div>"
             )
             first = False
@@ -893,35 +1257,221 @@ def _pack_html(
                 ["", "dimension", "", ""],
             )
         )
+    # Vidrios — mm enteros, composición, cantidad y destino por pieza.
+    glass_rows: dict[tuple[str, ...], dict[str, object]] = {}
+    infill_dest: dict[object, str] = {}
+    for sheet in sheets:
+        for piece in [
+            p for p in (sheet.get("placements") or []) if isinstance(p, dict)
+        ]:
+            _c, entity_id = sheet_assign.get(
+                (sheet.get("sheet_index"), piece.get("sequence")), ("", None)
+            )
+            if entity_id is not None:
+                infill_dest[entity_id] = (
+                    f"Lámina {_value(sheet.get('sheet_index'))}"
+                )
+    manufacturing = snapshot.get("manufacturing")
+    if isinstance(manufacturing, list):
+        for fact in manufacturing:
+            if not isinstance(fact, dict):
+                continue
+            for item in fact.get("infills") or []:
+                if not isinstance(item, dict):
+                    continue
+                rect = item.get("rect") or {}
+                composition = _value(
+                    item.get("technical_sku") or item.get("composition")
+                    or item.get("kind")
+                )
+                key = (
+                    str(item.get("position_id") or ""),
+                    str(item.get("bay_id") or ""),
+                    str(item.get("leaf_id") or ""),
+                    str(rect.get("width_mm") or item.get("width_mm") or ""),
+                    str(rect.get("height_mm") or item.get("height_mm") or ""),
+                    composition,
+                )
+                entry = glass_rows.setdefault(
+                    key,
+                    {
+                        "codes": [],
+                        "dests": set(),
+                        "position": labels["position"].get(
+                            item.get("position_id"), ""
+                        ),
+                        "location": _location(
+                            labels, item.get("bay_id"), item.get("leaf_id")
+                        ),
+                        "w": rect.get("width_mm") or item.get("width_mm"),
+                        "h": rect.get("height_mm") or item.get("height_mm"),
+                        "composition": composition,
+                    },
+                )
+                entry["codes"].append(
+                    labels["infill"].get(
+                        item.get("infill_id"),
+                        str(item.get("infill_id") or "")[:10],
+                    )
+                )
+                dest = infill_dest.get(item.get("infill_id"))
+                entry["dests"].add(dest or "Sin ubicar")
+    if glass_rows:
+        body += (
+            "<h2>Vidrios</h2>"
+            + _table(
+                ["Etiquetas", "Posición", "Vano / hoja", "Medidas mm",
+                 "Composición", "Cantidad", "Destino"],
+                [
+                    [
+                        _join_codes(entry["codes"]),
+                        entry["position"],
+                        entry["location"],
+                        f"{_fmt_mm(entry['w'])}×{_fmt_mm(entry['h'])}",
+                        entry["composition"],
+                        len(entry["codes"]),
+                        ", ".join(sorted(entry["dests"])),
+                    ]
+                    for entry in glass_rows.values()
+                ],
+                ["", "", "", "dimension", "", "", ""],
+            )
+        )
     if unnested:
         body += (
             "<h2>Piezas no ubicadas</h2>"
+            '<p class="muted">Cada pieza dice qué hacer — el taller no '
+            "adivina.</p>"
             + _table(
-                ["Pieza", "Grupo", "Medidas", "Motivo"],
+                ["Pieza", "Grupo", "Medidas", "Motivo → acción"],
                 [[infills.get(
                       _infill_key(item),
                       str(item.get("kind") or "") + " · "
                       + _location(labels, item.get("bay_id"), item.get("leaf_id")),
                   ),
                   item.get("group"),
-                  f"{_value(item.get('width_mm'))}×{_value(item.get('height_mm'))}"
-                  if item.get("width_mm") else _value(item.get("length_mm")),
+                  f"{_fmt_mm(item.get('width_mm'))}×{_fmt_mm(item.get('height_mm'))}"
+                  if item.get("width_mm") else _fmt_mm(item.get("length_mm")),
                   _UNNEST_REASONS.get(str(item.get("reason") or ""),
-                                      _value(item.get("reason")))]
+                                      _value(item.get("reason")))
+                  + " → "
+                  + _UNNEST_ACTIONS.get(str(item.get("reason") or ""),
+                                        "Revisar optimización")]
                  for item in unnested],
                 ["", "", "dimension", ""],
             )
         )
+    # Etiquetas de pieza — en la secuencia de corte, más las etiquetas de
+    # retazo producido. La grilla usa el papel documental de la org; el
+    # rollo es 100×50 mm por etiqueta.
+    labels_html = _cut_label_rows(
+        bars=bars,
+        sheets=sheets,
+        assignments=assignments,
+        sheet_assignments=sheet_assign,
+        order_code=order_code,
+        fp8=short_fp,
+        labels=labels,
+        next_station=next_stations,
+        default_station=default_station,
+        infill_station=infill_station,
+        color_label=color_label,
+    )
+    remnant_labels = []
+    for bar in bars:
+        remainder = _mm(bar.get("remainder_mm") or "0")
+        if remainder <= 0 or not bar.get("remainder_reusable"):
+            continue
+        folio = bar_folio.get(bar.get("bar_index"))
+        sku = _value(bar.get("commercial_sku"))
+        remnant_labels.append(
+            _piece_label_html(
+                code=folio or "RETAZO",
+                order_code=order_code,
+                fp8=short_fp,
+                line1=f"{sku} · {_fmt_mm(remainder)} mm",
+                line2=(
+                    f"Barra {_value(bar.get('bar_index'))} · {order_code}"
+                ),
+                next_station="Stock de retazos",
+                qr_payload=(
+                    f"DEKOPEN|REMNANT|{folio}" if folio else None
+                ),
+                remnant=True,
+            )
+        )
+    for sheet in sheets:
+        for index, rem in enumerate(sheet.get("produced_remnants") or []):
+            if not isinstance(rem, dict):
+                continue
+            folio = sheet_folio_produced.get((sheet.get("sheet_index"), index))
+            remnant_labels.append(
+                _piece_label_html(
+                    code=folio or "RETAZO",
+                    order_code=order_code,
+                    fp8=short_fp,
+                    line1=(
+                        f"{_value(sheet.get('workshop_sku'))} · "
+                        f"{_fmt_mm(rem.get('width_mm'))}×"
+                        f"{_fmt_mm(rem.get('height_mm'))} mm"
+                    ),
+                    line2=(
+                        f"Lámina {_value(sheet.get('sheet_index'))} · "
+                        f"{order_code}"
+                    ),
+                    next_station="Stock de retazos",
+                    qr_payload=(
+                        f"DEKOPEN|REMNANT|{folio}" if folio else None
+                    ),
+                    remnant=True,
+                )
+            )
+    if labels_html or remnant_labels:
+        if label_format == "THERMAL_100X50":
+            # Un título ocuparía una etiqueta entera de 100×50 — el rollo
+            # imprime solo etiquetas.
+            body += (
+                '<section class="label-roll-sheet"><div class="label-roll">'
+                + labels_html
+                + "".join(remnant_labels)
+                + "</div></section>"
+            )
+        else:
+            body += (
+                '<section class="labels-sheet">'
+                "<h2>Etiquetas de pieza — en secuencia de corte</h2>"
+                '<p class="pack-legend">Una etiqueta por pieza física, más '
+                "las etiquetas de retazo al final; el QR lleva el código y "
+                "la huella del plan.</p>"
+                '<div class="labels-grid">'
+                + labels_html
+                + "".join(remnant_labels)
+                + "</div></section>"
+            )
     body += (
         f'<h2>Identidad</h2><div class="sign-row"><div class="qr">{qr_svg}</div>'
         '<div class="sign-cell sign-date"><span class="sign-label">Fecha</span></div>'
         '<div class="sign-cell"><span class="sign-label">Operario</span></div>'
         '<div class="sign-cell"><span class="sign-label">Verificado por</span></div>'
-        f"</div><p class=\"muted\">Huella completa: {escape(fingerprint)}</p></main>"
+        "</div></main>"
     )
+    if label_format == "THERMAL_100X50":
+        # El cajetín corriente vive en @bottom-center del @page base y los
+        # márgenes con nombre heredan margin boxes — hay que anularlo o la
+        # franja se imprime encima de la etiqueta.
+        extra_css = (
+            "@page label-roll { size: 100mm 50mm; margin: 0; "
+            "@bottom-center { content: none; } }"
+        )
+    else:
+        paper = _LABEL_PAPER.get(str(label_paper).upper(), "letter")
+        extra_css = (
+            f"@page piece-labels {{ size: {paper} portrait; margin: 6mm; "
+            "@bottom-center { content: element(titleblock); } }}"
+        )
     return (
         '<!doctype html><html lang="es-CL"><head><meta charset="utf-8">'
-        f"<style>{_CSS}{_CSS_PACK}</style></head><body>{body}</body></html>"
+        f"<style>{_CSS}{_CSS_PACK}{extra_css}</style></head><body>{body}</body></html>"
     )
 
 
@@ -977,6 +1527,40 @@ def render_cut_pack(*, org_id: UUID, order_id: UUID) -> tuple[bytes, str]:
             or []
             if isinstance(entry, dict) and entry.get("id")
         }
+        # Folios RT- de los retazos que el plan produce — se asignan al
+        # cerrar el primer paso de corte; si aún no existen la etiqueta
+        # lleva su línea de escritura y la barra dice "folio al cerrar".
+        produced_folios: dict[tuple[object, ...], list[str]] = {}
+        for row in rows(
+            "SELECT remnant_code, kind, stock_authority_id::text, "
+            "sheet_workshop_sku, length_mm, width_mm, height_mm "
+            "FROM public.inventory_remnants "
+            "WHERE org_id = %s AND origin_order_id = %s AND origin = 'PRODUCTION' "
+            "ORDER BY remnant_code",
+            [str(org_id), str(order_id)],
+        ):
+            if row.get("kind") == "BAR":
+                key = (
+                    "BAR",
+                    str(row.get("stock_authority_id") or ""),
+                    str(Decimal(str(row.get("length_mm") or "0"))),
+                )
+            else:
+                key = (
+                    "SHEET",
+                    str(row.get("sheet_workshop_sku") or ""),
+                    str(Decimal(str(row.get("width_mm") or "0"))),
+                    str(Decimal(str(row.get("height_mm") or "0"))),
+                )
+            produced_folios.setdefault(key, []).append(
+                str(row.get("remnant_code"))
+            )
+        org_row = one(
+            "SELECT doc_paper_size, workshop_label_format "
+            "FROM public.tenancy_organizations WHERE id = %s",
+            [str(org_id)],
+            "organization_not_found",
+        )
         fingerprint = _optimization_fingerprint(optimization)
         html = _pack_html(
             order=order,
@@ -988,6 +1572,12 @@ def render_cut_pack(*, org_id: UUID, order_id: UUID) -> tuple[bytes, str]:
             bar_meta=_bar_context(org_id, bars),
             remnant_racks=remnant_racks,
             fingerprint=fingerprint,
+            produced_folios=produced_folios,
+            payload=payload,
+            label_format=str(
+                org_row.get("workshop_label_format") or "GRID"
+            ),
+            label_paper=str(org_row.get("doc_paper_size") or "LETTER"),
         )
     content = HTML(string=html, url_fetcher=_url_fetcher).write_pdf(
         pdf_identifier=f"cut-pack-{order['order_code']}",

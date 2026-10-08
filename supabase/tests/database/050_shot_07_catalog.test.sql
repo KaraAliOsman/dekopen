@@ -57,7 +57,7 @@ SELECT ok(EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='pu
 SELECT ok(EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='cutting_profiles' AND column_name='kerf_mm' AND data_type='numeric' AND numeric_precision=10 AND numeric_scale=2 AND is_nullable='NO'),'exact cutting_profiles.kerf_mm');
 SELECT ok(EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='cutting_profiles' AND column_name='head_trim_mm' AND data_type='numeric' AND numeric_precision=10 AND numeric_scale=2 AND is_nullable='NO'),'exact cutting_profiles.head_trim_mm');
 SELECT ok(EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='cutting_profiles' AND column_name='tail_trim_mm' AND data_type='numeric' AND numeric_precision=10 AND numeric_scale=2 AND is_nullable='NO'),'exact cutting_profiles.tail_trim_mm');
-SELECT is((SELECT count(*) FROM public.inspector_rule_configs),42::BIGINT,'all fourteen global configs');
+SELECT is((SELECT count(*) FROM public.inspector_rule_configs),168::BIGINT,'fourteen global configs per reference family');
 -- Exercise mutable catalog permissions on independent, unreferenced global rows.
 INSERT INTO public.profile_systems
 SELECT (jsonb_populate_record(NULL::public.profile_systems,to_jsonb(source)||

@@ -5,20 +5,28 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import type { CurrencyEnum } from "./currencyEnum";
+import type { CollectionMovement } from "./collectionMovement";
+import type { CollectionQuota } from "./collectionQuota";
 import type { PaymentStatusEnum } from "./paymentStatusEnum";
+import type { PricingCurrencyEnum } from "./pricingCurrencyEnum";
 import type { ProjectInvoice } from "./projectInvoice";
 import type { ProjectPayment } from "./projectPayment";
+import type { ReminderDraft } from "./reminderDraft";
+import type { SiiIntegrationState } from "./siiIntegrationState";
 
 export interface PaymentsSummary {
   payments: ProjectPayment[];
   invoices: ProjectInvoice[];
+  schedule: CollectionQuota[];
+  movements: CollectionMovement[];
+  sii: SiiIntegrationState;
+  reminder: ReminderDraft | null;
   collected: string;
   /** @nullable */
   quote_total_gross: string | null;
   /** @nullable */
   balance: string | null;
-  currency: CurrencyEnum;
+  currency: PricingCurrencyEnum;
   status: PaymentStatusEnum;
   /** @nullable */
   sealed_revision: string | null;

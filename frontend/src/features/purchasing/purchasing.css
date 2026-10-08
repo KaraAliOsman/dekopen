@@ -5,29 +5,29 @@
 }
 .purchasing-page h1,
 .purchasing-page h2 {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-12);
 }
 .purchasing-page header p {
   color: var(--theme-text-secondary);
 }
 .purchasing-page [role="alert"] {
-  color: var(--theme-danger);
+  color: var(--danger-ink);
 }
 .purchasing-version {
   color: var(--theme-text-secondary);
 }
 .purchasing-page label {
   display: grid;
-  gap: 0.3rem;
-  margin: 0.5rem 0;
+  gap: var(--space-4);
+  margin: var(--space-8) 0;
 }
 .purchasing-page input,
 .purchasing-page select {
   background: var(--theme-surface-panel);
   color: var(--theme-text-primary);
   border: 1px solid var(--theme-border-subtle);
-  padding: 0.6rem;
-  border-radius: 0.25rem;
+  padding: var(--space-8);
+  border-radius: var(--r-2);
   min-width: 0;
 }
 .purchasing-page input[type="checkbox"] {
@@ -35,7 +35,7 @@
   height: 1.25rem;
 }
 .purchasing-page button {
-  padding: 0.55rem 0.8rem;
+  padding: var(--space-8) var(--space-12);
   cursor: pointer;
 }
 .purchasing-page button:disabled {
@@ -43,17 +43,17 @@
   opacity: 0.6;
 }
 .purchasing-page .purchasing-cancel {
-  border: 1px solid var(--theme-danger, #b3261e);
-  color: var(--theme-danger, #b3261e);
+  border: 1px solid var(--theme-danger);
+  color: var(--danger-ink);
   background: transparent;
-  border-radius: 0.4rem;
+  border-radius: var(--r-2);
   font-weight: 500;
 }
 .purchasing-blockers {
   border: 1px solid var(--theme-danger);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin: 1rem 0;
+  border-radius: var(--r-2);
+  padding: var(--space-16);
+  margin: var(--space-16) 0;
 }
 .purchasing-blocker-link {
   background: none;
@@ -73,15 +73,15 @@
 .purchasing-blocker-link:focus-visible {
   outline: 2px solid var(--theme-accent);
   outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: var(--r-1);
 }
 .purchasing-type,
 .purchasing-orders,
 .purchasing-documents {
   border: 1px solid var(--theme-border-subtle);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin: 1rem 0;
+  border-radius: var(--r-2);
+  padding: var(--space-16);
+  margin: var(--space-16) 0;
   background: var(--theme-surface-panel);
   overflow-x: auto;
   max-width: 100%;
@@ -97,9 +97,9 @@
   min-width: 36rem;
 }
 .purchasing-badge {
-  margin-left: 0.75rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 0.5rem;
+  margin-left: var(--space-12);
+  padding: var(--space-2) var(--space-8);
+  border-radius: var(--r-2);
   border: 1px solid var(--theme-accent);
   color: var(--theme-accent);
   font-size: 0.8rem;
@@ -110,7 +110,7 @@
 }
 .purchasing-page td,
 .purchasing-page th {
-  padding: 0.5rem;
+  padding: var(--space-8);
   border-bottom: 1px solid var(--theme-border-subtle);
   text-align: left;
   vertical-align: top;
@@ -118,12 +118,13 @@
 .purchasing-page td small {
   display: block;
   color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
 }
 .purchasing-eligibility,
 .purchasing-confirm,
 .purchasing-order {
   border-top: 1px solid var(--theme-border-subtle);
-  padding: 0.75rem 0;
+  padding: var(--space-12) 0;
   overflow-x: auto;
   max-width: 100%;
 }
@@ -132,19 +133,19 @@
 }
 .purchasing-eligibility form {
   display: grid;
-  gap: 0.6rem;
-  margin-top: 0.75rem;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
 }
 .purchasing-eligibility fieldset {
   border: 1px solid var(--theme-border-subtle);
-  border-radius: 0.25rem;
+  border-radius: var(--r-2);
   display: grid;
-  gap: 0.4rem;
+  gap: var(--space-6);
 }
 .purchasing-order header {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-16);
   flex-wrap: wrap;
 }
 .purchasing-documents ul,
@@ -153,22 +154,22 @@
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 .purchasing-documents li,
 .purchasing-order li {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 @media (max-width: 760px) {
   .purchasing-page {
-    padding: 0.75rem;
+    padding: var(--space-12);
   }
 }
 
 .purchasing-coverage {
-  margin: 1rem 0;
+  margin: var(--space-16) 0;
   overflow-x: auto;
   max-width: 100%;
 }
@@ -181,25 +182,25 @@
 .purchasing-coverage th,
 .purchasing-coverage td {
   text-align: left;
-  padding: 0.3rem 0.5rem;
-  border-bottom: 1px solid var(--theme-line, #dde2e8);
+  padding: var(--space-4) var(--space-8);
+  border-bottom: 1px solid var(--theme-line);
 }
 .purchasing-coverage-alert {
-  color: var(--theme-danger, #b3261e);
+  color: var(--danger-ink);
   font-weight: 600;
 }
 .purchasing-coverage-short {
-  color: var(--theme-danger, #b3261e);
+  color: var(--danger-ink);
 }
 .purchasing-coverage-unit {
-  color: var(--theme-text-secondary, #667085);
+  color: var(--theme-text-secondary);
   font-size: 0.8em;
 }
 .inventory-remnant-filter {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
-  margin: 0.5rem 0 0.75rem;
+  gap: var(--space-6);
+  margin: var(--space-8) 0 var(--space-12);
   align-items: center;
 }
 .purchasing-receiving-scroll {
@@ -212,10 +213,10 @@
 .purchasing-stock-search {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  margin: 0.25rem 0 0.5rem;
+  gap: var(--space-8);
+  margin: var(--space-4) 0 var(--space-8);
   font-size: 0.85rem;
-  color: var(--theme-text-secondary, #667085);
+  color: var(--theme-text-secondary);
 }
 .purchasing-stock-search input {
   min-width: 14rem;
@@ -225,25 +226,25 @@
 }
 .inventory-remnant-filter .portal-view-toggle {
   border: 1px solid var(--theme-border-subtle);
-  border-radius: 999px;
-  padding: 0.3rem 0.7rem;
+  border-radius: var(--r-pill);
+  padding: var(--space-4) var(--space-12);
 }
 .inventory-remnant-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: 0.5rem 0.9rem;
+  gap: var(--space-8) var(--space-16);
   align-items: end;
-  padding: 0.75rem;
+  padding: var(--space-12);
   border: 1px dashed var(--theme-border-subtle);
-  border-radius: 0.4rem;
-  margin-bottom: 0.75rem;
+  border-radius: var(--r-2);
+  margin-bottom: var(--space-12);
 }
 .inventory-remnant-form .purchasing-hint {
   grid-column: 1 / -1;
   margin: 0;
 }
 .inventory-movements {
-  margin-top: 0.75rem;
+  margin-top: var(--space-12);
   overflow-x: auto;
   max-width: 100%;
 }
@@ -253,11 +254,11 @@
   font-weight: 600;
 }
 .inventory-movements table {
-  margin-top: 0.5rem;
+  margin-top: var(--space-8);
   min-width: 34rem;
 }
 .inventory-adjust {
-  margin-bottom: 0.9rem;
+  margin-bottom: var(--space-16);
 }
 .inventory-adjust summary {
   cursor: pointer;
@@ -266,49 +267,49 @@
 }
 .inventory-adjust-items {
   list-style: none;
-  margin: 0.5rem 0;
+  margin: var(--space-8) 0;
   padding: 0;
   display: grid;
-  gap: 0.3rem;
+  gap: var(--space-4);
 }
 .inventory-adjust-items li {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.3rem 0;
+  gap: var(--space-12);
+  padding: var(--space-4) 0;
   border-bottom: 1px solid var(--theme-border-subtle);
 }
 
 .purchasing-index {
-  border: 1px solid var(--theme-border, #e0e0e0);
-  border-radius: 0.75rem;
-  padding: 1rem;
-  margin: 0.5rem 0 1rem;
-  background: var(--theme-surface, #fff);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--r-2);
+  padding: var(--space-16);
+  margin: var(--space-8) 0 var(--space-16);
+  background: var(--theme-surface);
   overflow-x: auto;
 }
 .purchasing-index h2 {
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--space-8);
   font-size: 1rem;
 }
 .purchasing-index-filters {
   display: flex;
-  gap: 0.4rem;
+  gap: var(--space-6);
   flex-wrap: wrap;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-12);
 }
 .purchasing-index-filters button {
-  border: 1px solid var(--theme-border, #d5d5d5);
-  background: var(--theme-surface, #fff);
-  border-radius: 999px;
-  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-surface);
+  border-radius: var(--r-pill);
+  padding: var(--space-4) var(--space-12);
   font-size: 0.8rem;
 }
 .purchasing-index-filters button.is-active {
-  background: var(--theme-primary, #1a4f8f);
-  border-color: var(--theme-primary, #1a4f8f);
-  color: var(--theme-on-primary, #fff);
+  background: var(--theme-primary);
+  border-color: var(--theme-primary);
+  color: var(--theme-on-primary);
 }
 .purchasing-index table {
   width: 100%;
@@ -318,21 +319,21 @@
 .purchasing-index th {
   text-align: left;
   font-weight: 600;
-  color: var(--theme-text-muted, #666);
-  padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid var(--theme-border, #e0e0e0);
+  color: var(--theme-text-muted);
+  padding: var(--space-6) var(--space-8);
+  border-bottom: 1px solid var(--theme-border);
   white-space: nowrap;
 }
 .purchasing-index td {
-  padding: 0.45rem 0.5rem;
-  border-bottom: 1px solid var(--theme-border, #eee);
+  padding: var(--space-8) var(--space-8);
+  border-bottom: 1px solid var(--theme-border);
   white-space: nowrap;
 }
 .purchasing-index-row {
   cursor: pointer;
 }
 .purchasing-index-row:hover {
-  background: var(--theme-hover, #f4f7fb);
+  background: var(--theme-hover);
 }
 .purchasing-index-row:focus-visible {
   outline: 2px solid var(--theme-focus-ring);
@@ -341,19 +342,19 @@
 
 .purchasing-badge--expired {
   background: var(--theme-danger-soft);
-  color: var(--theme-danger);
-  border-color: var(--theme-danger);
+  color: var(--danger-ink);
+  border-color: var(--danger-ink);
 }
 .inventory-label {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
-  padding: 0.6rem 0.9rem;
-  border: 2px solid var(--theme-text, #1b1d21);
-  border-radius: 0.35rem;
-  background: var(--theme-surface, #fff);
+  gap: var(--space-16);
+  padding: var(--space-8) var(--space-16);
+  border: 2px solid var(--theme-text);
+  border-radius: var(--r-1);
+  background: var(--theme-surface);
   width: fit-content;
-  margin: 0.5rem 0 0.75rem;
+  margin: var(--space-8) 0 var(--space-12);
 }
 .inventory-label .qr svg {
   width: 26mm;
@@ -361,18 +362,18 @@
   display: block;
 }
 .inventory-label .inventory-label-id {
-  font-size: 0.72rem;
+  font-size: var(--type-dense);
   letter-spacing: 0.06em;
-  color: var(--theme-text-secondary, #667085);
+  color: var(--theme-text-secondary);
 }
 .inventory-label .inventory-label-name {
   font-size: 1.05rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.2;
 }
 .inventory-label .inventory-label-dims {
   font-size: 1.35rem;
-  font-weight: 800;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .inventory-label .inventory-label-rack {
@@ -380,8 +381,8 @@
 }
 .inventory-label-actions {
   display: flex;
-  gap: 0.4rem;
-  margin-top: 0.4rem;
+  gap: var(--space-6);
+  margin-top: var(--space-6);
 }
 @media print {
   body * {
@@ -407,16 +408,16 @@
 .purchasing-glance {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.5rem;
-  margin: 0.5rem 0;
+  gap: var(--space-8);
+  margin: var(--space-8) 0;
 }
 .purchasing-glance-cell {
   border: 1px solid var(--theme-border);
-  border-radius: var(--radius-md, 8px);
-  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-md);
+  padding: var(--space-8) var(--space-12);
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-2);
   background: var(--theme-surface);
 }
 .purchasing-glance-cell strong {
@@ -428,10 +429,10 @@
   color: var(--theme-text-secondary);
 }
 .purchasing-glance-cell.is-short {
-  border-color: var(--theme-danger, #b3261e);
+  border-color: var(--danger-ink);
 }
 .purchasing-glance-cell.is-short strong {
-  color: var(--theme-danger, #b3261e);
+  color: var(--danger-ink);
 }
 
 .purchasing-directory ul {
@@ -439,7 +440,7 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.4rem;
+  gap: var(--space-6);
 }
 .purchasing-directory-row {
   display: grid;
@@ -447,10 +448,10 @@
       180px,
       1.4fr
     );
-  gap: 0.75rem;
-  padding: 0.55rem 0.75rem;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--theme-border);
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   background: var(--theme-surface);
   align-items: center;
   font-size: 0.85rem;
@@ -491,6 +492,124 @@
   }
 }
 .purchasing-order-damaged {
-  color: var(--theme-danger, #b3261e);
+  color: var(--danger-ink);
   font-weight: 600;
+}
+
+/* P15 — separación compras/inventario, montos, sobre-recepción y retazos. */
+.purchasing-inventory-link {
+  font-size: var(--type-micro);
+  color: var(--theme-text-secondary);
+}
+.purchasing-inventory-link a {
+  color: var(--theme-accent);
+  font-weight: 600;
+}
+.purchasing-order-total {
+  font-size: 0.85rem;
+  color: var(--theme-text-primary);
+  margin: var(--space-4) 0;
+}
+.purchasing-order-lines {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-4) 0;
+  font-size: 0.8rem;
+  color: var(--theme-text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.purchasing-price {
+  margin-top: var(--space-4);
+}
+.purchasing-price input {
+  width: 8.5rem;
+  font-size: 0.8rem;
+}
+.purchasing-over-receipt {
+  border: 1px solid var(--theme-warning);
+  background: var(--theme-warning-soft);
+  border-radius: var(--r-2);
+  padding: var(--space-8) var(--space-12);
+  margin: var(--space-8) 0;
+}
+.purchasing-over-receipt p {
+  margin: var(--space-4) 0;
+  font-size: 0.8rem;
+  color: var(--theme-text-secondary);
+}
+.purchasing-remnant-offers {
+  margin-top: var(--space-12);
+  border-top: 1px solid var(--theme-border-subtle);
+  padding-top: var(--space-8);
+}
+.purchasing-remnant-offers h3 {
+  font-size: 0.85rem;
+  margin: var(--space-4) 0;
+}
+.purchasing-remnant-offer ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  font-size: 0.8rem;
+}
+.purchasing-remnant-offer select {
+  margin: 0 var(--space-4);
+  font-size: 0.8rem;
+}
+.inventory-remnant-old td {
+  background: var(--theme-warning-soft);
+}
+.inventory-remnant-old td:first-child {
+  border-left: 3px solid var(--theme-warning);
+}
+.inventory-age-alert {
+  color: var(--theme-warning);
+  font-weight: 600;
+}
+.inventory-remnant-rack input,
+.inventory-remnant-order select,
+.inventory-scrap input {
+  font-size: 0.8rem;
+  margin-right: var(--space-6);
+}
+.inventory-movement-doc,
+.inventory-movement-lot,
+.inventory-movement-actor {
+  color: var(--theme-text-secondary);
+  font-size: 0.78rem;
+}
+.inventory-actions {
+  display: flex;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+.inventory-search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  font-size: var(--type-micro);
+  color: var(--theme-text-secondary);
+  margin: var(--space-8) 0;
+}
+.inventory-search input {
+  max-width: 22rem;
+}
+
+/* ——— P15: objetivos táctiles ≥ 44 px en /inventory ———
+ * Misma regla que el tablero de producción (constitución §3.7 + auditoría
+ * ux:capture): ningún control de la superficie baja de 2.75 rem. */
+.inventory-page input:not([type="checkbox"]),
+.inventory-page select,
+.inventory-page button,
+.inventory-page label,
+.inventory-page summary {
+  min-height: 2.75rem;
+}
+.inventory-page .fmt-code {
+  min-height: 2.75rem;
+  align-items: center;
 }

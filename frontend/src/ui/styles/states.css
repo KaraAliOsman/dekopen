@@ -1,0 +1,15 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* ---------- estados bloqueados ---------- */
+.ui-empty--blocked .ui-empty__glyph {
+  color: var(--warn);
+}
+
+/* ---------- "sin datos" en línea ---------- */
+/* Una sola piel para el texto atenuado de lista/tabla vacía — antes vivía
+ * como .ws-empty/.art-empty/.aiws-empty con la misma función. */
+.ui-empty-inline {
+  margin: 0;
+  color: var(--theme-text-muted);
+  font-size: var(--type-dense);
+}

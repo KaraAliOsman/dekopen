@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { t } from "../../i18n/es-CL";
+import { useCanvasStore } from "./canvasStore";
 import {
   type Box,
   clampViewToBox,
@@ -24,10 +25,10 @@ import {
 } from "./viewport";
 
 /** Canvas viewport: a pannable/zoomable drawing sheet. Content renders in mm
- * coordinates inside a `<g transform>` the viewport owns. Wheel pans,
- * Ctrl/⌘+wheel zooms to the cursor, space or middle-drag pans, Shift+1 fits,
- * Shift+2 zooms to the selection, Shift+0 restores 100%. A floating island
- * bottom-left carries the same controls; the status readout sits bottom-right. */
+ * coordinates inside a `<g transform>` the viewport owns. Wheel zooms to the
+ * cursor (P04), space or middle-drag pans, Shift+1/F fits, Shift+2 zooms to
+ * the selection, Shift+0 restores 100%. A floating island bottom-left carries
+ * the same controls; the status readout sits bottom-right. */
 
 const PAN_STEP = 60;
 
@@ -45,6 +46,7 @@ export function CanvasViewport({
   selectionBox,
   status,
   contentEpoch = 0,
+  onViewChange,
   children,
 }: {
   contentBox: Box;
@@ -54,6 +56,9 @@ export function CanvasViewport({
    * pick, another design loaded) — a manual pan/zoom latch must not leave
    * the new product rendered off-viewport. */
   contentEpoch?: number;
+  /** Live transform readout — overlays that draw in model space (the Medir
+   * ruler, the proposal ghost) need `scale` to counter-size their marks. */
+  onViewChange?(view: ViewTransform): void;
   children: ReactNode;
 }): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -77,6 +82,11 @@ export function CanvasViewport({
   const lastFitBoxRef = useRef<Box | null>(null);
   const lastFitSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
   const lastEpochRef = useRef(0);
+  // External "Ajustar a pantalla" requests — the F key / command surface
+  // bumps the store's fitEpoch; each bump re-fits and clears the manual
+  // latch so the refit actually lands.
+  const fitEpoch = useCanvasStore((state) => state.fitEpoch);
+  const lastFitEpochRef = useRef(fitEpoch);
 
   const fit = useCallback(() => {
     lastFitBoxRef.current = contentBox;
@@ -140,6 +150,13 @@ export function CanvasViewport({
       fit();
   }, [fit, size, contentBox, contentEpoch]);
 
+  useEffect(() => {
+    if (fitEpoch === lastFitEpochRef.current) return;
+    lastFitEpochRef.current = fitEpoch;
+    userInteractedRef.current = false;
+    fit();
+  }, [fitEpoch, fit]);
+
   // Space held → pan mode. Listen on window so it works wherever focus sits —
   // except inside form fields, where Space must type a space.
   useEffect(() => {
@@ -184,24 +201,25 @@ export function CanvasViewport({
         setView((current) =>
           zoomAt(current, event.clientX - rect.left, event.clientY - rect.top, factor),
         );
-      } else if (event.shiftKey) {
-        setView((current) =>
-          clampViewToBox(
-            panBy(current, -event.deltaY, 0),
-            boxRef.current,
-            sizeRef.current.w,
-            sizeRef.current.h,
-          ),
-        );
       } else {
-        setView((current) =>
-          clampViewToBox(
-            panBy(current, -event.deltaX, -event.deltaY),
-            boxRef.current,
-            sizeRef.current.w,
-            sizeRef.current.h,
-          ),
-        );
+        // P04 — la rueda desnuda ZOOMA hacia el cursor (la instrucción del
+        // encargo sobre el estudio §4): el pan queda en espacio+arrastre,
+        // botón medio y flechas. Shift+rueda = pan horizontal, como en CAD.
+        const factor = Math.pow(1.0015, -event.deltaY);
+        if (event.shiftKey) {
+          setView((current) =>
+            clampViewToBox(
+              panBy(current, -event.deltaY, 0),
+              boxRef.current,
+              sizeRef.current.w,
+              sizeRef.current.h,
+            ),
+          );
+        } else {
+          setView((current) =>
+            zoomAt(current, event.clientX - rect.left, event.clientY - rect.top, factor),
+          );
+        }
       }
     };
     host.addEventListener("wheel", onWheel, { passive: false });
@@ -284,6 +302,10 @@ export function CanvasViewport({
   );
 
   const percent = Math.round((view.scale / SCALE_100) * 100);
+
+  useEffect(() => {
+    onViewChange?.(view);
+  }, [view, onViewChange]);
   const menu = useMemo(
     () => [
       {

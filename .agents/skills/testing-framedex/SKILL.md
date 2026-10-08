@@ -449,3 +449,402 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - Remnant "Etiqueta" renders `.inventory-label` inline (no close button); "Imprimir" → `window.print()` w/ `@media print` isolating the label (24-page count in dialog is harmless — hidden content). Print dialog BLOCKS CDP websocket — cancel it via GUI before continuing.
 - Doc generators ("Generar / abrir", DOC-0x PDF/XLSX) call `window.open(signed_storage_url)` — stub `window.open` to capture the URL, then `urlretrieve` and verify `%PDF`+`%%EOF`/PK.
 - Mobile pass: `Emulation.setDeviceMetricsOverride width=390 dsf=0 mobile=false` — must re-check `innerWidth` after nav (mobile=true can yield iw≠width).
+
+## Phase-16 evidence-harness notes
+- **OWNER TOTP vault**: `dev_fixture.py` does NOT enroll a factor — `frontend/scripts/ux-capture/auth.ts` enrolls on first run and persists the base32 secret to `.fixture-state.json` under `totp` (`{"<email>": "<BASE32>"}`). Reuse it for manual tests:
+  `cd frontend && node -e "const O=require('otpauth');console.log(new O.TOTP({digits:6,period:30,secret:O.Secret.fromBase32('<B32>')}).generate())"`.
+  With a factor enrolled, `/auth/mfa` shows the challenge form directly.
+- **Multi-org selector**: `/select-organization` only renders when `/api/v1/auth/me` 409s `organization_selection_required` — no persisted org pick. The app stores it in `localStorage["dekopen.active_org.<user-id>"]`; sign-out does NOT clear it. To force the selector in a reused profile: DevTools → Application → Local Storage → delete `dekopen.active_org.*`, keep `sb-` auth-token, navigate to `/select-organization`.
+- **Expected console noise** in the owner login: `me` 409 (org-selection) then 403 `mfa_required` — the contract, not errors.
+- **Fixture rerun safety**: `supabase start` after a container wipe creates a FRESH DB — re-run `SUPABASE_SERVICE_ROLE_KEY=… .venv/bin/python scripts/dev_fixture.py` and re-read `.fixture-state.json` (the script is idempotent per-DB; a state file from a wiped DB is stale but harmless — it just re-seeds).
+- `node` resolves via nvm (v24.x) — `npm run ux:capture` (`--experimental-strip-types`) works as-is; `~/node22` is stale.
+- `browser_console`/CDP only works when Chrome was launched with `--remote-debugging-port`; otherwise use F12 DevTools UI.
+
+## D04 herrajes inspector/OT notes
+- **Design-options API** (`/api/v1/projects/design-options/{system_id}/`): kits under `hardware_kits` (not `kits`), parts under `contents` (not `components`). Decimals serialize as STRINGS (`"60"`, `"500"`) — `typeof x === "number"` checks fail silently on these fields; use the `num()` coercion helper (qty_rule's `per_mm > 0` survives coercion; `cut_rule.minus_mm` typeof checks do not).
+- **Inspector «Herrajes»**: bay select = click the tree `button:has-text("Oscilobatiente izquierda")` (or the bay rect); section is a `<details>` CLOSED when the bay has no explicit `hardware_set_sku` — click its `summary`; nested «¿Por qué este kit?» and «Avanzado» each need their own summary click. «Altura de manilla (mm)» DraftField lives in the «Relleno» section; the out-of-range hint renders inside «Herrajes».
+- **Avanzado table prefers engine-emitted BOM lines** (`resolvedHardware.contents` with real `qty`/`length_mm` from the finished leaf) when the last calc covers the same kit + option set; the local mirror on the bay envelope is only the pre-calculation fallback. If inspector Largo ≠ OT picking length, that's the bug signature.
+- **OT deep-link**: `/production?order=<order_uuid>` selects the order directly; `hardware_picking`/`hardware_machining` live in `public.orders.payload_json` — no dedicated UI, verify via API/DB.
+- **Playwright scripts outside `frontend/` can't resolve `@playwright/test`** — import via absolute path `"/home/ubuntu/repos/dekopen/frontend/node_modules/@playwright/test/index.mjs"`.
+- **Mailpit**: message DETAIL has no `Created` field (only `Date`); filter newest on the `/api/v1/messages` LIST item's `Created` before fetching detail.
+- `locator.screenshot()` on `<details>` can fail ("not visible or not an HTMLElement") — take a `page.screenshot()` after `summary.scrollIntoView()`.
+- Force theme in a fresh context: `context.addInitScript(() => localStorage.setItem("dekopen.theme", "dark"))` (values `"light"`/`"dark"`, applied to `documentElement.dataset.theme`).
+
+## D03 aperturas/emisión notes
+- **Emit happy path**: project → "Agregar vanos" → starter → Serie de perfiles → inspector «Relleno»: pick Espesor + Vidrio (required or Guardar stays disabled) → "Cotizar proyecto" → confirm → "Calcular y revisar" → "Aprobar y aplicar precios" → ▼Cotización → "Preparar emisión" → pago + validez + per-vano selects (manillas/refuerzos stay on "Seleccionar autoridad técnica", NOT auto-selected) → "Usar sugeridas" on suggested handle heights → confirm → "Emitir cotización". Freeze is all-or-nothing across vanos.
+- **runjobs needs the runserver env**: `manage.py runjobs --once` without `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_JWT_VERIFY_MODE` permanently fails `document.artifact.generate` with `document_storage_not_configured` — missing env, NOT a missing bucket. Requeue: `UPDATE job_runs SET state='QUEUED', attempt=0, error=NULL, run_after=now(), locked_at=NULL, locked_by=NULL, completed_at=NULL, started_at=NULL WHERE id=...`.
+- **FIXED_SASH leaf facts take no kit by design** (`opening:{movement:FIXED, fixed_in_sash:true}` → `FIXED_SASH`/`DOOR:FIXED_SASH` leaf with `kit=None`, zero candidates). D03 shipped the inspector skip (`inspector.py` continues past leaves whose trace key ends `:FIXED_SASH`); before it, `NoCompatibleHardwareKit` aborted every freeze containing one. Diagnose leaf kits in-shell via `documents.service._position_calculations(tree, params)` → `leaf.selected_kit`/`leaf.candidates`.
+- **R02 door-ratio is YELLOW, not a block**: seeded R02 = [0.40, 2.50]; standard door leaves run ~2.7–2.9 → `Proporción de la hoja` warning, never `inspector_red_blocks` (R02 is in `_YELLOW_RULES`; status stays YELLOW → freeze proceeds, incomplete-documentary at worst). To keep a door finding-free on the fixture, size leaf w ≥ h/2.5.
+- **Freeze error surface is generic**: the UI banner ("Falta o no coincide una autoridad técnica") hides the per-vano reason — it travels in `DocumentaryError.extra["inspector_failures"]` (rule/severity/bay/leaf per entry). Reproduce without UI in `manage.py shell` via `documents.service.freeze_revision_a(..., allow_incomplete_workshop=True)`; `ValueError`s wrap as `Vano «N»: <error>`.
+- **Fitting SKUs need EA cost items**: any `fitting.sku` (e.g. `TORNILLO-4X16`) must exist in `cost_list_items` with `unit='EA'`, else pricing 422s `cost_list_not_found`. Seeded into D03 Test Supplier `11111111-2222-3333-4444-555555555555` (keep it).
+- **Door-unit sidelights**: frame-fixed lateral = `opening:{movement:FIXED}` + glass; sash-fixed inside a DOOR unit = `fixed_in_sash:true` + `panel_article_sku` (door sash requires panel, glass-only is rejected).
+
+## D07 vano→fabricación inspector notes
+- **Inspector mechanics**: clicking the canvas SELECTS a pane, it does not deselect — press **Escape** (`edit.deselect`) AND activate the "Vista general" tab in the inspector's detail switcher to reach "Vano y materiales" → `<details> "Vano y montaje"`. The right inspector is its own scroll container; the canvas zoom/fit control can render offscreen — verify fine print with zoom-region screenshots.
+- **Measurement state machine**: CLIENT_DECLARED → SITE_RECTIFIED → CONFIRMED. `positionsMeasurementConfirm {confirmed}` toggles CONFIRMED ↔ SITE_RECTIFIED ("Confirmar para producción" / "Reabrir medida"). A save whose measurement payload differs resets CONFIRMED→SITE_RECTIFIED; an unchanged payload keeps the state ("1700"→"1700.00" is unchanged semantically). CONFIRMED carries `Confirmada YYYY-MM-DD`.
+- **Guardar gates**: no dirty gate — disabled only by validation flags, notably `vanoInvalid` when "Fijar medida de fabricación a mano" is checked but dims are empty. An *incoherent* lock only warns, Guardar stays enabled; saving with an unconfirmed measure works (the confirm gate lives in OT release, not the editor).
+- **Descuadre vs tolerance**: >1 point per axis shows "Se usa la menor" + `Descuadre {spread} mm — manda la menor.` whenever spread>0, but the red engine warning fires only when spread is STRICTLY > org `vano_spread_tolerance_mm` (default 10). Spread == tolerance shows the note WITHOUT the warning — useful boundary.
+- **Preview + chip reactivity**: header chip and inspector preview come from a 350 ms-debounced `positionsMeasurementResolve` — they update live on keystrokes, no save needed. Manual lock shows badge "Fijada a mano" + headline lock dims + warnings "La medida fijada no es coherente…" / "El producto no se está fabricando con la medida fijada manualmente."
+- **Fixings/extensions render**: `authority.fixings` seeds use `{label, qty_per_unit, note}` and `frame_extensions` use `{side, label, mm}` — NOT `code`. VanoSection maps label+qty (`"Anclaje perimetral ×8"`). (Bug found & fixed in D07: reading `fixing.code` rendered an always-empty line.)
+- **DB check**: `docker exec supabase_db_dekopen psql -U postgres -d postgres -tA -c "SELECT rough_opening_input, measurement_state, measurement_confirmed_at, fabrication_lock, mounting_rule_id FROM project_positions WHERE id='…';"` — fixture record: `width_points_mm:["1620.00","1700.00"]`, `height_points_mm:["1220.00"]`, CONFIRMED, lock NULL, rule EN_VANO (`d441e283-4005-45a3-be70-5324284327e4`, −10 mm/side).
+
+## D06 extras/servicios inspector notes
+
+## Extras panel ("Extras de la posición") gating
+
+- The right-rail extras panel renders ONLY when the detail level is "Vista general"
+  AND nothing is selected in the tree/canvas. Detail level defaults to "Diseño"
+  (AssemblyEditor.tsx). To reach it: click empty canvas or press Escape (may need
+  two attempts — the first Escape can land on a focused input), then click the
+  "Vista general" tab button, then scroll the `devin-scrollable` rail — the panel
+  sits below "Vano y materiales".
+- Suggestion chips (e.g. "Mosquitero enrollable — Las ventanas practicables suelen
+  llevar mosquitero") appear only when the article isn't already in the extras list
+  and the engine's `extra_suggestions` emit a cause.
+
+## Page layout quirk on /positions/new and /edit
+
+- The editor page does NOT scroll — it's a fixed-height app shell. An expanded
+  "Biblioteca de diseños" `<details>` pushes the canvas+tree+rail row below the
+  viewport with no way to scroll to it. Click the "Biblioteca de diseños" summary
+  to collapse it and reveal the canvas row. The right rail scrolls independently
+  inside `devin-scrollable`.
+
+## Unsaved-change guards (two distinct ones)
+
+- In-app React-Router guard on internal navigation: dialog "Hay cambios sin
+  guardar. ¿Quieres salir y descartarlos?" with Cancelar/Confirmar — Confirmar
+  discards and proceeds.
+- Browser beforeunload "Leave site?" fires on ctrl+l URL-bar navigation with
+  dirty state; clicking "Leave" sometimes reloads in place instead of navigating
+  — prefer in-app links ("Volver al proyecto") and the in-app guard.
+
+## Extras persistence — defect signature and the fixed shape (D06)
+
+- FIXED at 6ae7a3c4 (devin/D06-accesorios-extras): `designPayload()` in
+  ProjectPositionEditor.tsx used to emit `parametric_tree: single.tree` (raw
+  IntentNode) for `isSingleUnit(product)`, dropping `product.extras` on the
+  product-v2 wrapper. Now gated by `hasExtras`: single+extras →
+  `parametric_tree: product` (version "product-v2"); single+NO extras still
+  saves the classic bare tree. `pickStarter()` also copies `product.extras`
+  onto the swapped starter product (template-seeded extras survive a
+  design-library swap).
+- Pre-fix symptom (if it regresses): add extras → Guardar → "Cambios
+  guardados." → reload → "Sin accesorios declarados para este vano." DB check:
+  `parametric_tree->>'version'` NULL, `parametric_tree->'extras'` NULL,
+  `bom_snapshot->'extra_lines'` = [].
+- Post-fix DB shape for a single-unit position WITH extras: `version` =
+  "product-v2", `extras` array (e.g. `[{"sku":"EXT-MOSQ-ENR",...}]`),
+  `extra_lines` populated. Removing all extras + save round-trips back to
+  classic (version/extras NULL) — both directions are worth checking.
+- The extras panel also renders on /positions/new BEFORE first save (org
+  templates pre-merge into the default product) — you can verify template
+  seeding and starter-swap survival without ever saving the position.
+
+## BOM (Despiece y materiales) on the project page
+
+- Select a position row, expand "Despiece y materiales" in the right rail; it
+  contains Perfil cuts, Vidrio, kit, Herrajes (Artículo | Herrajes | Cantidad),
+  Refuerzos tables. Counted extras land as Herrajes rows with the article SKU in
+  the Artículo column and the human name (e.g. "Mosquitero") in the Herrajes
+  column — raw enum values like MOSQUITO_SCREEN must not appear; length extras
+  appear as profile cuts (e.g. ENS-PVC-60).
+- BOM tables also render inside the /edit page below the canvas ("Despiece y
+  materiales" details).
+
+## Interaction traps hit while testing (computer-use)
+
+- Chrome omnibox autocompletes typed paths to history entries — typing a
+  project URL can land on a recently-visited /positions/<id>/edit instead.
+  Prefer in-app links ("Volver al proyecto", breadcrumbs, position rows);
+  reserve URL-bar nav for fresh paths or verify the landed URL afterwards.
+- Label-vs-input misclick: in the position editor form, the "Ubicación del
+  vano" label sits ~20px above its input — clicking the label does nothing and
+  the subsequent typing goes nowhere (looks like a silent failure). Click the
+  rendered field TEXT, not the label; verify via DOM `text=` that the value
+  changed before saving.
+- An in-app link click can silently no-op (no navigation, no dialog) — retry
+  once, then fall back to URL-bar nav + the native beforeunload dialog.
+
+## Coupled-position build recipe (needed to exercise extras persistence)
+
+- /positions/new → pick a coupled starter OR: single module → "Agregar unidad a
+  la derecha" toolbar button. Then every module needs Marco+Hoja+Vidrio assigned
+  and the joint needs an Acoplador article (select the "Acoplador ? · 0.0°" tree
+  node → Acoplador select → COPLE-60 for 0°). Guardar enables at "Geometría
+  válida" even with fabricación-incompleta observations in some builds; fully
+  assigned modules clear all observations.
+
+## ai_gateway (IA3) surfaces
+
+- **Modes — env AND DB must agree**: LIVE needs `AI_GATEWAY_MIMO_API_KEY`+`BASE_URL` set, `AI_GATEWAY_MOCK_ENABLED=0`/unset AND `ai_routes.provider='MIMO'`; TEST needs `AI_GATEWAY_MOCK_ENABLED=1` AND `UPDATE ai_routes SET provider='MOCK'`. `MOCK_ENABLED` alone doesn't reroute. Restart `runserver --noreload` AND `runjobs` after either change.
+- **Worker required**: `manage.py runjobs --poll 1.5` — agent jobs are async; no worker = QUEUED forever. MOCK rounds finish <250ms; to verify phase UI inject a RUNNING `ai_jobs`+`job_runs` row with `progress_phase='context'|'model'|'proposal'` and open `/assistant?job=<id>`.
+- **pgrep footgun**: `pgrep -f "manage[.]py" | xargs kill` can match your own exec shell's cmdline — `ps aux | grep -E 'manage[.]py (runserver|runjobs)'` and kill explicit PIDs; `cd` does not carry to a second `setsid` in one call (use absolute manage.py path).
+- **Headless capture reuse**: `frontend/scripts/ux-capture/auth.ts` `loginAs(page, email, {totp, orgName})` does real magic-link+TOTP login; standalone scripts must live under `frontend/scripts/` (module resolution is file-relative — /tmp scripts can't import @playwright/test); `context.storageState()` once → loop `{viewport, colorScheme, url}`; theme = colorScheme, not localStorage.
+- **OWNER TOTP bootstrap**: fixture creates no MFA — `INSERT INTO auth.mfa_factors (id,user_id,factor_type,status,secret,created_at,updated_at) VALUES (uuid,uid,'totp','verified',<base32>,now(),now())` (created_at/updated_at NOT NULL) + store same secret in `.fixture-state.json` `totp["<email>"]`.
+- **aal2 token via REST (curl aal2-gated APIs like /ai/ops-contract/)**: `POST /auth/v1/token?grant_type=password` (apikey: anon) → aal1 token; `GET /auth/v1/user` → `factors[0].id`; `POST /auth/v1/factors/<id>/challenge` → challenge_id; TOTP via hmac(base32decode(secret), time//30, sha1); `POST /auth/v1/factors/<id>/verify {challenge_id, code}` → aal2 token; `curl -H "Authorization: Bearer <aal2>"`.
+- **Probes vs consumption**: `/ai/provider/check/` writes `kind='probe'` rows (visible in activity) but month usage counts `kind='call'` only — probes never raise "Con error" or consume budget.
+
+## P25 additions (brand/mail E2E)
+
+- **Stale code trap generalizes**: `runserver --noreload` serves the code from
+  launch time — after ANY backend commit kill and relaunch with env sourced,
+  or fixes appear absent (verified: a portal payload change looked missing
+  until restart).
+- **Zero-factor OWNER TOTP enroll via UI** (no SQL): if admin API shows
+  `factors: []`, the MFA sheet offers "Configurar autenticador" → manual
+  secret at `data-testid="totp-secret"` → 6-digit code via stdlib TOTP
+  (`base64.b32decode(secret)` + hmac-sha1 + `struct.pack('>Q', t//30)`) →
+  "Verificar" lands on dashboard as Propietario.
+- **Fixture accounts** (`.fixture-state.json`): `demo-estimator@…` (ESTIMATOR,
+  no MFA, best default), `demo-manager@…` (WORKSHOP_MANAGER), `demo-owner@…`
+  (aal2), `demo-multi@…` (org selector → pick "Ventanas del Sur SpA" via
+  `.org-option`).
+- **browser_console async**: promise results aren't serialized — write to
+  `window.__x` in `.then()` and read `window.__x` on the next call.
+- **Endpoint checks without cookie tricks**: in-page
+  `fetch('/api/v1/…', {headers:{'X-Organization-ID': orgId}})` exercises the
+  same auth path as the app; assert status/content-type directly (verified
+  `branding/logo/` → 200 `image/png`).
+- **OfflineOverlay**: `window.dispatchEvent(new Event('offline'))` hits the
+  real component; dispatch `'online'` to clear.
+- **iframe mail previews**: `/dev/correos` (DEV-only; 404 unless DEBUG or
+  MAIL_DEV_PREVIEWS=1) renders `iframe.dev-mail__frame` — assert
+  `frame.srcdoc` contains `data:image/png;base64` + org hex instead of
+  shooting every template.
+- **Mobile viewport without devtools**: `wmctrl -r :ACTIVE: -b
+  remove,maximized_vert,maximized_horz && wmctrl -r :ACTIVE: -e
+  0,300,10,430,740`.
+- **Dark login capture**: `dekopen.theme` in localStorage only applies inside
+  the shell — to shoot a dark login, toggle dark while logged in, sign out,
+  then `/login` renders dark.
+## Settings / org-branding surface (P09)
+
+- `/settings/general` is behind ReadyGuard only — NO route-level role gate.
+  The left-rail "Administración" nav item is gated
+  `OWNER || WORKSHOP_MANAGER` (AppShell `navigationAllowed`), but the
+  org-branding card (incl. the "Documento comercial" fieldset:
+  `doc_paper_size` select + 5 `doc_terms` textareas) renders for
+  `OWNER || ESTIMATOR` (`canWriteDocs`). An ESTIMATOR fixture user can view
+  AND save org doc settings — navigate to `/settings/general` directly; the
+  nav link simply isn't shown.
+- Org-branding/doc-settings UI testing does NOT need an OWNER account
+  (avoids the aal2/MFA enrollment wall). ESTIMATOR suffices: RLS policy
+  `tenancy_organizations_branding_update` allows `OWNER`/`ESTIMATOR` and the
+  column grant covers `doc_paper_size`/`doc_terms`.
+- Fixture org insert needs only `{id, name, tax_id}` — every other
+  `tenancy_organizations` column (country, currency, subscription_tier,
+  doc_paper_size='LETTER', doc_terms='{}') has a default.
+- Save path: one shared "Guardar marca" submit writes brand fields + doc
+  fields together; empty/whitespace `doc_terms` values are stripped
+  client-side before POST and land as absent keys (verify with
+  `SELECT doc_paper_size, doc_terms FROM tenancy_organizations`).
+
+## P03 shell/stack learnings (2026-10-06)
+
+- `supabase status -o env` emits `KEY="VALUE"` shell lines, NOT JSON — extract with `grep -o 'SERVICE_ROLE_KEY="[^"]*"' | cut -d'"' -f2`. A JSON-shaped grep returns empty silently → `invalid_token` 401 everywhere and magic links never reaching Mailpit.
+- Fixture `scripts/dev_fixture.py` orgs: "Ventanas del Sur SpA" (6 miembros) + "Cristales del Norte Ltda." (2, casi sin datos — `demo-multi` es ESTIMATOR en ambas y es el único camino fiable al estado vacío «Todo al día»). Cuentas `demo-{owner,estimator,manager,operator,installer,multi}@fixture.dekopen.local`; estado en `.fixture-state.json` (incluye la semilla TOTP del OWNER aal2 — TOTP se deriva con hmac-sha1 sobre el base32, counter=time//30, sin pyotp).
+- Códigos del fixture que existen: `P-000001..13`, `OC-000001..4`, `RT-000001..72`, OTs de taller solo `OT-P-000007/8/9-REV-A-*` (no existe `OT-P-000005*`); cliente «Inmobiliaria Los Alerces Ltda.».
+- `GET /api/v1/analytics/today/` es la cola «Hoy» (no `/api/v1/today/`). Destinos de búsqueda Ctrl K: proyectos→`/projects/{id}`, clientes→`/clients`, OC→`/purchasing`, RT→`/inventory`, OT→`/production`.
+- Superficie IA (orb, AskDekopen, badge «Modo de prueba», /assistant, /jobs) monta SOLO para OWNER/ESTIMATOR/WORKSHOP_MANAGER — OPERATOR/INSTALLER deben emitir 0 requests `/api/v1/ai/*` (verificar con `performance.getEntriesByType('resource')` + log de Django).
+- StrictMode firma de bug: página monta directo en estado de error con los GETs 200 — el doble-montaje aborta el primer fetch y `.catch→setFailed` gana la carrera contra el segundo fetch. Todo `useRef(new AbortController())` reemplazado en effect + precedencia `failed` sobre datos es sospechoso también en remontajes por cambio de org.
+- `?` no se puede teclear vía xdotool (`key "?"`/`type "?"` llegan como `\u0000`) — usar `key shift+slash`. `wmctrl -r :ACTIVE: -e 0,x,y,w,h` redimensiona la ventana. Para 390px usar DevTools device toolbar con preset iPhone y verificar `document.documentElement.clientWidth` (innerWidth miente). Overflow horizontal: `scrollWidth` vs `clientWidth` — `scrollLeft` se clampa a 0 cuando el overflow viene de elementos fijos.
+- Node real del box: `~/.nvm/versions/node/v24.19.0/bin` (la referencia vieja a `~/node22` puede no existir — comprobar).
+
+## AskDekopen dock + assistant/jobs surface (P17 learnings)
+
+- The AskDekopen dock (section aria-label="Preguntar a DEKOPEN") is a 400px
+  right drawer: at viewport ≥1024px the workspace reserves its width (content
+  pushes left); below that it overlays the page — close it via the × before
+  clicking right-edge controls; it reopens via the topbar "IA"/orb button and
+  its open state persists across navigations (sessionStorage `dk:askdock`).
+- Agent runs settle in <1s under the MOCK provider — screenshotting a live
+  thinking/working Orb mid-run is luck. Capture the DOM busy line
+  ("N% · En cola/Ejecutando… · Cancelar") instead; the 15fps recording still
+  shows ring animation frames.
+- Sending a dock prompt with chips: suggestion chips sit at the bottom of the
+  thread — coordinates drift as turns stream in; re-screenshot before clicking.
+- OpsProposalCard: "Aplicar N operaciones" is disabled with title
+  "El producto cambió — genera de nuevo para aplicar." whenever the live product
+  sig differs from the proposal's (stale guard). After Ctrl+Z restores the
+  product, older pending cards become apply-able again (sig matches).
+- Dock cards DO restore applied/declined outcomes on remount: `threadFromJob`
+  seeds each turn's outcome sets from `job.outcomes` (server dedupes per
+  (turn, step, action)); the workspace /assistant?job=<id> reads the same
+  source — both surfaces agree after a reload/reopen.
+- /jobs: state filter sets ?state=QUEUED etc. via a native <select> — click the
+  element then Down/Return; it must be focused (dock must not cover it).
+  Actor column is resolved via memberships→auth.users; object label is
+  "Pos. NN <location> · P-######" built in SQL from position_index.
+- Audit deep-link: dock card "Ver auditoría" and jobs "Abrir en el asistente"
+  both land on /assistant?job=<ai_job_id> (the job_runs.payload->>'ai_job_id'
+  provides the link). The "N créditos · N tokens" header counts that job's
+  operation_key plus its :rN/:gN round suffixes — a separate send is a
+  separate ai_jobs row with its own key, so per-job spend is correct
+  (verified: header == the job's own invocations exactly).
+- Role gate recipe: login as a fixture OPERATOR/INSTALLER (magic link via
+  Mailpit) — the SPA restores the last URL, so landing directly on /jobs after
+  login exercises the denied view: nav collapses to role-allowed entries, no
+  orb/badge/dock mount, denied text renders instantly (query disabled).
+- Magic-link: the /verify?token=...&redirect_to= URL from Mailpit can be pasted
+  straight into the address bar — no need to click it inside an email client.
+
+## P07 pricing-workspace learnings
+
+- **Mail delivery requires SMTP env on the runjobs worker**: default `MAIL_PROVIDER=sandbox` only writes `mail_messages` rows — nothing reaches Mailpit. To see real mail (pricing_decision, quote emails) restart the worker with `MAIL_PROVIDER=smtp MAIL_SMTP_HOST=127.0.0.1 MAIL_SMTP_PORT=25325 MAIL_SMTP_TLS=0 MAIL_FROM=noreply@dekopen.cl` (Mailpit SMTP is :25325, UI :25324). The runserver process may keep `sandbox`; the Ajustes → "Correo transaccional" card then shows Sandbox while worker-delivered mail lands in Mailpit — expected, not a bug.
+- **Verify mail end-to-end**: `mail_messages` (status/provider/error/to_email/template) + `job_runs` (columns: type,state,error,attempt — NOT kind/status). `pricing_decision` mails go to `requested_by_email` with subject `[DEKOPEN] Precios {aprobada|rechazada|retirada} — {project}`.
+- **Pricing admin tabs run under `SET LOCAL ROLE pricing_backend`**: any new table touched by `/api/v1/pricing/admin/*` needs a GRANT+RLS policy for `pricing_backend` or the endpoint 409s with "Pricing transaction rejected (ProgrammingError)" and the tab shows "No se pudieron cargar los datos". Reproduce in psql: `SET ROLE pricing_backend; SELECT 1 FROM public.<table> LIMIT 1;`. Observed missing on `glass_purchase_mappings`, `panel_purchase_authorities`, `hardware_purchase_mappings`, `fitting_purchase_mappings` (coverage endpoint).
+- **Zero-factor OWNER TOTP enroll works via UI**: MfaPage "Configurar autenticador" → `data-testid="totp-secret"` → stdlib TOTP (base32 + hmac-sha1 + struct time//30) → input `id="totp-code"` → "Verificar". After enroll, "Verificación en dos pasos: Activa" shows in Ajustes.
+- **Pricing workspace routes**: project ops at `/projects/:id/pricing`; owner admin at `/pricing/cost-lists` (tabs: listas/insumos/cobertura/reglas/tarifas/matriz/fx/historial); margin band fields live in "Reglas comerciales" (margin_min_pct/margin_max_pct as percents, stored as fractions). "Editar registro" leaves % fields blank — retype all before "Guardar cambio auditado".
+- **Owner pricing form has an extra mode**: `TARGET_GROSS_MARGIN_PROJECT` ("Margen objetivo del proyecto") is owner-only in the pricing_mode select.
+- **Cascade "sin desglose exacto" signature**: `Operación anterior a la cascada — sin desglose exacto.` means `_cascade_payload` returned None — usually engine `_position_cascade` raising `inconsistent_pricing_result` when materials+waste+labour != stored unit_cost (4dp-quantized snapshots vs recompute drift). Check stored `input_snapshot.unit_cost` vs recomputed cost_net.
+
+## Pack de corte (P13) — receta de verificación
+
+- Ruta UI: `/production?order=<order_uuid>` → detalle de OT → tab **Corte** →
+  «Pack de corte (PDF)» (requiere `payload_json.optimization` no invalidado; el
+  botón se deshabilita con tooltip «plan invalidado» tras re-optimizar).
+  Endpoint: `GET /api/v1/production/orders/<id>/cut-pack/` (200 application/pdf;
+  errores `cut_pack_requires_optimization`, `plan_invalidated`). ESTIMATOR
+  alcanza para descargarlo.
+- `workshop_label_format` (migración 20270204000000): select en Ajustes ›
+  Documentos — GRID=«Grilla en hoja», THERMAL_100X50=«Rollo térmico 100×50 mm».
+  Se guarda con «Guardar marca» del formulario de branding y aterriza en
+  `tenancy_organizations.workshop_label_format` (round-trip al recargar).
+- La prueba dura de que el formato conduce el render: rasterizar/extraer el PDF
+  descargado con pymupdf (`fitz`, en `.venv`). GRID → etiquetas en página del
+  papel documental (Carta vertical 612×792, h2 «Etiquetas de pieza — en
+  secuencia de corte», muchas etiquetas por página + RETAZO al final).
+  THERMAL_100X50 → una página de 100×50 mm (283×142 pt) por etiqueta, sin
+  cajetín; el bloque «Identidad» queda en página full-size al final.
+- Secciones esperadas del PDF (apaisado, en español): stats de cabecera,
+  «Lista de corte» con bloques por barra + badges «BARRA NUEVA»/«retazo RT-…»,
+  línea de cierre Decimal exacto por barra, «Retazo N mm → stock de retazos
+  (folio RT- al cerrar el corte)», «Cortes agrupados — sierra manual»,
+  «Refuerzos y junquillos», «Plan de láminas»/«Vidrios», «Piezas no ubicadas»
+  (motivo → acción), etiquetas con QR y «→ siguiente estación», línea
+  `OT-… · plan <fp8>`, firma «Identidad».
+- Las OT de `dev_fixture.py` ya vienen optimizadas: la de vitrina (10
+  posiciones) ejercita cada sección, incl. «Piezas no ubicadas» («Sin formato
+  de lámina declarado en el catálogo → Catálogo › Vidrios › Formatos»).
+- Gotcha: el pack se renderiza al descargar, así que cambiar el setting de la
+  org y re-descargar la MISMA OT es la prueba A/B más limpia (la segunda
+  descarga aterriza como `… (1).pdf` en ~/Downloads).
+
+## P11 cobranza — env vars y patrones nuevos
+- `SII_CAF_KEK=<64-hex>` — REQUIRED for any CAF upload or DTE stamp; missing →
+  503 «SII_CAF_KEK no está configurado». Generate with
+  `python -c "import secrets;print(secrets.token_hex(32))"` and relaunch
+  runserver + runjobs.
+- `FLOW_WS_MOCK=1` exposes `/api/v1/billing/flow-sim/<token>/` (public).
+- `SII_WS_ENVIO_MOCK=1` + `SII_WS_ENVIO_MOCK_VERDICT=OBSERVED` makes «Enviar al
+  SII» land «SII · Aceptado con reparos».
+- `AI_GATEWAY_MOCK_ENABLED=1` + `UPDATE ai_routes SET provider='MOCK' WHERE
+  capability='collection_reminder'` when MiMo is 429 — env alone is not enough.
+
+Direct-SQL writes (link expiry, client_email, invoice payload fixes):
+
+- `projects` UPDATE needs service role + claims GUC or the
+  guard/RLS silently returns 0 rows:
+  `BEGIN; SET LOCAL ROLE pricing_backend;
+   SET LOCAL request.jwt.claims='{"sub":"<uid>","role":"authenticated","aal":"aal2"}';
+   UPDATE ...; COMMIT;`
+- Plain psql as postgres works for reads and non-guarded tables
+  (`project_payment_links.expires_at`, `project_invoices.payload_json`,
+  `ai_routes`).
+
+Fixture data gaps found (P11): all clients lack `client_rut`/`client_giro`/
+`client_comuna`/`client_address` → DTE stamping 422s «RUT de receptor
+válido» / «giro, comuna y dirección». `projects.client_email` is empty →
+«Enviar recordatorio» 422s `reminder_no_client_email` (no clients.email
+fallback). Fix via guarded UPDATEs above or patch the sealed
+`project_invoices.payload_json->project` with `jsonb_set` (UTF-8 chars
+outside ISO-8859-1 — e.g. ’ — are rejected at stamp time).
+
+Devin Secrets needed: none (all keys come from `supabase status` / .fixture-state.json).
+## Delta-reverification additions (2026-10, post `8ca5c467`)
+
+- **Frontend magic-link needs Vite env**: `VITE_SUPABASE_URL` +
+  `VITE_SUPABASE_ANON_KEY` must be exported before `npm run dev` or the
+  OTP step fails with «No fue posible solicitar el enlace de acceso»
+  (supabaseClient reads `import.meta.env.VITE_*`). Take both values from
+  `supabase status`.
+- **Heredoc into `docker exec` needs `-i`**: `docker exec supabase_db_dekopen
+  psql <<EOF` silently runs nothing — stdin is not forwarded without `-i`.
+  Symptom: statements "succeed" but produce no output and apply nothing.
+- **Grant bugs hide behind earlier crashes**: `_seal_repr`'s
+  `UPDATE project_dtes SET repr_*` lacked `GRANT UPDATE` for
+  `documentary_backend`, but the PDF417 ValueError crashed *before* the
+  UPDATE — the missing grant only surfaced once the barcode was fixed
+  (409 `Pricing transaction rejected`, SQLSTATE 42501). When a fix moves
+  a failure boundary forward, re-check grants/RLS on every later statement
+  in the same transaction; test-workaround was column-level
+  `GRANT UPDATE (repr_storage_object_key, repr_file_sha256)`.
+- **`pkill -f` inside a compound command can kill the command itself** if the
+  pattern matches the parent shell's command line (e.g. `pkill -f vite` in a
+  shell that also contains 'vite' in argv) — verify the port is down, then
+  relaunch in a separate call.
+- **Bash `UID` is readonly** — never assign to it; use `OU`/`OWNER_UID`.
+- **pyotp not installed** — compute TOTP inline (hmac-sha1, T=30, `% 10**6`).
+- **Mock `_charges` dies with the runserver process**: previously created
+  flow-sim links 404 «cargo desconocido» after any backend restart — mint a
+  fresh link instead of reusing an old token.
+
+- **Feature-gated systems not in the series picker**: systems with
+  `quote_ready=False` (the synthetic D08 typology series — DEMO_ELEVACION_90,
+  DEMO_PSK_90, DEMO_PLEGABLE_70, DEMO_PIVOTANTE_120, DEMO_GUILLOTINA_60,
+  DEMO_PUERTA_CORREDERA_70) never appear in the series `<select>`; preselect
+  them via URL param `/projects/<id>/positions/new?system=<uuid>`.
+- **Wire format pitfalls (product-v2)**: `nominal_width_mm`/`width_mm`/
+  `height_mm` are Decimal **strings** (`"1200.00"`, raw numbers → 400);
+  `color` is the English enum (`WHITE`), not the UI label;
+  `POST /api/v1/engine/assembly/calculate/` takes `product`, while
+  `POST /api/v1/engine/calculate/` takes `parametric_tree` +
+  `glass_thickness_mm`/`glass_spec` + legacy `opening_type` enums;
+  design-options is `GET /api/v1/projects/design-options/<system_id>/`
+  (trailing slash).
+- **Slide-family spec bays need `sliding_layout`** (`LIFT_SLIDE`/
+  `PARALLEL_SLIDE`/`SLIDE`): the engine rejects them with
+  `sliding_layout_invalid` without a declared track topology — panels have
+  `kind` MOVING/FIXED, `track` (0-based, null on FIXED) and `travel`; jamb
+  rule: first MOVING can't travel LEFT, last can't travel RIGHT.
+  Spec `leaves` carry `slot`/`opening`/`axis_offset_mm` and `unit_kind`
+  lives on the unit's top node.
+- **3200×2400 @ dpr 2 display**: physical px = CSS px × 2; `wmctrl -i -r
+  <winid> -e 0,x,y,W,H` sizes the outer window (subtract ~110 CSS px of
+  Chrome chrome); use `wmctrl -i` — `:ACTIVE:` can resolve to the Plasma
+  layer. Theme via `localStorage["dekopen.theme"]` + reload.
+- **`B` opens the design-library flyout** (Escape does NOT close it — the
+  panel is non-modal); `UnsavedChangesGuard` fires a native "Leave site?"
+  dialog on `location.href=` mid-edit — click Leave; `Descartar` clears
+  the draft-recovery banner.
+- **To capture the request the UI sends**, patch `window.fetch` AFTER load
+  (navigation drops the patch); for a fresh JWT read `access_token` out of
+  the logged-in tab's localStorage instead of re-logging (tokens ~1h).
+- **Full stack restart after container loss**: `supabase stop`/docker
+  prune drops the named volumes — `supabase start` recreates
+  schema+seed but `auth.users` is empty and stored sessions die.
+  Recovery: `supabase start` (never `db reset` mid-session) →
+  `SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY python scripts/dev_fixture.py`
+  → re-login via magic-link. Fixture IDs are NOT stable across runs —
+  re-read `.fixture-state.json` (e.g. `projects.borrador.id`), never
+  trust IDs from earlier sessions.
+- **Post-P21 shell**: `/projects/<id>/positions/new?system=<uuid>`
+  unchanged; below ~1100 CSS px the left nav collapses to a hamburger
+  and the inspector hides behind an "Inspector" rail button; the library
+  flyout is "Biblioteca de diseños" (same `B`).
+
+## P19 3D-fidelity testing notes
+- **Overlay coverage check** — a control present in DOM can still be unreachable:
+  prove clickability with `document.elementFromPoint(cx, cy) === btn` at the
+  button's center (benchmark `.benchmark-three-freeze` overlay previously
+  covered wrapped-toolbar buttons; now bottom-right of the canvas).
+- **Dark theme without OS change**: emulate `prefers-color-scheme` via CDP
+  (`Emulation.setEmulatedMedia`) or set `localStorage['dekopen.theme']` BEFORE
+  the page mounts — the React theme provider reads it once.
+- **Editor regressions need an EDITABLE project**: the fixture vitrina project
+  is a sealed revision ("Revisión cerrada para edición"). Use the draft
+  `P-000001 Casa El Roble` (fixture) → Posiciones → "Abrir diseño";
+  `Dormitorio principal` is a Fijo + Oscilobatiente Conjunto.
+- **Toolbar truth at ~380 px**: the `.model3d-toolbar` wraps to a second row —
+  verify every button by elementFromPoint, not just DOM presence.

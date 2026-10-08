@@ -32,4 +32,8 @@ export interface EvidenceRow {
   reviewed_by: string | null;
   /** @nullable */
   reviewed_at: string | null;
+  /** @nullable */
+  declared_by_label?: string | null;
+  /** @nullable */
+  reviewed_by_label?: string | null;
 }

@@ -112,6 +112,17 @@ def _patch_env(monkeypatch, rows_impl, client=None):
     def with_collected(sql, params=None):
         if "COALESCE(SUM(amount)" in sql:
             return [{"collected": Decimal("0")}]
+        if "private.payment_link_public_scope" in sql:
+            return [
+                {
+                    "id": uuid4(),
+                    "org_id": uuid4(),
+                    "project_id": uuid4(),
+                    "created_by": uuid4(),
+                }
+            ]
+        if "set_config('request.jwt.claims'" in sql:
+            return []
         return rows_impl(sql, params)
 
     monkeypatch.setattr(payment_links, "rows", with_collected)
@@ -251,8 +262,8 @@ def test_confirm_settles_payment_into_ledger(monkeypatch):
     inserts = []
 
     def fake_rows(sql, params=None):
-        if "SELECT org_id FROM public.project_payment_links" in sql:
-            return [{"org_id": link["org_id"]}]
+        if "SELECT * FROM public.project_payment_links WHERE org_id" in sql:
+            return [link]
         if "FROM public.org_payment_integrations" in sql:
             return [integration]
         if "FOR UPDATE" in sql:
@@ -282,8 +293,8 @@ def test_confirm_seals_frozen_total_when_repriced(monkeypatch):
     integration = _integration(org_id=link["org_id"])
 
     def fake_rows(sql, params=None):
-        if "SELECT org_id FROM public.project_payment_links" in sql:
-            return [{"org_id": link["org_id"]}]
+        if "SELECT * FROM public.project_payment_links WHERE org_id" in sql:
+            return [link]
         if "FROM public.org_payment_integrations" in sql:
             return [integration]
         if "FOR UPDATE" in sql:
@@ -313,8 +324,8 @@ def test_confirm_settles_on_frozen_deal_when_pricing_reset(monkeypatch):
     integration = _integration(org_id=link["org_id"])
 
     def fake_rows(sql, params=None):
-        if "SELECT org_id FROM public.project_payment_links" in sql:
-            return [{"org_id": link["org_id"]}]
+        if "SELECT * FROM public.project_payment_links WHERE org_id" in sql:
+            return [link]
         if "FROM public.org_payment_integrations" in sql:
             return [integration]
         if "FOR UPDATE" in sql:
@@ -341,8 +352,8 @@ def test_confirm_settles_on_live_deal_for_legacy_link(monkeypatch):
     integration = _integration(org_id=link["org_id"])
 
     def fake_rows(sql, params=None):
-        if "SELECT org_id FROM public.project_payment_links" in sql:
-            return [{"org_id": link["org_id"]}]
+        if "SELECT * FROM public.project_payment_links WHERE org_id" in sql:
+            return [link]
         if "FROM public.org_payment_integrations" in sql:
             return [integration]
         if "FOR UPDATE" in sql:
@@ -371,8 +382,8 @@ def test_confirm_settles_without_any_deal(monkeypatch):
     integration = _integration(org_id=link["org_id"])
 
     def fake_rows(sql, params=None):
-        if "SELECT org_id FROM public.project_payment_links" in sql:
-            return [{"org_id": link["org_id"]}]
+        if "SELECT * FROM public.project_payment_links WHERE org_id" in sql:
+            return [link]
         if "FROM public.org_payment_integrations" in sql:
             return [integration]
         if "FOR UPDATE" in sql:
@@ -396,8 +407,8 @@ def test_confirm_rejects_binding_mismatch(monkeypatch):
     integration = _integration(org_id=link["org_id"])
 
     def fake_rows(sql, params=None):
-        if "SELECT org_id FROM public.project_payment_links" in sql:
-            return [{"org_id": link["org_id"]}]
+        if "SELECT * FROM public.project_payment_links WHERE org_id" in sql:
+            return [link]
         if "FROM public.org_payment_integrations" in sql:
             return [integration]
         if "FOR UPDATE" in sql:
@@ -420,8 +431,8 @@ def test_confirm_paid_link_is_idempotent(monkeypatch):
     integration = _integration(org_id=link["org_id"])
 
     def fake_rows(sql, params=None):
-        if "SELECT org_id FROM public.project_payment_links" in sql:
-            return [{"org_id": link["org_id"]}]
+        if "SELECT * FROM public.project_payment_links WHERE org_id" in sql:
+            return [link]
         if "FROM public.org_payment_integrations" in sql:
             return [integration]
         if "FOR UPDATE" in sql:
@@ -438,8 +449,8 @@ def test_confirm_failed_observation_marks_link_failed(monkeypatch):
     integration = _integration(org_id=link["org_id"])
 
     def fake_rows(sql, params=None):
-        if "SELECT org_id FROM public.project_payment_links" in sql:
-            return [{"org_id": link["org_id"]}]
+        if "SELECT * FROM public.project_payment_links WHERE org_id" in sql:
+            return [link]
         if "FROM public.org_payment_integrations" in sql:
             return [integration]
         if "FOR UPDATE" in sql:
@@ -457,6 +468,90 @@ def test_confirm_failed_observation_marks_link_failed(monkeypatch):
     _patch_env(monkeypatch, fake_rows, client=client)
     out = payment_links.confirm_link(link_id=link["id"], token="tok-1")
     assert out["link"]["status"] == "FAILED"
+
+
+def test_confirm_settles_through_public_scope_and_delegated_claims(monkeypatch):
+    """The public webhook carries no JWT: the link row resolves via the
+    SECURITY DEFINER scope, then the settle runs under the link creator's
+    claims — the only path that passes org-scoped RLS unauthenticated."""
+    link = _link()
+    integration = _integration(org_id=link["org_id"])
+    queries = []
+
+    def fake_rows(sql, params=None):
+        queries.append(sql)
+        if "private.payment_link_public_scope" in sql:
+            return [
+                {
+                    "id": link["id"],
+                    "org_id": link["org_id"],
+                    "project_id": link["project_id"],
+                    "created_by": link["created_by"],
+                }
+            ]
+        if "set_config('request.jwt.claims'" in sql:
+            return []
+        if "COALESCE(SUM(amount)" in sql:
+            return [{"collected": Decimal("0")}]
+        if "FROM public.org_payment_integrations" in sql:
+            return [integration]
+        if "FROM public.project_payment_links" in sql:
+            return [link]
+        if "INSERT INTO public.project_payments" in sql:
+            return [_payment_row()]
+        if "UPDATE public.project_payment_links" in sql:
+            return [_link(status="PAID", project_payment_id=uuid4())]
+        return []
+
+    _patch_env(monkeypatch, fake_rows, client=_Client())
+    # El wrapper de _patch_env intercepta scope/claims antes que el espía —
+    # este test necesita ver el SQL real, así que se reemplaza directo.
+    monkeypatch.setattr(payment_links, "rows", fake_rows)
+    out = payment_links.confirm_link(link_id=link["id"], token="tok-1")
+    assert out["link"]["status"] == "PAID"
+    assert any("payment_link_public_scope" in sql for sql in queries)
+    claims = [sql for sql in queries if "request.jwt.claims" in sql]
+    assert claims, "the settle must assert the creator's claims before reading"
+
+
+def test_confirm_simulated_settles_via_scope(monkeypatch):
+    link = _link()
+    integration = _integration(org_id=link["org_id"])
+
+    def fake_rows(sql, params=None):
+        if "private.payment_link_public_scope" in sql:
+            return [
+                {
+                    "id": link["id"],
+                    "org_id": link["org_id"],
+                    "project_id": link["project_id"],
+                    "created_by": link["created_by"],
+                }
+            ]
+        if "set_config('request.jwt.claims'" in sql:
+            return []
+        if "FROM public.org_payment_integrations" in sql:
+            return [integration]
+        if "FROM public.project_payment_links" in sql:
+            return [link]
+        if "INSERT INTO public.project_payments" in sql:
+            return [_payment_row()]
+        if "UPDATE public.project_payment_links" in sql:
+            return [_link(status="PAID", project_payment_id=uuid4())]
+        return []
+
+    monkeypatch.setenv("FLOW_WS_MOCK", "1")
+    _patch_env(monkeypatch, fake_rows, client=_Client())
+    out = payment_links.confirm_simulated(token="tok-1")
+    assert out["link"]["status"] == "PAID"
+    assert out["payer_return_url"] == "https://app.test/pago/retorno"
+
+
+def test_confirm_simulated_unknown_token_stays_not_found(monkeypatch):
+    monkeypatch.setenv("FLOW_WS_MOCK", "1")
+    _patch_env(monkeypatch, lambda sql, params=None: [], client=_Client())
+    with pytest.raises(FlowError, match="payment_link_not_found"):
+        payment_links.confirm_simulated(token="sim-desconocido")
 
 
 def test_recover_link_uses_order_lookup(monkeypatch):

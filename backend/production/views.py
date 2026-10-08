@@ -22,7 +22,7 @@ from dekopen_engine.cutting import InvalidCutContract
 from documents.repository import DocumentaryError
 from documents.views import DOCUMENTARY_ERROR_DETAILS, ERRORS, documentary_scope, validate
 from engine_api.repository import SystemNotFound
-from production import cnc, service
+from production import cnc, deliveries as deliveries_api, service
 from production.trace import trace_piece, trace_version, trace_work_order
 from production.confirmations import confirmation_access, confirm_delivery
 from production.dispatch_notes import dispatch_note_access
@@ -37,6 +37,7 @@ from production.serializers import (
     DeliveryConfirmRequestSerializer,
     DeliveryConfirmResponseSerializer,
     DeliveryConfirmationAccessSerializer,
+    DeliveryListResponseSerializer,
     DeliveryResponseSerializer,
     DeliveryScheduleRequestSerializer,
     DeliveryTransitionRequestSerializer,
@@ -46,6 +47,7 @@ from production.serializers import (
     CncMachinePatchSerializer,
     CncMachineRequestSerializer,
     CncMachineSerializer,
+    CncProgramCompareSerializer,
     CncProgramListSerializer,
     CncProgramSerializer,
     CncReadinessSerializer,
@@ -102,7 +104,12 @@ def public_production_errors():
     try:
         yield
     except DocumentaryError as error:
-        if error.code in ("version_not_found", "work_order_not_found", "production_step_not_found", "delivery_not_found", "delivery_confirmation_not_found"):
+        if error.code in (
+            "version_not_found", "work_order_not_found", "production_step_not_found",
+            "delivery_not_found", "delivery_confirmation_not_found",
+            "incident_not_found", "service_ticket_not_found", "crew_not_found",
+            "purchase_request_not_found", "position_not_found", "project_not_found",
+        ):
             status_code = 404
         elif error.code == "work_order_cancelled":
             status_code = 409
@@ -538,6 +545,79 @@ class ProductionOrderLabelsView(APIView):
         return Response(output)
 
 
+class ProductionOrderGlazierOrderView(APIView):
+    """D02 pedido al vidriero: cut list + per-piece QR labels rendered from
+    sealed evidence. ``?output=csv`` switches to the flat CSV export
+    (``format`` would collide with DRF's reserved format-override query
+    param and 404 before the view runs);
+    ``?orders=<uuid,uuid>`` merges sibling work orders of the same frozen
+    version into one batch (the 'lote')."""
+
+    @extend_schema(
+        operation_id="production_order_glazier_order",
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                name="output",
+                type=OpenApiTypes.STR,
+                enum=["pdf", "csv"],
+                default="pdf",
+                location=OpenApiParameter.QUERY,
+            ),
+            OpenApiParameter(
+                name="orders",
+                type=OpenApiTypes.STR,
+                required=False,
+                location=OpenApiParameter.QUERY,
+                description="UUIDs adicionales de órdenes de la misma versión (lote).",
+            ),
+        ],
+        request=None,
+        responses={
+            (200, "application/pdf"): OpenApiTypes.STR,
+            (200, "text/csv"): OpenApiTypes.STR,
+            **ERRORS,
+        },
+        tags=["production"],
+    )
+    def get(self, request, order_id: UUID):
+        output_format = request.query_params.get("output") or "pdf"
+        if output_format not in ("pdf", "csv"):
+            raise contract_error(
+                400,
+                "invalid_glazier_order_format",
+                "El formato del pedido al vidriero debe ser pdf o csv.",
+            )
+        extra_ids: list[UUID] = []
+        for value in (request.query_params.get("orders") or "").split(","):
+            value = value.strip()
+            if not value:
+                continue
+            try:
+                extra_ids.append(UUID(value))
+            except ValueError:
+                raise contract_error(
+                    400,
+                    "invalid_glazier_order_batch",
+                    "La lista de órdenes del lote contiene un identificador inválido.",
+                )
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                from production.glass_order import glazier_order
+
+                content, content_type, download_name = glazier_order(
+                    org_id=org_id,
+                    order_id=order_id,
+                    extra_order_ids=extra_ids,
+                    output_format=output_format,
+                )
+        response = HttpResponse(content, content_type=content_type)
+        response["Content-Disposition"] = (
+            f'attachment; filename="{download_name}"'
+        )
+        return response
+
+
 class ProductionOrderDispatchView(APIView):
     @extend_schema(
         operation_id="production_order_dispatch",
@@ -812,6 +892,9 @@ class ProductionOrderDeliveryView(APIView):
                     contact_name=data.get("contact_name"),
                     contact_phone=data.get("contact_phone"),
                     installer_name=data.get("installer_name"),
+                    installer_user_id=data.get("installer_user_id"),
+                    crew_id=data.get("crew_id"),
+                    route_order=data.get("route_order"),
                     notes=data.get("notes"),
                     unit_indexes=data.get("unit_indexes"),
                 )
@@ -861,6 +944,7 @@ class ProductionOrderDeliveryConfirmView(APIView):
                     receiver_rut=data.get("receiver_rut"),
                     signature_b64=data["signature_png"],
                     payment=data.get("payment"),
+                    observations=data.get("observations"),
                 )
                 output = {
                     "confirmation": confirmation,
@@ -968,6 +1052,46 @@ class ProductionVersionTraceView(APIView):
         return Response(output)
 
 
+class ProductionDeliveriesView(APIView):
+    """Hoja de ruta del despacho: todas las entregas del tenant con su OT,
+    proyecto y estado real. El equipo de instalación y el jefe de taller
+    trabajan desde aquí; el comercial no despacha."""
+
+    @extend_schema(
+        operation_id="production_deliveries",
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                name="when",
+                type=str,
+                location="query",
+                enum=["open", "today", "overdue", "all"],
+                description="Ventana en la zona de la organización",
+            ),
+            OpenApiParameter(
+                name="status",
+                type=str,
+                location="query",
+                enum=["SCHEDULED", "ON_ROUTE", "DELIVERED", "FAILED"],
+            ),
+        ],
+        request=None,
+        responses={200: DeliveryListResponseSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def get(self, request):
+        with public_production_errors():
+            with documentary_scope(
+                request, ("OWNER", "WORKSHOP_MANAGER", "INSTALLER")
+            ) as (_, _, org_id):
+                output = deliveries_api.list_deliveries(
+                    org_id=org_id,
+                    when=request.query_params.get("when") or "open",
+                    status=request.query_params.get("status") or None,
+                )
+        return Response(output)
+
+
 class ProductionStationQueueView(APIView):
     """Cross-order floor view: open steps grouped by station — what each
     bench/cell has queued, which one is next, which are blocked."""
@@ -1044,7 +1168,8 @@ class CncToolDetailView(APIView):
         with public_production_errors():
             with documentary_scope(request, _WRITERS) as (token, _, org_id):
                 output = cnc.update_tool(
-                    org_id=org_id, tool_id=tool_id, data=data
+                    org_id=org_id, tool_id=tool_id,
+                    actor_id=token.user_id, data=data
                 )
         return Response(output)
 
@@ -1092,7 +1217,8 @@ class CncMachineDetailView(APIView):
         with public_production_errors():
             with documentary_scope(request, _WRITERS) as (token, _, org_id):
                 output = cnc.update_machine(
-                    org_id=org_id, machine_id=machine_id, data=data
+                    org_id=org_id, machine_id=machine_id,
+                    actor_id=token.user_id, data=data
                 )
         return Response(output)
 
@@ -1152,6 +1278,23 @@ class CncProgramListView(APIView):
                     actor_id=token.user_id,
                 )
         return Response(output, status=201)
+
+
+class CncProgramCompareView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_program_compare",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: CncProgramCompareSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request, program_id: UUID, other_id: UUID):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = cnc.program_compare(
+                    org_id=org_id, program_id=program_id, other_id=other_id
+                )
+        return Response(output)
 
 
 class CncProgramFileView(APIView):

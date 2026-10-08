@@ -9,7 +9,7 @@
 import { useMemo, useRef, useState } from "react";
 
 import type { SectionImportCandidate, SectionImportResponse } from "../../api/generated/models";
-import { parseLocaleNumber } from "../../format";
+import { formatDims, parseLocaleNumber } from "../../format";
 import { t, type TranslationKey } from "../../i18n/es-CL";
 import type { catalogApi } from "./catalogModel";
 
@@ -230,7 +230,7 @@ export function SectionImportPanel({
                   type="text"
                   required
                   inputMode="decimal"
-                  pattern="[0-9]+([.,][0-9]+)?"
+                  data-pattern="[0-9]+([.,][0-9]+)?"
                   value={scale}
                   onChange={(event) => setScale(event.target.value)}
                 />
@@ -243,11 +243,16 @@ export function SectionImportPanel({
                     className="section-import-preview-figure"
                   />
                   <p>
-                    {ct("preview")}: {scaledBox.w.toFixed(1)} × {scaledBox.h.toFixed(1)} mm
+                    {ct("preview")}: {formatDims(scaledBox.w, scaledBox.h)} mm
                   </p>
                 </div>
               )}
-              <button type="button" className="primary" disabled={!scaledPoints} onClick={confirm}>
+              <button
+                type="button"
+                className="ui-button ui-button--primary"
+                disabled={!scaledPoints}
+                onClick={confirm}
+              >
                 {ct("apply")}
               </button>
             </div>

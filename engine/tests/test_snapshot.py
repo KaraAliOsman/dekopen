@@ -20,7 +20,8 @@ def test_golden_composite_is_distinct_from_g3(demo_60_params: SystemParams) -> N
     result = golden_result()
     assert_role(result, ProfileRole.FRAME, [("1506", 2), ("1406", 2)], [("1470", 2), ("1370", 2)])
     assert_role(result, ProfileRole.MULLION_V, [("1280", 1)], [("1270", 1)])
-    assert_role(result, ProfileRole.SASH, [("672", 2), ("1302", 2)], [("636", 2), ("1266", 2)])
+    # The 672 mm horizontal stays bare under the white-member rule (≥ 1000 mm).
+    assert_role(result, ProfileRole.SASH, [("672", 2), ("1302", 2)], [("1266", 2)])
     assert_role(result, ProfileRole.GLAZING_BEAD, [("689", 2), ("1319", 2), ("555", 2), ("1185", 2)], [])
     assert [(p.width_mm, p.height_mm, p.area_m2, p.weight_kg) for p in result.glasses] == [
         (D("680"), D("1310"), D("0.8908"), D("17.82")),
@@ -28,9 +29,9 @@ def test_golden_composite_is_distinct_from_g3(demo_60_params: SystemParams) -> N
     ]
     exact = exact_weight_for_leaf(result, demo_60_params, "bay_2")
     assert (exact.pvc_weight_kg, exact.steel_weight_kg, exact.infill_weight_kg, exact.total_weight_kg) == (
-        D("4.7376"), D("6.4668"), D("12.841920"), D("26.546320"),
+        D("4.7376"), D("4.3044"), D("12.841920"), D("24.383920"),
     )
-    assert result.leaf_weights[0].total_weight_kg == D("26.55")
+    assert result.leaf_weights[0].total_weight_kg == D("24.38")
     assert result.hardware_items[0].kit_sku == "KIT-TILT-TURN"
     assert result.panels == []
 
@@ -82,7 +83,9 @@ def test_snapshot_request_identity_and_response_contract() -> None:
     request = golden_request()
     assert request["system_id"] == "3067da09-3119-5ad0-a1d5-498cd2dfd753"
     response = calculation_response(request, golden_result())
-    assert set(response) == {"calculation_hash", "profile_cuts", "reinforcements", "glasses", "panels", "hardware_items", "leaf_weights", "fittings"}
+    # D05: finish identity + declared surcharge rows ride on the BOM.
+    # D06: measured extras sublines ride alongside.
+    assert set(response) == {"calculation_hash", "profile_cuts", "reinforcements", "glasses", "panels", "hardware_items", "leaf_weights", "fittings", "finish_key", "finish_label", "finish_class", "color_surcharges", "extra_lines"}
     assert json.loads(generated_bytes()) == {"request": request, "response": response}
     changed = deepcopy(request)
     changed["color"] = "CHANGED-HASH-INPUT"

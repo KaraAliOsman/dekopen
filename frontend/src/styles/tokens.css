@@ -1,166 +1,356 @@
-/* DEKOPEN identity tokens — phase-01 visual contract.
-   Architectural workbench feel: warm light canvas, graphite ink, thin lines,
-   measured spacing, product as protagonist, petrol-teal accent. Dark theme
-   uses legible graphites. No gradients, glow, or glassmorphism.
+/* DEKOPEN — tokens v2. La constitución de diseño (docs/design/CONSTITUCION.md)
+   convertida en variables. Punto de vista: «DEKOPEN se dibuja como se dibuja
+   una ventana» — grafito como estructura, teal como único croma funcional,
+   naranja solo para la marca y «esto necesita a una persona».
 
-   Three tiers:
-   1. Interface color tokens — --theme-* (surface/text/border/focus/action/
-      danger/warning/success/info/disabled, distinct hover-vs-business state).
-   2. Physical material colors — --mat-* in the unthemed block: the real finish
-      of a product (PVC, foil, aluminium, glass, hardware). Theme-invariant by
-      contract: a foil-brown window keeps its finish in the dark theme; Studio,
-      print and the renderer may never restyle them as chrome.
-   3. Structural tokens — type/space/radius/shadow/z-index.
+   Pisos:
+   1. Rampas de color (valores hex canónicos del §3.1).
+   2. Roles funcionales — claro y oscuro ([data-theme]); los componentes nunca
+      nombran un color de rampa, nombran un rol.
+   3. Roles del lienzo (--canvas-*): la hoja de papel y su gramática de dibujo.
+   4. Tipografía (IBM Plex Sans/Mono autoalojadas), espaciado, radios,
+      elevación por delineado, capas, movimiento, densidades.
+   5. Materiales físicos (--mat-*) y el Orb (--orb-*): identidad del producto
+      renderizado — invariantes de tema por contrato.
+   6. Alias de compatibilidad (--theme-*, legado) resueltos a los roles
+      canónicos; código nuevo usa los roles directamente.
 
-   Aliases at the bottom retire the ad-hoc vocabulary older code pasted in;
-   keep them defined and migrate call sites opportunistically.
+   Los tests de tokens (frontend/src/styles/tokens.test.ts) fallan si un
+   var() no está definido o si un par texto/fondo declarado queda bajo AA. */
 
-   Type scale (contract): base 14px, labels 12–13, section titles 19px,
-   page titles 26px. Mono/tabular figures only where comparison improves.
-   Space scale: 4/8/12/16/24/32/48. Desktop controls ≈36px, touch 44px. */
-
-:root,
-:root[data-theme="light"] {
-  --theme-bg-canvas: #f7f6f3;
-  --theme-viewport-stage: #e8e9e5;
-  --theme-viewport-ground: #d3d5cf;
-  --theme-surface-panel: #ffffff;
-  --theme-surface-card: #f0efeb;
-  --theme-surface-hover: #e9e7e1;
-  --theme-border-subtle: #dcdad3;
-  --theme-border-strong: #b8b9b1;
-  --theme-text-primary: #24292c;
-  --theme-text-secondary: #545d60;
-  --theme-text-muted: #5f6a6c;
-  --theme-text-tertiary: #5f6a6c; /* smallest text tier — AA on panel surfaces */
-  --theme-accent: #0f817a;
-  --theme-accent-strong: #0b6b66;
-  --theme-accent-deep: #09524e;
-  --theme-accent-soft: #e4f3f1;
-  --theme-accent-ink: #0b4d49;
-  --theme-mark: #e56a32;
-  --theme-warning: #9c5306;
-  --theme-warning-soft: #fdf1e3;
-  --theme-success: #1e7a4c;
-  --theme-success-soft: #e3f2ea;
-  --theme-danger: #b3372f;
-  --theme-danger-soft: #fbe9e7;
-  --theme-danger-ink: #ffffff;
-  --theme-info: var(--theme-accent);
-  --theme-info-soft: var(--theme-accent-soft);
-  /* Technical states — UNKNOWN means the authority is absent (not "unset"),
-     BLOCKED means the domain refuses to proceed. Both are facts to act on,
-     so they get dedicated soft surfaces instead of reusing warning/danger. */
-  --theme-unknown: #5f6d69;
-  --theme-unknown-soft: #e7eceb;
-  --theme-blocked: #8c2f9b;
-  --theme-blocked-soft: #f3e8f7;
-  --theme-focus-ring: #0f817a;
-  --theme-selection: #d3ebe8;
-  --theme-disabled-bg: #eceeee;
-  --theme-disabled-ink: #76847f; /* 3.35:1 on disabled-bg — exempt from AA but readable */
-  --theme-disabled-border: #d5dbda;
-  --theme-skeleton: #e2e7e6;
-  --theme-skeleton-sheen: #f2f5f4;
-  --theme-glass-tint: rgba(15, 129, 122, 0.07);
-  --op-selected-row: #fdf3dc;
-  --shadow-raise: 0 1px 3px rgb(28 30 28 / 0.07), 0 3px 10px rgb(28 30 28 / 0.07);
-  --shadow-pop: 0 10px 28px rgb(28 30 28 / 0.14);
-  --shadow-modal: 0 12px 40px rgba(20, 24, 24, 0.2);
-
-  /* DEKOPEN orb identity — flat 2D. The sphere is intentionally identical
-   * across themes (the identity IS the dark orb); only the edge stroke
-   * adapts to the dark theme. */
-  --orb-mid: #2a3238;
-  --orb-deep: #171e23;
-  --orb-edge: rgba(10, 15, 18, 0.55);
-  /* Cyan capsule eyes + thin orbit line — the identity accent. */
-  --orb-eye: #0fd8ea;
-  --orb-eye-hi: #7cf3ff;
-  --orb-ribbon: #0fd8ea;
-  --orb-ribbon-soft: rgba(15, 216, 234, 0.42);
-}
-
-:root[data-theme="dark"] {
-  --theme-bg-canvas: #14181a;
-  /* 3D stage stays lighter than the chrome so anthracite/PVC frames keep
-   * silhouette contrast — a neutral exhibition backdrop, not page chrome. */
-  --theme-viewport-stage: #262c2f;
-  --theme-viewport-ground: #1c2225;
-  --theme-surface-panel: #1b2124;
-  --theme-surface-card: #232a2d;
-  --theme-surface-hover: #2c3539;
-  --theme-border-subtle: #323c40;
-  --theme-border-strong: #4a585d;
-  --theme-text-primary: #edf2f1;
-  --theme-text-secondary: #a4b6b3;
-  --theme-text-muted: #81938f;
-  --theme-text-tertiary: #81938f;
-  --theme-accent: #2aa69b;
-  --theme-accent-strong: #45beb1;
-  --theme-accent-deep: #2aa69b;
-  --theme-accent-soft: #14312f;
-  --theme-accent-ink: #bfe6e0;
-  --theme-mark: #e8804a;
-  --theme-warning: #e09543;
-  --theme-warning-soft: #33231a;
-  --theme-success: #4caf7f;
-  --theme-success-soft: #16291f;
-  --theme-danger: #e06154;
-  --theme-danger-soft: #331d1a;
-  --theme-danger-ink: #ffffff;
-  --theme-info: var(--theme-accent);
-  --theme-info-soft: var(--theme-accent-soft);
-  --theme-unknown: #93a19d;
-  --theme-unknown-soft: #242c2f;
-  --theme-blocked: #c07ad1;
-  --theme-blocked-soft: #2b1f31;
-  --theme-focus-ring: #45beb1;
-  --theme-selection: #163a38;
-  --theme-disabled-bg: #222a2d;
-  --theme-disabled-ink: #6b7a76; /* 3.25:1 on disabled-bg */
-  --theme-disabled-border: #333d41;
-  --theme-skeleton: #262f33;
-  --theme-skeleton-sheen: #2f393d;
-  --theme-glass-tint: rgba(42, 166, 155, 0.1);
-  --op-selected-row: #3a3220;
-  --shadow-raise: 0 2px 10px rgba(0, 0, 0, 0.45);
-  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.55);
-  --shadow-modal: 0 12px 44px rgba(0, 0, 0, 0.6);
-
-  --orb-mid: #313a41;
-  --orb-deep: #1a2228;
-  --orb-edge: rgba(233, 242, 241, 0.16);
-  --orb-eye: #12ddf0;
-  --orb-eye-hi: #96f6ff;
-  --orb-ribbon: #12ddf0;
-  --orb-ribbon-soft: rgba(18, 221, 240, 0.48);
-}
-
+/* ------------------------------------------------------------------ *
+ * 1. Rampas — hex canónicos §3.1                                      *
+ * ------------------------------------------------------------------ */
 :root {
-  /* Type — contract: base 14–15, labels 12–13, sections 18–20, pages 24–28.
-     Operational information never lives below 12px. */
+  /* Grafito — estructura, tinta, reglas */
+  --g-950: #161c1f;
+  --g-900: #252d31;
+  --g-700: #465158;
+  --g-500: #727d82;
+  --g-400: #9aa6a9;
+  --g-300: #cdd5d6;
+  --g-200: #e0e6e5;
+  --g-100: #eef2f1;
+  --g-50: #f5f7f6;
+  --g-25: #fcfdfc;
+  --paper: #ffffff;
+
+  /* Teal — el metal: único acento funcional */
+  --teal-950: #042e2c;
+  --teal-900: #064440;
+  --teal-800: #075f5a;
+  --teal-700: #0b7770;
+  --teal-600: #0f8f85;
+  --teal-500: #20a79a;
+  --teal-400: #48bcaf;
+  --teal-200: #b0e4dc;
+  --teal-100: #d4efea;
+  --teal-50: #e6f4f2;
+
+  /* Naranja — la marca y «requiere persona». ≤ 3 % de píxeles. */
+  --orange-700: #a84418;
+  --orange-600: #c9571f;
+  --orange-500: #e56a32;
+  --orange-400: #ed8653;
+  --orange-300: #f5b28a;
+  --orange-100: #fbebe2;
+
+  /* Semánticos (base · suave · tinta) — §3.1 */
+  --ok: #1e7a4c;
+  --ok-soft: #e3f2ea;
+  --ok-ink: #13502f;
+  --warn: #b25e09;
+  --warn-soft: #fdf1e3;
+  --warn-ink: #7a3d05;
+  --danger: #b3372f;
+  --danger-soft: #fbe9e7;
+  --danger-ink: #7e1f19;
+  --info: var(--teal-700);
+  --info-soft: var(--teal-50);
+  --info-ink: var(--teal-900);
+  --person: var(--orange-500);
+  --person-soft: var(--orange-100);
+  --person-ink: var(--orange-700);
+}
+
+/* ------------------------------------------------------------------ *
+ * 2. Roles funcionales — tema claro (por defecto)                     *
+ * ------------------------------------------------------------------ */
+:root,
+:root[data-theme="light"],
+[data-theme-scope="light"] {
+  --bg-app: var(--g-50);
+  --surface-panel: var(--g-25);
+  --surface-card: var(--g-100);
+  --surface-sheet: var(--paper);
+  --surface-hover: #e2e8e7;
+  --surface-selected: var(--teal-50);
+  --selected-edge: var(--teal-700);
+
+  --border-subtle: var(--g-200);
+  --border-default: var(--g-300);
+  --border-strong: #a9b4b6;
+  --border-focus: var(--teal-600);
+
+  --text-primary: var(--g-950);
+  --text-secondary: var(--g-700);
+  /* g-500 puro queda bajo AA sobre las superficies claras (3.9–4.2); el rol
+     muted usa el punto medio del tramo g-500→g-700 que llega a ≥ 4.55. */
+  --text-muted: #666f74;
+  --text-faint: var(--g-400);
+
+  --interactive: var(--teal-700);
+  --interactive-hover: var(--teal-800);
+  --interactive-fill: var(--teal-800);
+  --interactive-fill-hover: var(--teal-700);
+  --interactive-fill-active: var(--teal-900);
+  --on-interactive-fill: var(--paper);
+  --mark: var(--orange-500);
+  --on-mark: var(--paper);
+
+  --focus-ring: var(--teal-600);
+  --focus-ring-shadow: 0 0 0 2px var(--bg-app), 0 0 0 4px var(--focus-ring);
+  --disabled-bg: var(--g-100);
+  --disabled-ink: #5f6e6b;
+  --disabled-border: var(--g-200);
+  --skeleton: var(--g-100);
+  --scrim: rgb(22 28 31 / 42%);
+
+  /* Elevación por delineado — §3.4 */
+  --shadow-e2: 0 1px 2px rgb(22 28 31 / 5%), 0 4px 12px rgb(22 28 31 / 8%);
+  --shadow-e3: 0 2px 6px rgb(22 28 31 / 6%), 0 12px 32px rgb(22 28 31 / 14%);
+  --shadow-sheet: 0 1px 3px rgb(22 28 31 / 7%);
+
+  /* Lienzo — hoja de papel sobre la mesa (§3.1 Lienzo) */
+  --canvas-paper: var(--paper);
+  --canvas-grid: #dce4e2;
+  --canvas-profile: var(--g-950);
+  --canvas-dim: var(--g-700);
+  --canvas-glass: rgb(15 143 133 / 7%);
+  --canvas-glass-edge: var(--teal-600);
+  --canvas-symbol: var(--g-700);
+  --canvas-selection: var(--teal-600);
+  --canvas-selection-fill: rgb(15 143 133 / 8%);
+  --canvas-handle: var(--orange-500);
+  --canvas-handle-edge: var(--paper);
+  --canvas-snap: var(--ok);
+  --canvas-preview: var(--orange-500);
+  --canvas-invalid: var(--danger);
+
+  /* La rampa semántica se re-declara en el bloque de tema: si solo viviera
+     en :root, un panel data-theme-scope="light" dentro de una página
+     oscura heredaría las tintas oscuras (mismo congelamiento que §5). */
+  --ok: #1e7a4c;
+  --ok-soft: #e3f2ea;
+  --ok-ink: #13502f;
+  --warn: #b25e09;
+  --warn-soft: #fdf1e3;
+  --warn-ink: #7a3d05;
+  --danger: #b3372f;
+  --danger-soft: #fbe9e7;
+  --danger-ink: #7e1f19;
+  --info: var(--teal-700);
+  --info-soft: var(--teal-50);
+  --info-ink: var(--teal-900);
+  --person: var(--orange-500);
+  --person-soft: var(--orange-100);
+  --person-ink: var(--orange-700);
+}
+
+/* Roles funcionales — tema oscuro (§3.1) */
+:root[data-theme="dark"],
+[data-theme-scope="dark"] {
+  --bg-app: #0f1416;
+  --surface-panel: #151b1e;
+  --surface-card: #1b2326;
+  --surface-sheet: #182024; /* el lienzo; los documentos impresos siempre claros */
+  --surface-hover: #1f282b;
+  --surface-selected: #11312e;
+  --selected-edge: var(--teal-400);
+
+  --border-subtle: #243033;
+  --border-default: #2f3c3f;
+  --border-strong: #41545a;
+  --border-focus: var(--teal-400);
+
+  --text-primary: #e7edec;
+  --text-secondary: #aeb9bb;
+  --text-muted: #86928f;
+  --text-faint: #5f6e6b;
+
+  --interactive: var(--teal-400);
+  --interactive-hover: var(--teal-500);
+  --interactive-fill: var(--teal-500);
+  --interactive-fill-hover: var(--teal-400);
+  --interactive-fill-active: var(--teal-600);
+  --on-interactive-fill: var(--g-950);
+  --mark: var(--orange-400);
+  --on-mark: var(--g-950);
+
+  --ok: #4caf7f;
+  --ok-soft: #16291f;
+  --ok-ink: #9bd8b5;
+  --warn: #e09543;
+  --warn-soft: #33231a;
+  --warn-ink: #f0c492;
+  --danger: #e06154;
+  --danger-soft: #331d1a;
+  --danger-ink: #f2a99f;
+  --info: var(--teal-400);
+  --info-soft: #14312f;
+  --info-ink: #bfe6e0;
+  --person: var(--orange-400);
+  --person-soft: #332115;
+  --person-ink: #f5c9a8;
+
+  --focus-ring: var(--teal-400);
+  --disabled-bg: #222a2d;
+  --disabled-ink: #6b7a76;
+  --disabled-border: #333d41;
+  --skeleton: #262f33;
+  --scrim: rgb(0 0 0 / 55%);
+
+  --shadow-e2: 0 1px 2px rgb(0 0 0 / 45%), 0 4px 12px rgb(0 0 0 / 50%);
+  --shadow-e3: 0 2px 6px rgb(0 0 0 / 50%), 0 12px 32px rgb(0 0 0 / 60%);
+  --shadow-sheet: 0 1px 3px rgb(0 0 0 / 50%);
+
+  /* Lienzo en oscuro: la hoja sigue siendo «papel» del sistema (sheet) */
+  --canvas-paper: var(--surface-sheet);
+  --canvas-grid: #2a3538;
+  --canvas-profile: #e7edec;
+  --canvas-dim: #aeb9bb;
+  --canvas-glass: rgb(42 166 155 / 10%);
+  --canvas-glass-edge: var(--teal-500);
+  --canvas-symbol: #aeb9bb;
+  --canvas-selection: var(--teal-400);
+  --canvas-selection-fill: rgb(72 188 175 / 12%);
+  --canvas-handle: var(--orange-400);
+  --canvas-handle-edge: var(--g-950);
+  --canvas-snap: var(--ok);
+  --canvas-preview: var(--orange-400);
+  --canvas-invalid: var(--danger);
+}
+
+/* ------------------------------------------------------------------ *
+ * 3. Tipografía, espaciado, radios, capas, movimiento, densidad       *
+ * ------------------------------------------------------------------ */
+:root {
+  /* Familias — IBM Plex Sans habla de interfaz, Plex Mono habla de medidas */
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
-  --text-xs: 0.75rem;
-  --text-s: 0.8125rem;
-  --text-body: 0.9375rem;
-  --text-title: 1.1875rem;
-  --text-display: 1.625rem;
 
-  /* Space — 4px base grid: 4/8/12/16/24/32/48 */
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.5rem;
-  --space-6: 2rem;
-  --space-7: 3rem;
+  /* Escala §3.2 — tamaño / altura de línea. Mínimo absoluto: 11 px. */
+  --type-display: 2rem;
+  --type-display-lh: 2.25rem;
+  --type-title-l: 1.25rem;
+  --type-title-l-lh: 1.625rem;
+  --type-title-m: 0.875rem;
+  --type-title-m-lh: 1.125rem;
+  --type-label: 0.6875rem;
+  --type-label-lh: 0.875rem;
+  --type-label-ls: 0.06em;
+  --type-body: var(--density-font);
+  --type-body-lh: var(--density-line);
 
-  /* Physical material colors — the product's real finish. Deliberately
-     defined once here, outside both themed blocks: a white-PVC or
-     foil-brown window must keep its identity in the dark theme, and print/
-     documents share the same finish. UI chrome never reuses these. */
+  --type-dense: 0.75rem;
+  --type-dense-lh: 1rem;
+  --type-dim: 0.8125rem;
+  --type-dim-lh: 1rem;
+  --type-micro: 0.6875rem;
+  --type-micro-lh: 0.875rem;
+
+  /* Espaciado §3.4 — base 4: 2·4·6·8·12·16·24·32·48·64 */
+  --space-2: 0.125rem;
+  --space-4: 0.25rem;
+  --space-6: 0.375rem;
+  --space-8: 0.5rem;
+  --space-12: 0.75rem;
+  --space-16: 1rem;
+  --space-24: 1.5rem;
+  --space-32: 2rem;
+  --space-48: 3rem;
+  --space-64: 4rem;
+
+  /* Radios mecanizados: r-2 (4 px) es el máximo dentro del producto */
+  --r-0: 0;
+  --r-1: 0.125rem;
+  --r-2: 0.25rem;
+  --r-pill: 999px; /* solo puntos de estado */
+
+  /* Capas — §3.4. Prohibidos los literales fuera de esta escala. */
+  --z-base: 0;
+  --z-raise: 2;
+  --z-raise-top: 3;
+  --z-sticky: 10;
+  --z-rail: 20;
+  --z-popover: 40;
+  --z-drawer: 50;
+  --z-dialog: 60;
+  --z-menu: 70;
+  --z-toast: 70;
+  --z-palette: 80;
+
+  /* Movimiento §3.5 — ensamblar, no animar */
+  --t-micro: 90ms;
+  --t-state: 160ms;
+  --t-spatial: 220ms;
+  --t-max: 280ms;
+  --ease-enter: cubic-bezier(0.2, 0, 0.38, 1);
+  --ease-exit: cubic-bezier(0.4, 0.14, 1, 1);
+
+  /* Rieles — §3.4 */
+  --rail-inspector: 19.5rem; /* 300–320 px */
+  --rail-tree: 16.25rem; /* 240–280 px */
+  --rail-tools: 3rem; /* franja de herramientas 48 px */
+  --topbar-height: 3rem; /* barra superior 48 px */
+
+  /* Densidad por defecto: office */
+  --density-font: 0.8125rem;
+  --density-line: 1.125rem;
+  --control-height: 2rem;
+  --control-height-sm: 1.75rem;
+}
+
+/* Densidades §3.7 — se aplican en el contenedor raíz de cada superficie */
+[data-density] {
+  /* var() se resuelve donde se declara: type-body debe vivir en el propio
+     scope de densidad o queda congelado a la fuente de :root. */
+  --type-body: var(--density-font);
+  --type-body-lh: var(--density-line);
+}
+[data-density="office"] {
+  --density-font: 0.8125rem;
+  --density-line: 1.125rem;
+  --control-height: 2rem;
+  --control-height-sm: 1.75rem;
+}
+[data-density="document"] {
+  --density-font: 0.875rem;
+  --density-line: 1.25rem;
+  --control-height: 2.5rem;
+  --control-height-sm: 2.25rem;
+}
+[data-density="workshop"] {
+  --density-font: 1rem;
+  --density-line: 1.375rem;
+  --control-height: 2.75rem; /* ≥ 44 px — guantes y distancia */
+  --control-height-sm: 2.75rem;
+}
+
+/* La firma: una única esquina recortada a 45°, catetos de 8 px, arriba a la
+   derecha. Solo superficies tipo hoja: lienzo, documentos, vista previa,
+   marca. Nunca en controles, nunca más de una por superficie. */
+.sheet-miter {
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+}
+
+/* ------------------------------------------------------------------ *
+ * 4. Materiales físicos (--mat-*) — el acabado real del producto.      *
+ *    Invariantes de tema por contrato: un PVC blanco o un foliado      *
+ *    nogal conservan su identidad en el tema oscuro; el cromo nunca    *
+ *    reutiliza estos colores.                                         *
+ * ------------------------------------------------------------------ */
+:root {
   --mat-pvc-fill: #f4f7f6;
   --mat-pvc-edge: #b9c4c2;
   --mat-pvc-highlight: #ffffff;
@@ -181,9 +371,14 @@
   --mat-coupler: #5d6469;
   --mat-gasket: #2e3134;
   --mat-edge: #6b7075;
-  /* CNC op-kind marks — categorical diagram palette (drill/water/cut-mill/
-     edge/hardware), distinct from semantic accents; fixed across themes so
-     a machining drawing reads identically on screen and on paper. */
+  /* Vano de muro en la vista 3D — estuco plano, cálido y apagado; el
+     producto, no el fondo, lleva el contraste. */
+  --mat-wall: #d7d3c8;
+  /* Bicolor sellado (benchmark): cara interior blanca cálida — la cara
+     exterior toma el antracita de catálogo (--mat-anthracite-fill). */
+  --mat-bicolor-interior: #f4f1ea;
+  /* Marcas de operación CNC — paleta categórica de diagrama, fija entre
+     temas para que el mecanizado se lea igual en pantalla y en papel. */
   --mat-op-mark: #7a5af8;
   --mat-op-mark-edge: #4c2fd1;
   --mat-op-drill: #2563eb;
@@ -197,14 +392,175 @@
   --mat-op-edge-work: #64748b;
   --mat-op-edge-work-edge: #334155;
   --mat-op-hardware: #b45309;
-  /* Opaque glass pane — physical, one legible tone in both themes (the
-     translucent tint let member slabs show through). Signature ink: the
-     pad is white paper sealed into the POD, so ink stays dark always. */
   --mat-glass-pane: #e9f2f1;
   --mat-signature-ink: #1a1f24;
 
-  /* Compatibility aliases — resolve to the invariant --mat-* palette so
-     existing render call sites keep working unchanged in both themes. */
+  /* Orb DEKOPEN — 2D plano. La esfera es la identidad (grafito en ambos
+     temas); el acento cromático es el teal de la marca (P25: se retira el
+     cyan fuera de paleta); solo el borde adapta. */
+  --orb-hi: #4e5960;
+  --orb-mid: #262e34;
+  --orb-lo: #12171b;
+  --orb-edge: rgb(10 15 18 / 55%);
+  --orb-spec-op: 0.5;
+  --orb-eye: var(--teal-400);
+  --orb-ribbon: var(--teal-400);
+  --orb-pane: rgb(111 217 205 / 28%);
+  --orb-shadow: rgb(15 22 24 / 22%);
+}
+:root[data-theme="dark"],
+[data-theme-scope="dark"] {
+  --orb-hi: #5a666e;
+  --orb-mid: #272f35;
+  --orb-lo: #10151a;
+  --orb-edge: rgb(233 242 241 / 16%);
+  --orb-spec-op: 0.32;
+  --orb-eye: var(--teal-400);
+  --orb-ribbon: var(--teal-400);
+  --orb-pane: rgb(111 217 205 / 18%);
+  --orb-shadow: rgb(0 0 0 / 45%);
+}
+
+/* ------------------------------------------------------------------ *
+ * 5. Alias de compatibilidad — el vocabulario viejo resuelve a los    *
+ *    roles canónicos. Código nuevo usa los roles directamente.        *
+ * ------------------------------------------------------------------ *
+ *    Los alias se declaran también en cada «scope»: var() dentro de    *
+ *    una custom property se resuelve donde se declara, así que un      *
+ *    alias solo definido en :root quedaría congelado al tema raíz y    *
+ *    un panel con data-theme-scope heredaría el tema equivocado.       *
+ * ------------------------------------------------------------------ */
+:root,
+[data-theme-scope] {
+  /* Roles funcionales */
+  --theme-bg-canvas: var(--bg-app);
+  --theme-viewport-stage: var(--surface-card);
+  --theme-viewport-ground: var(--bg-app);
+  --theme-surface-panel: var(--surface-panel);
+  --theme-surface-card: var(--surface-card);
+  --theme-surface-hover: var(--surface-hover);
+  --theme-border-subtle: var(--border-subtle);
+  --theme-border-strong: var(--border-strong);
+  --theme-text-primary: var(--text-primary);
+  --theme-text-secondary: var(--text-secondary);
+  --theme-text-muted: var(--text-muted);
+  --theme-text-tertiary: var(--text-muted);
+  --theme-accent: var(--interactive);
+  --theme-accent-strong: var(--interactive-hover);
+  --theme-accent-deep: var(--interactive-fill-active);
+  --theme-accent-soft: var(--info-soft);
+  --theme-accent-ink: var(--info-ink);
+  /* Tinta sobre relleno de acento; el portal la recalcula por marca (brandOnFill). */
+  --theme-accent-onfill: var(--on-interactive-fill);
+  --theme-accent-ghost: var(--surface-selected);
+  --theme-mark: var(--mark);
+  --theme-warning: var(--warn);
+  --theme-warning-soft: var(--warn-soft);
+  --theme-warning-ink: var(--warn-ink);
+  --theme-success: var(--ok);
+  --theme-success-soft: var(--ok-soft);
+  --theme-danger: var(--danger);
+  --theme-danger-soft: var(--danger-soft);
+  --theme-danger-ink: var(--on-interactive-fill);
+  --theme-info: var(--info);
+  --theme-info-soft: var(--info-soft);
+  --theme-unknown: var(--text-muted);
+  --theme-unknown-soft: var(--surface-card);
+  --theme-blocked: var(--person);
+  --theme-blocked-soft: var(--person-soft);
+  --theme-focus-ring: var(--focus-ring);
+  --theme-selection: var(--surface-selected);
+  --theme-disabled-bg: var(--disabled-bg);
+  --theme-disabled-ink: var(--disabled-ink);
+  --theme-disabled-border: var(--disabled-border);
+  --theme-skeleton: var(--skeleton);
+  --theme-glass-tint: var(--canvas-glass);
+  --theme-glass-pane: var(--mat-glass-pane);
+  --op-selected-row: var(--warn-soft);
+  --signature-ink: var(--mat-signature-ink);
+  --scrim-overlay: var(--scrim);
+
+  /* Sombras numeradas por nivel de elevación */
+  --elevation-0: none;
+  --elevation-1: none; /* E1 = 1 px de borde, sin sombra */
+  --elevation-2: var(--shadow-e2);
+  --elevation-3: var(--shadow-e3);
+  --shadow-raise: var(--shadow-e2);
+  --shadow-pop: var(--shadow-e2);
+  --shadow-modal: var(--shadow-e3);
+
+  /* Tipografía legada */
+  --theme-font-mono: var(--font-mono);
+  --text-xs: var(--type-dense);
+  --text-s: var(--type-dense);
+  --text-sm: var(--type-dense);
+  --text-m: var(--type-body);
+  --text-subtle: var(--type-dense);
+  --text-body: var(--type-body);
+  --text-title: var(--type-title-l);
+  --text-display: var(--type-display);
+  --font-size-xl: var(--type-title-l);
+
+  /* Espaciado: la escala vieja --space-1..7 fue migrada a los tokens por px
+     (--space-4…--space-64). Ningún var() con el nombre viejo debe quedar. */
+
+  /* Radios legados → mecanizados */
+  --radius-sm: var(--r-1);
+  --radius-xs: var(--r-1);
+  --radius-md: var(--r-1);
+  --radius-lg: var(--r-2);
+  --radius-m: var(--r-2);
+  --radius-xl: var(--r-2);
+  --radius-card: var(--r-2);
+  --radius-pill: var(--r-pill);
+  --radius-full: var(--r-pill);
+  --theme-radius: var(--r-1);
+  --theme-radius-sm: var(--r-1);
+  --theme-radius-pill: var(--r-pill);
+
+  /* Interacción y capas */
+  --motion-fast: var(--t-micro);
+  --motion-base: var(--t-state);
+  --z-island: var(--z-sticky);
+  --z-overlay: var(--z-drawer);
+  --z-modal: var(--z-dialog);
+
+  /* Densidades legadas */
+  --density-compact: 1.75rem;
+  --density-default: var(--control-height);
+  --density-loose: 2.75rem;
+
+  /* Puntos de quiebre documentados */
+  --bp-tablet: 1100px;
+  --bp-phone: 720px;
+
+  /* Vocabulario retirado → canónico (usados por sitios antiguos) */
+  --theme-surface: var(--surface-panel);
+  --theme-surface-raised: var(--surface-panel);
+  --surface-raised: var(--surface-panel);
+  --surface-sunken: var(--surface-card);
+  --accent: var(--interactive);
+  --ok-legacy: var(--ok);
+  --warn-legacy: var(--warn);
+  --danger-legacy: var(--danger);
+  --ink: var(--text-primary);
+  --ink-muted: var(--text-muted);
+  --ink-3: var(--text-secondary);
+  --ink-faint: var(--text-muted);
+  --text-dim: var(--text-secondary);
+  --line-soft: var(--border-subtle);
+  --line: var(--border-subtle);
+  --line-strong: var(--border-strong);
+  --border: var(--border-subtle);
+  --paper-2: var(--surface-panel);
+  --model3d-backdrop: var(--bg-app);
+  --model3d-glass: var(--mat-glass);
+  --model3d-steel: var(--mat-steel);
+  --model3d-handle: var(--mat-handle);
+  --model3d-coupler: var(--mat-coupler);
+  --model3d-gasket: var(--mat-gasket);
+  --model3d-edge: var(--mat-edge);
+  --model3d-wall: var(--mat-wall);
   --member-pvc-fill: var(--mat-pvc-fill);
   --member-pvc-edge: var(--mat-pvc-edge);
   --member-pvc-highlight: var(--mat-pvc-highlight);
@@ -219,12 +575,6 @@
   --member-anthracite-highlight: var(--mat-anthracite-highlight);
   --member-panel-fill: var(--mat-panel-fill);
   --member-panel-edge: var(--mat-panel-edge);
-  --model3d-glass: var(--mat-glass);
-  --model3d-steel: var(--mat-steel);
-  --model3d-handle: var(--mat-handle);
-  --model3d-coupler: var(--mat-coupler);
-  --model3d-gasket: var(--mat-gasket);
-  --model3d-edge: var(--mat-edge);
   --op-mark: var(--mat-op-mark);
   --op-mark-edge: var(--mat-op-mark-edge);
   --op-drill: var(--mat-op-drill);
@@ -238,103 +588,99 @@
   --op-edge-work: var(--mat-op-edge-work);
   --op-edge-work-edge: var(--mat-op-edge-work-edge);
   --op-hardware: var(--mat-op-hardware);
-  --theme-glass-pane: var(--mat-glass-pane);
-  --signature-ink: var(--mat-signature-ink);
+  --theme-op-selected-row: var(--op-selected-row);
 
-  /* Radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --radius-pill: 999px;
-
-  /* Elevation — numbered scale; the named shadows resolve through it */
-  --elevation-0: none;
-  --elevation-1: var(--shadow-raise);
-  --elevation-2: var(--shadow-pop);
-  --elevation-3: var(--shadow-modal);
-
-  /* Density — row/control heights on the 4px grid */
-  --density-compact: 1.75rem;
-  --density-default: 2.25rem;
-  --density-loose: 2.75rem;
-  --control-height: var(--density-default);
-
-  /* Interaction */
-  --focus-ring: 0 0 0 2px var(--theme-bg-canvas), 0 0 0 4px var(--theme-focus-ring);
-  --motion-fast: 120ms;
-  --motion-base: 180ms;
-
-  /* Layers */
-  --z-island: 10;
-  --z-drawer: 30;
-  --z-overlay: 50;
-  --z-modal: 90;
-
-  /* Breakpoints (used by @media rules; documented as tokens for parity) */
-  --bp-tablet: 1100px;
-  --bp-phone: 720px;
-
-  /* Retired-vocabulary aliases — resolve to canonical tokens so older call
-     sites render correctly in both themes. New code uses --theme-* directly. */
-  --theme-surface: var(--theme-surface-panel);
-  --theme-surface-raised: var(--theme-surface-panel);
-  --theme-font-mono: var(--font-mono);
-  --surface-raised: var(--theme-surface-panel);
-  --surface-sunken: var(--theme-surface-card);
-  --accent: var(--theme-accent);
-  --ok: var(--theme-success);
-  --warn: var(--theme-warning);
-  --danger: var(--theme-danger);
-  --ink: var(--theme-text-primary);
-  --ink-muted: var(--theme-text-muted);
-  --ink-3: var(--theme-text-secondary);
-  --ink-faint: var(--theme-text-muted);
-  --text-dim: var(--theme-text-secondary);
-  --warning: var(--theme-warning);
-  --warning-soft: var(--theme-warning-soft);
-  --line-soft: var(--theme-border-subtle);
-  --line: var(--theme-border-subtle);
-  --line-strong: var(--theme-border-strong);
-  --border: var(--theme-border-subtle);
+  /* Fantasmas frecuentes en llamadas antiguas — mapeados al rol real */
+  --theme-bg: var(--bg-app);
+  --theme-fg-primary: var(--text-primary);
+  --theme-fg-secondary: var(--text-secondary);
+  --theme-fg-muted: var(--text-muted);
+  --theme-text: var(--text-primary);
+  --theme-text-dim: var(--text-muted);
+  --theme-border: var(--border-default);
+  --theme-line: var(--border-subtle);
+  --theme-canvas: var(--surface-sheet);
+  --theme-hover: var(--surface-hover);
+  --theme-surface-2: var(--surface-card);
+  --theme-surface-alt: var(--surface-card);
+  --theme-surface-inset: var(--surface-card);
+  --theme-surface-page: var(--bg-app);
+  --theme-surface-sunken: var(--surface-card);
+  --theme-warn-bg: var(--warn-soft);
+  --theme-primary: var(--interactive-fill);
+  --theme-on-primary: var(--on-interactive-fill);
 }
+
+/* Tema oscuro: los alias semánticos heredan los roles oscuros
+   automáticamente; solo los alias que apuntaban a valores fijos cambian. */
 
 /* Route-level error boundary: a crashed view keeps a recoverable frame. */
 .route-error {
   min-height: 60vh;
   display: grid;
   place-items: center;
-  padding: var(--space-6, 24px);
+  padding: var(--space-32);
 }
 .route-error-card {
   max-width: 26rem;
   text-align: center;
   display: grid;
-  gap: var(--space-3, 12px);
+  gap: var(--space-12);
 }
 .route-error-card h1 {
-  font-size: 1.25rem;
+  font-size: var(--type-title-l);
   margin: 0;
 }
 .route-error-card p {
-  color: var(--theme-text-secondary, #5b6472);
+  color: var(--text-secondary);
   margin: 0;
 }
 .route-error-actions {
   display: flex;
-  gap: var(--space-2, 8px);
+  gap: var(--space-8);
   justify-content: center;
 }
-.route-error-actions button {
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--line, #d6dae2);
-  background: var(--accent, #1b5cff);
-  color: var(--theme-surface-panel);
-  font-weight: 600;
-  cursor: pointer;
+
+/* P25 — páginas de sistema (404 / sin conexión) comparten la tarjeta de
+ * error con lámina: paper sobre banco, una acción. */
+.app-error-page {
+  display: grid;
+  min-height: 60vh;
+  padding: var(--space-32);
+  place-items: center;
 }
-.route-error-actions .route-error-secondary {
-  background: transparent;
-  color: var(--theme-text-primary, #1d2430);
+
+.app-error-card {
+  align-items: center;
+  display: grid;
+  gap: var(--space-12);
+  justify-items: center;
+  max-width: 26rem;
+  text-align: center;
+}
+
+.app-error-card h1 {
+  font-size: var(--type-title-l);
+  margin: 0;
+}
+
+.app-error-card p {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.app-error-card__actions {
+  display: flex;
+  gap: var(--space-8);
+  justify-content: center;
+}
+
+/* Sin conexión: overlay completo — el taller no se dibuja sin red. */
+.app-offline {
+  background: var(--theme-bg-canvas);
+  display: grid;
+  inset: 0;
+  place-items: center;
+  position: fixed;
+  z-index: var(--z-palette);
 }

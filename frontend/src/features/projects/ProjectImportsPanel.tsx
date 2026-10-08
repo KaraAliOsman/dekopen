@@ -15,6 +15,13 @@ import type {
   ImportResponse,
 } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
+import { StatusChip } from "../../ui/StatusChip";
+import {
+  IMPORT_CONFIDENCE_LABEL,
+  IMPORT_CONFIDENCE_TONE,
+  IMPORT_STATUS_LABEL,
+  IMPORT_STATUS_TONE,
+} from "../catalogs/importStatus";
 
 type Candidate = {
   key: string;
@@ -30,13 +37,6 @@ type Candidate = {
 
 type EditableRow = Candidate & { include: boolean };
 
-const STATUS_LABEL: Record<string, TranslationKey> = {
-  UPLOADED: "projects.importsStatusUploaded",
-  EXTRACTING: "projects.importsStatusExtracting",
-  REVIEW_READY: "projects.importsStatusReviewReady",
-  CONFIRMED: "projects.importsStatusConfirmed",
-  FAILED: "projects.importsStatusFailed",
-};
 const OPENING_LABEL: Record<string, TranslationKey> = {
   FIXED: "intent.fixed",
   TURN_LEFT: "intent.turnLeft",
@@ -415,9 +415,11 @@ export function ProjectImportsPanel({
               <tr key={entry.id}>
                 <td title={entry.file_name}>{entry.file_name}</td>
                 <td>
-                  <span className={`production-chip imports-status-${entry.status.toLowerCase()}`}>
-                    {t(STATUS_LABEL[entry.status] ?? "projects.importsStatusUploaded")}
-                  </span>
+                  <StatusChip
+                    label={t(IMPORT_STATUS_LABEL[entry.status] ?? "projects.importsStatusUploaded")}
+                    tone={IMPORT_STATUS_TONE[entry.status] ?? "neutral"}
+                    value={null}
+                  />
                   {entry.status === "FAILED" && entry.error_code && (
                     <span className="imports-warning">{codeText(entry.error_code)}</span>
                   )}
@@ -592,13 +594,15 @@ export function ProjectImportsPanel({
                       </select>
                     </td>
                     <td title={row.source_text}>
-                      <span
-                        className={`production-chip imports-confidence-${row.confidence.toLowerCase()}`}
-                      >
-                        {row.confidence === "HIGH"
-                          ? t("projects.importsConfidenceHigh")
-                          : t("projects.importsConfidenceReview")}
-                      </span>
+                      <StatusChip
+                        label={
+                          IMPORT_CONFIDENCE_LABEL[row.confidence]
+                            ? t(IMPORT_CONFIDENCE_LABEL[row.confidence]!)
+                            : row.confidence
+                        }
+                        tone={IMPORT_CONFIDENCE_TONE[row.confidence] ?? "neutral"}
+                        value={null}
+                      />
                       {itemError && (
                         <span className="imports-warning">{codeText(itemError.code)}</span>
                       )}

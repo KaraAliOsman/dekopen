@@ -55,6 +55,10 @@ def _runner(captured, existing=None, payments_list=None, sealed_gross=None,
             envios_list=None):
     def fake_rows(sql, params=None):
         captured.append((sql, params))
+        # La línea de tiempo P11 cruza varias tablas en un solo UNION —
+        # el marcador la saca del camino antes que las rutas por tabla.
+        if "p11_movements" in sql:
+            return []
         if "SELECT * FROM public.project_payments WHERE org_id=%s AND operation_key=%s" in sql:
             return list(existing or [])
         if "FROM public.project_versions" in sql:
@@ -88,7 +92,10 @@ def _runner(captured, existing=None, payments_list=None, sealed_gross=None,
             return list(payments_list or [])
         if "FROM public.project_invoices" in sql:
             return list(invoices_list or [])
-        if "FROM public.sii_envios" in sql:
+        # La línea de tiempo P11 también consulta sii_envios (rama UNION
+        # «'envio' AS type») — el badge de envío distingue por su JOIN a
+        # project_dtes, que la línea de tiempo no trae.
+        if "FROM public.sii_envios" in sql and "project_dtes" in sql:
             return list(envios_list or [])
         if "INSERT INTO public.project_payments" in sql:
             return [] if existing else [_payment_row(project_id=params[1])]
@@ -116,6 +123,18 @@ def env(monkeypatch):
         payments.sii,
         "dtes_by_credit_note",
         lambda *, org_id, project_id: {},
+    )
+    # P11 — el resumen consulta la bitácora IA y el estado tributario real;
+    # en unidad ambos son un stub honesto, no una fila en DB.
+    monkeypatch.setattr(
+        payments.reminders,
+        "latest_draft",
+        lambda *, org_id, project_id: None,
+    )
+    monkeypatch.setattr(
+        payments, "_sii_summary",
+        lambda org_id: {"adapter": "none", "certified": False,
+                        "certificate": False, "caf_available": False},
     )
     monkeypatch.setattr(
         payments,

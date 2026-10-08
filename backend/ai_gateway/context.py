@@ -479,6 +479,22 @@ def _project(org_id: UUID, refs: dict) -> dict:
             "documentary_complete": bool(versions[0]["documentary_complete"]),
             "production_allowed": bool(versions[0]["production_allowed"]),
         }
+    # IA2 — add_position/update_position citan system_id reales: el catálogo
+    # compacto viaja en el contexto para que el modelo nunca invente uno.
+    systems = rows(
+        "SELECT id, code, system_family FROM public.profile_systems "
+        "WHERE (org_id=%s OR (org_id IS NULL AND is_global)) AND is_active "
+        "ORDER BY code LIMIT %s",
+        [org_id, MAX_LIST],
+    )
+    context["systems"] = [
+        {
+            "id": str(s["id"]),
+            "code": _cut(s["code"]),
+            "family": _cut(s["system_family"]),
+        }
+        for s in systems
+    ]
     # Positions are writable only while the current revision is unsealed —
     # batch design ops are only offerable when this reads true.
     context["editable"] = project["status"] == "DRAFT" and not (
@@ -526,11 +542,75 @@ def stable_refs(refs: dict) -> dict:
     return {key: value for key, value in refs.items() if key not in VOLATILE_REFS}
 
 
+def _system_opening_options(org_id: UUID, position: dict) -> list[dict]:
+    """The system's declared opening repertoire (D03) — what the AI may
+    offer in set_opening ops. Declared capability rows win; a system with
+    none falls back to its fabrication family's repertoire."""
+    from dekopen_engine import (
+        default_capabilities_for_family,
+        spec_options_from_capabilities,
+    )
+    from dekopen_engine.models import (
+        LeafRole,
+        OpeningCapability,
+        OpeningDirection,
+        OpeningMovement,
+        SystemFamily,
+        UnitKind,
+    )
+
+    if not position.get("system_uuid"):
+        return []
+    capability_rows = rows(
+        "SELECT movement, directions, leaf_roles, unit_kinds, max_leaves, "
+        "fixed_in_sash FROM public.system_opening_capabilities "
+        "WHERE system_id=%s AND (org_id=%s OR org_id IS NULL) "
+        "ORDER BY movement",
+        [position["system_uuid"], org_id],
+    )
+    capabilities = (
+        tuple(
+            OpeningCapability(
+                movement=OpeningMovement(str(row["movement"])),
+                directions=tuple(
+                    OpeningDirection(value) for value in row["directions"] or ()
+                ),
+                leaf_roles=tuple(
+                    LeafRole(value) for value in row["leaf_roles"] or ()
+                ),
+                unit_kinds=tuple(
+                    UnitKind(value) for value in row["unit_kinds"] or ()
+                ),
+                max_leaves=int(row["max_leaves"]),
+                fixed_in_sash=bool(row["fixed_in_sash"]),
+            )
+            for row in capability_rows
+        )
+        or default_capabilities_for_family(
+            SystemFamily(str(position["system_family"]))
+        )
+    )
+    # Compact projection for the prompt: the option key the op echoes back
+    # plus its Spanish name and unit kind — spec payloads stay in the API.
+    # `legacy` viaja también: el glosario enseña TILT_TURN_LEFT y el
+    # validador acepta ambas formas del catálogo (key D03 o alias legacy).
+    return [
+        {
+            "key": option["key"],
+            "name": option["name"],
+            "unit_kind": option["unit_kind"],
+            "legacy": option.get("legacy"),
+        }
+        for option in spec_options_from_capabilities(capabilities)
+    ]
+
+
 def _position(org_id: UUID, refs: dict) -> dict:
     result = rows(
         "SELECT p.id, p.project_id, p.position_index, p.location_tag, p.typology, "
-        "p.width_mm, p.height_mm, p.parametric_tree, "
-        "s.code AS system_code, s.name AS system_name, s.material, "
+        "p.width_mm, p.height_mm, p.parametric_tree, p.bom_snapshot, "
+        "s.id AS system_uuid, s.code AS system_code, s.name AS system_name, "
+        "s.material, s.system_family, "
         "pr.code AS project_code, pr.name AS project_name "
         "FROM public.project_positions p "
         "LEFT JOIN public.profile_systems s ON s.id = p.system_id "
@@ -542,6 +622,7 @@ def _position(org_id: UUID, refs: dict) -> dict:
     if not result:
         raise _ContextError("ai_context_not_found")
     position = result[0]
+    opening_options = _system_opening_options(org_id, position)
     tree = _jsonb(position.get("parametric_tree"))
     assembly = tree.get("assembly") if isinstance(tree, dict) else None
     modules = assembly.get("modules") if isinstance(assembly, dict) else None
@@ -596,6 +677,39 @@ def _position(org_id: UUID, refs: dict) -> dict:
             c.get("id") == selection_id for c in couplings if isinstance(c, dict)
         ):
             selected = {"id": _cut(selection_id, 80), "kind": "coupling"}
+    # IA2 — la salida del motor persistida con la posición: pesos por
+    # hoja e issues que la IA cita tal cual (e09 peso, e10 bloqueos) en
+    # vez de recalcularlos o inventarlos.
+    bom = _jsonb(position.get("bom_snapshot"))
+    leaf_weights = (
+        [
+            {
+                "bay_id": _cut(item.get("bay_id"), 60),
+                "leaf_id": _cut(item.get("leaf_id"), 60),
+                "total_weight_kg": _cut(item.get("total_weight_kg")),
+                "weight_unknown_reasons": item.get("weight_unknown_reasons") or [],
+            }
+            for item in bom.get("leaf_weights", [])[:MAX_LIST]
+            if isinstance(item, dict)
+        ]
+        if isinstance(bom, dict)
+        else []
+    )
+    issues = (
+        [
+            {
+                "code": _cut(issue.get("code"), 80)
+                if isinstance(issue, dict)
+                else _cut(issue, 80),
+                "detail": _cut(issue.get("detail"), 200)
+                if isinstance(issue, dict)
+                else None,
+            }
+            for issue in bom.get("issues", [])[:MAX_LIST]
+        ]
+        if isinstance(bom, dict)
+        else []
+    )
     return {
         "id": str(position["id"]),
         "project": {
@@ -610,11 +724,14 @@ def _position(org_id: UUID, refs: dict) -> dict:
             "code": _cut(position["system_code"]),
             "name": _cut(position["system_name"]),
             "material": _cut(position["material"]),
+            "opening_options": opening_options,
         },
         "width_mm": _cut(position["width_mm"]),
         "height_mm": _cut(position["height_mm"]),
         "modules": projected_modules,
         "couplings": len(couplings) if isinstance(couplings, list) else None,
+        "leaf_weights": leaf_weights or None,
+        "issues": issues or None,
         "selected": selected,
     }
 
@@ -1076,7 +1193,7 @@ def _client(org_id: UUID, refs: dict) -> dict:
     """One client's desk: identity + their projects — the detail route's
     assistant must answer about THIS client, not the org aggregate."""
     client = rows(
-        "SELECT id, name, rut, email, phone, address, notes, is_active"
+        "SELECT id, name, rut, email, phone, address, is_active"
         " FROM public.clients WHERE id=%s AND org_id=%s",
         [refs["client_id"], org_id],
     )

@@ -136,10 +136,21 @@ function position(
     project_id: projectId,
     position_index: 3,
     location_tag: location,
+    is_option: false,
     quantity: 4,
     typology: "FIXED",
     price_net: "0",
     discount_pct: "0",
+    thermal_orientation: null,
+    measurement: {
+      state: "CLIENT_DECLARED",
+      confirmed_at: null,
+      confirmed_by: null,
+      vano: null,
+      mounting_rule: null,
+      fabrication_lock: null,
+      resolution: null,
+    },
     updated_at: "2026-09-18T15:00:00.123456Z",
     design: {
       system_id: "system-a",
@@ -249,6 +260,16 @@ function mount(path = "/projects/project-a/positions/position-a/edit") {
 }
 
 function change(key: TranslationKey, value: string) {
+  if (key === "projects.system") {
+    // The Serie selector lives inside the strip chip's popover — open it first.
+    if (!screen.queryByRole("combobox", { name: t(key) })) {
+      fireEvent.click(screen.getByRole("button", { name: t(key) }));
+    }
+    fireEvent.change(screen.getByRole("combobox", { name: t(key) }), {
+      target: { value },
+    });
+    return;
+  }
   fireEvent.change(screen.getByLabelText(t(key)), {
     target: { value },
   });
@@ -282,6 +303,17 @@ beforeEach(() => {
           code: "A",
           name: "Sistema A",
           is_demo: false,
+          system_family: "CASEMENT",
+          allowed_openings: [
+            "FIXED",
+            "TURN_LEFT",
+            "TURN_RIGHT",
+            "TILT_TURN_LEFT",
+            "TILT_TURN_RIGHT",
+            "AWNING",
+            "DOOR_ENTRY",
+            "DOOR_DOUBLE",
+          ],
           quote_ready: true,
           readiness_reasons: [],
         },
@@ -290,6 +322,17 @@ beforeEach(() => {
           code: "B",
           name: "Sistema B",
           is_demo: false,
+          system_family: "CASEMENT",
+          allowed_openings: [
+            "FIXED",
+            "TURN_LEFT",
+            "TURN_RIGHT",
+            "TILT_TURN_LEFT",
+            "TILT_TURN_RIGHT",
+            "AWNING",
+            "DOOR_ENTRY",
+            "DOOR_DOUBLE",
+          ],
           quote_ready: true,
           readiness_reasons: [],
         },
@@ -316,11 +359,14 @@ beforeEach(() => {
       ],
       glazing_thicknesses: ["24.00", "28.00"],
       glass_skus: ["GLASS-A", "GLASS-B"],
+      glass_products: [],
       glass_specs: [
         { sku: "GLASS-A", spec: "4-16-4" },
         { sku: "GLASS-B", spec: null },
       ],
       handle_policy: null,
+      hardware_families: [],
+      hardware_options: [],
       hardware_kits: [
         {
           sku: "KIT-B",
@@ -332,6 +378,9 @@ beforeEach(() => {
           max_leaf_height_mm: "2400",
           max_leaf_weight_kg: "120",
           weight_kg: null,
+          class_label: null,
+          max_aspect_ratio: null,
+          min_stay_height_mm: null,
           contents: [],
         },
       ],
@@ -365,9 +414,14 @@ afterEach(() => {
   useCanvasStore.getState().reset();
 });
 
+async function openStarterLibrary() {
+  fireEvent.click(screen.getByRole("button", { name: t("assembly.starterLibrary") }));
+  return await screen.findByRole("dialog", { name: t("assembly.starterLibrary") });
+}
+
 it("opens a new position directly on the canvas editor", async () => {
   mount("/projects/project-a/positions/new");
-  await screen.findByRole("list", { name: t("assembly.starterLibrary") });
+  await openStarterLibrary();
   // A blank window is already on the canvas — no product-type decision exists.
   expect(useCanvasStore.getState().inputs.product).not.toBeNull();
   expect(screen.getByRole("button", { name: t("projects.save") })).toBeDisabled();
@@ -392,12 +446,38 @@ it("loads a classic position as a compositional product and saves it back unchan
     {
       location_tag: "Dormitorio",
       quantity: 7,
+      is_option: false,
       // Single-unit products fold back to the classic documentary shape.
       design: position().design,
       expected_updated_at: position().updated_at,
     },
     { headers: { "X-Organization-ID": "org-a" } },
   );
+});
+
+it("saves a single-unit position with declared extras as product-v2", async () => {
+  mount();
+  await ready();
+
+  const inputs = useCanvasStore.getState().inputs;
+  const product = inputs.product!;
+  // D06: extras live on the product-v2 wrapper — the classic single-unit
+  // shape (bare IntentNode) has nowhere to carry them, so declaring one
+  // switches the persisted shape for this save.
+  act(() => {
+    useCanvasStore.getState().commitInputs({
+      ...inputs,
+      product: { ...product, extras: [{ sku: "EXT-MOSQ-ENR" }] },
+    });
+  });
+
+  save();
+  await screen.findByText(t("projects.saved"));
+  const tree = update.mock.calls[0]?.[1].design?.parametric_tree as ProductJson;
+  expect(tree.version).toBe("product-v2");
+  expect(tree.extras).toEqual([{ sku: "EXT-MOSQ-ENR" }]);
+  // The module tree itself is unchanged — only the wrapper shape differs.
+  expect(tree.assembly.modules[0]!.tree).toEqual(position().design.parametric_tree);
 });
 
 it("round-trips a saved assembly as product-v2", async () => {
@@ -453,7 +533,7 @@ it("saves a manufacturing-incomplete assembly as a draft", async () => {
 
 it("builds a five-unit bow from the design library and edits a joint angle on plan", async () => {
   mount("/projects/project-a/positions/new");
-  await screen.findByRole("list", { name: t("assembly.starterLibrary") });
+  await openStarterLibrary();
 
   fireEvent.click(screen.getByRole("button", { name: /Bow ×5/ }));
 
@@ -464,7 +544,7 @@ it("builds a five-unit bow from the design library and edits a joint angle on pl
 
 it("auto-resolves the catalog coupler when only one exists", async () => {
   mount("/projects/project-a/positions/new");
-  await screen.findByRole("list", { name: t("assembly.starterLibrary") });
+  await openStarterLibrary();
 
   fireEvent.click(screen.getByRole("button", { name: /Bow ×3/ }));
 
@@ -484,8 +564,11 @@ it("fills glass defaults when the catalog has a single glazing thickness", async
       profiles: [],
       glazing_thicknesses: ["4.00"],
       handle_policy: null,
+      hardware_families: [],
+      hardware_options: [],
       hardware_kits: [],
       glass_skus: ["GLASS-A"],
+      glass_products: [],
       glass_specs: [{ sku: "GLASS-A", spec: "4" }],
       coupler_skus: [],
       coupler_profiles: [],
@@ -499,8 +582,10 @@ it("fills glass defaults when the catalog has a single glazing thickness", async
     }),
   );
   mount("/projects/project-a/positions/new");
-  await screen.findByRole("list", { name: t("assembly.starterLibrary") });
-  // The system <select> only commits once its options exist.
+  await openStarterLibrary();
+  // The system <select> only commits once its options exist — it lives inside
+  // the strip chip's popover.
+  fireEvent.click(screen.getByRole("button", { name: t("projects.system") }));
   await screen.findByRole("option", { name: /Sistema A/ });
 
   change("projects.system", "system-a");
@@ -527,7 +612,7 @@ it("fills glass defaults when the catalog has a single glazing thickness", async
 
 it("removes a selected module with Delete and undoes it", async () => {
   mount("/projects/project-a/positions/new");
-  await screen.findByRole("list", { name: t("assembly.starterLibrary") });
+  await openStarterLibrary();
   fireEvent.click(screen.getByRole("button", { name: /Bow ×3/ }));
 
   useCanvasStore.getState().select("m2");
@@ -577,6 +662,7 @@ it("copies a position through create, preserving its exact design", async () => 
     {
       location_tag: "Copia cocina",
       quantity: source.quantity,
+      is_option: false,
       design: source.design,
     },
     { headers: { "X-Organization-ID": "org-a" } },
@@ -818,6 +904,17 @@ it("does not offer FOILED or a catalog the backend marks incomplete", async () =
           code: "A",
           name: "Sistema A",
           is_demo: false,
+          system_family: "CASEMENT",
+          allowed_openings: [
+            "FIXED",
+            "TURN_LEFT",
+            "TURN_RIGHT",
+            "TILT_TURN_LEFT",
+            "TILT_TURN_RIGHT",
+            "AWNING",
+            "DOOR_ENTRY",
+            "DOOR_DOUBLE",
+          ],
           quote_ready: true,
           readiness_reasons: [],
         },
@@ -826,6 +923,17 @@ it("does not offer FOILED or a catalog the backend marks incomplete", async () =
           code: "B",
           name: "Incomplete system",
           is_demo: false,
+          system_family: "CASEMENT",
+          allowed_openings: [
+            "FIXED",
+            "TURN_LEFT",
+            "TURN_RIGHT",
+            "TILT_TURN_LEFT",
+            "TILT_TURN_RIGHT",
+            "AWNING",
+            "DOOR_ENTRY",
+            "DOOR_DOUBLE",
+          ],
           quote_ready: false,
           readiness_reasons: ["manufacturing"],
         },
@@ -840,17 +948,18 @@ it("does not offer FOILED or a catalog the backend marks incomplete", async () =
 
 it("renders the design library with rendered starter cards", async () => {
   mount("/projects/project-a/positions/new");
-  const list = await screen.findByRole("list", {
-    name: t("assembly.starterLibrary"),
-  });
-  expect(within(list).getAllByRole("listitem")).toHaveLength(15);
+  const list = await openStarterLibrary();
+  // 15 classic recipes + the 6 advanced D08 typologies (the mock declares
+  // no opening_options, so the library shows everything).
+  expect(within(list).getAllByRole("listitem")).toHaveLength(21);
   // Every card previews through the same front-elevation renderer.
   expect(within(list).getAllByTestId("product-front").length).toBeGreaterThan(0);
+  expect(within(list).getByRole("button", { name: /Corredera elevable/ })).toBeInTheDocument();
 });
 
 it("picking a sliding starter card builds a sliding product", async () => {
   mount("/projects/project-a/positions/new");
-  await screen.findByRole("list", { name: t("assembly.starterLibrary") });
+  await openStarterLibrary();
   fireEvent.click(screen.getByRole("button", { name: /Corredera 2 hojas/ }));
   const product = useCanvasStore.getState().inputs.product;
   expect(product?.assembly.modules[0]?.tree.opening_type).toBe("SLIDING_2L");

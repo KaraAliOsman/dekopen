@@ -9,10 +9,16 @@ import type { InventoryMovementMovementTypeEnum } from "./inventoryMovementMovem
 
 export interface InventoryMovement {
   id: string;
-  item_id: string;
+  /** @nullable */
+  item_id: string | null;
+  /** @nullable */
+  remnant_id?: string | null;
   movement_type: InventoryMovementMovementTypeEnum;
-  /** @pattern ^-?\d{0,12}(?:\.\d{0,2})?$ */
-  quantity: string;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,12}(?:\.\d{0,2})?$
+   */
+  quantity: string | null;
   /** @nullable */
   order_id: string | null;
   /** @nullable */
@@ -27,5 +33,15 @@ export interface InventoryMovement {
   actor_id: string | null;
   /** @nullable */
   actor_label?: string | null;
+  /** @nullable */
+  order_code?: string | null;
+  /** @nullable */
+  receipt_code?: string | null;
+  /** @nullable */
+  remnant_code?: string | null;
+  /** @nullable */
+  sku?: string | null;
+  /** @nullable */
+  item_name?: string | null;
   created_at: string;
 }

@@ -1,0 +1,188 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* ---------- panel / sección / ficha ---------- */
+.ui-panel {
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-2);
+}
+.ui-panel__head {
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  gap: var(--space-8);
+  justify-content: space-between;
+  padding: var(--space-12) var(--space-16);
+}
+.ui-panel__title {
+  font-size: var(--type-title-m);
+  font-weight: 600;
+  letter-spacing: var(--type-label-ls);
+  margin: 0;
+}
+.ui-panel__actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-8);
+}
+.ui-panel__body {
+  padding: var(--space-16);
+}
+.ui-section + .ui-section {
+  margin-top: var(--space-24);
+}
+.ui-section__title {
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: var(--type-title-m);
+  font-weight: 600;
+  letter-spacing: var(--type-label-ls);
+  margin: 0 0 var(--space-12);
+  padding-bottom: var(--space-8);
+}
+.ui-kv {
+  align-items: baseline;
+  display: flex;
+  gap: var(--space-8);
+  justify-content: space-between;
+  min-height: var(--control-height);
+  padding: var(--space-4) 0;
+}
+.ui-kv__key {
+  color: var(--text-muted);
+  font-size: var(--type-dense);
+}
+.ui-kv__value {
+  text-align: right;
+}
+.ui-spec {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-1);
+  padding: var(--space-8) var(--space-12);
+}
+.ui-stepper {
+  display: flex;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ui-stepper__item {
+  align-items: center;
+  display: flex;
+  flex: 1;
+}
+.ui-stepper__step {
+  align-items: center;
+  display: flex;
+  flex: none;
+}
+.ui-stepper__item:not(:last-child)::after {
+  background: var(--border-default);
+  content: "";
+  flex: 1;
+  height: 1px;
+  margin: 0 var(--space-8);
+}
+.ui-stepper__item.is-done:not(:last-child)::after {
+  background: var(--interactive);
+}
+.ui-stepper__index {
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  color: var(--text-muted);
+  display: flex;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--type-micro);
+  height: 1.25rem;
+  justify-content: center;
+  margin-right: var(--space-6);
+  width: 1.25rem;
+}
+.ui-stepper__item.is-blocked .ui-stepper__index {
+  border-style: dashed;
+}
+.ui-stepper__item.is-current .ui-stepper__index {
+  background: var(--interactive-fill);
+  border-color: var(--interactive-fill);
+  color: var(--on-interactive-fill);
+}
+.ui-stepper__item.is-done .ui-stepper__index {
+  background: var(--interactive);
+  border-color: var(--interactive);
+  color: var(--on-interactive-fill);
+}
+.ui-stepper__label {
+  font-size: var(--type-dense);
+}
+.ui-stepper__item.is-current .ui-stepper__label {
+  font-weight: 600;
+}
+.ui-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.ui-stat__label {
+  color: var(--text-muted);
+  font-size: var(--type-label);
+  letter-spacing: var(--type-label-ls);
+  text-transform: uppercase;
+}
+.ui-stat__value {
+  font-family: var(--font-mono);
+  font-size: var(--type-title-l);
+}
+.ui-stat__detail {
+  align-items: center;
+  color: var(--text-muted);
+  display: flex;
+  font-size: var(--type-micro);
+  gap: var(--space-6);
+}
+
+/* ---------- inspector ---------- */
+.ui-inspector {
+  background: var(--surface-panel);
+  border-left: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  max-width: 20rem;
+  min-height: 0;
+  min-width: 18.75rem;
+}
+.ui-inspector__head {
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  gap: var(--space-8);
+  justify-content: space-between;
+  padding: var(--space-12) var(--space-16);
+}
+.ui-inspector__title {
+  font-size: var(--type-title-m);
+  font-weight: 600;
+  letter-spacing: var(--type-label-ls);
+  margin: 0;
+}
+.ui-inspector__body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-16);
+}
+.ui-inspector__foot {
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-12) var(--space-16);
+}
+.ui-inspector-group__title {
+  color: var(--text-muted);
+  font-size: var(--type-label);
+  letter-spacing: var(--type-label-ls);
+  margin: var(--space-16) 0 var(--space-8);
+  text-transform: uppercase;
+}
+.ui-inspector-group:first-child .ui-inspector-group__title {
+  margin-top: 0;
+}

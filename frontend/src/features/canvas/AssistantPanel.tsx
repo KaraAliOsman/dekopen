@@ -11,6 +11,9 @@ type Preview = {
   ops: DesignOp[];
   rejected: { op: string | null; reason: string }[];
   notes: string | null;
+  /** IA2 §3 — aclaración tipada: pregunta + opciones reales; elegir un chip
+   * re-envía el mismo pedido con la respuesta y continúa el trabajo. */
+  clarify: { question: string; options: { value: string; label: string }[] } | null;
   model: string;
   credits: number;
   /** The product instance the ops were validated against — any later commit
@@ -138,10 +141,30 @@ export function AssistantPanel({
           reason: typeof item.reason === "string" ? item.reason : "formato_invalido",
         })),
         notes: data.notes,
+        clarify: (() => {
+          const raw = data.clarify;
+          if (!raw || typeof raw.question !== "string") return null;
+          const options = Array.isArray(raw.options)
+            ? raw.options.flatMap((option) =>
+                option && typeof option === "object" && "value" in option
+                  ? [
+                      {
+                        value: String(option.value),
+                        label:
+                          "label" in option && typeof option.label === "string"
+                            ? option.label
+                            : String(option.value),
+                      },
+                    ]
+                  : [],
+              )
+            : [];
+          return { question: raw.question, options };
+        })(),
         model: data.model,
         credits: data.credits_debited,
       });
-      if (data.ops.length === 0 && data.rejected.length === 0) {
+      if (data.ops.length === 0 && data.rejected.length === 0 && !data.clarify) {
         setMessage(t("assistant.empty"));
       }
     } catch (error) {
@@ -184,7 +207,7 @@ export function AssistantPanel({
           <div className="inspector-actions">
             <button
               type="button"
-              className="primary-button"
+              className="ui-button ui-button--primary"
               disabled={busy || disabled || !systemId || !prompt.trim()}
               onClick={() => void generate()}
             >
@@ -195,6 +218,33 @@ export function AssistantPanel({
           {preview && (
             <div className="assistant-panel__preview">
               {preview.notes && <p className="assistant-panel__notes">{preview.notes}</p>}
+              {preview.clarify && (
+                <div className="assistant-panel__clarify">
+                  <p className="assistant-panel__notes">{preview.clarify.question}</p>
+                  {preview.clarify.options.length > 0 && (
+                    <div className="assistant-panel__chips">
+                      {preview.clarify.options.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className="assistant-panel__chip"
+                          disabled={busy}
+                          onClick={() => {
+                            // La respuesta continúa el mismo pedido: el chip
+                            // re-envía «pedido — respuesta» y el asistente
+                            // resuelve la op con el dato zanjado.
+                            const next = `${prompt.trim()} — ${option.label}`;
+                            setPrompt(next);
+                            void generate(next);
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {preview.ops.length > 0 && (
                 <ul className="assistant-panel__ops">
                   {preview.ops.map((op, index) => (
@@ -219,7 +269,7 @@ export function AssistantPanel({
                 <div className="inspector-actions">
                   <button
                     type="button"
-                    className="primary-button"
+                    className="ui-button ui-button--primary"
                     disabled={preview.ops.length === 0 || disabled}
                     onClick={() => {
                       onApply(preview.ops);

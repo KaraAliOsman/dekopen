@@ -11,7 +11,7 @@ so the floor has a paperless trail."""
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from time import perf_counter
 import hashlib
 import json
@@ -38,13 +38,15 @@ from documents.repository import (
     write,
 )
 from documents.renderers import (
+    _bar_assignments,
     _cut_key,
     _cut_member_map,
     _infill_code_map,
     _infill_key,
     _piece_labels,
+    _sheet_assignments,
 )
-from engine_api.cutting_repository import CuttingRepository
+from engine_api.cutting_repository import CuttingRepository, steel_color_map
 from inventory import remnants as remnants_service
 from inventory import production_stock
 from production.confirmations import _confirmation_public
@@ -589,6 +591,14 @@ def _work_order_payload(
                 "fittings", "hardware_items",
             )
         },
+        # D04: hardware work view — the OT's picking list (component, qty,
+        # cut length) and the declared machining operations, aggregated off
+        # the sealed expansion. Never invented: lines only exist when the
+        # catalog's expansion emitted them.
+        "hardware_picking": _hardware_picking(
+            engine, quantity=int(position.get("quantity") or 1)
+        ),
+        "hardware_machining": _hardware_machining(engine),
         "glass_polishing": list(polishing or []),
         "routing": _routing(
             engine,
@@ -598,6 +608,78 @@ def _work_order_payload(
         ),
         "process_authority": _process_authority(profile, resolved_via),
     }
+
+
+def _decimal_of(value: object) -> Decimal:
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal("0")
+
+
+def _hardware_picking(
+    engine: dict[str, object], *, quantity: int
+) -> list[dict[str, object]]:
+    """Picking lines for the work order: each emitted component (its leaf
+    count already resolved by the engine) times leaf count times position
+    quantity, grouped by (sku, cut length) so the same part never splits
+    across lines. `option_sku` keeps provenance for option-driven parts."""
+    grouped: dict[tuple[object, ...], dict[str, object]] = {}
+    for item in engine.get("hardware_items") or []:
+        if not isinstance(item, dict):
+            continue
+        item_qty = _decimal_of(item.get("qty") or 1)
+        for component in item.get("contents") or []:
+            if not isinstance(component, dict):
+                continue
+            key = (
+                component.get("sku"),
+                component.get("length_mm"),
+                component.get("option_sku"),
+            )
+            units = _decimal_of(component.get("qty") or 0) * item_qty * quantity
+            line = grouped.get(key)
+            if line is None:
+                grouped[key] = {
+                    "sku": component.get("sku"),
+                    "name": component.get("name"),
+                    "qty": units,
+                    "unit": component.get("unit"),
+                    "category": component.get("category"),
+                    "length_mm": component.get("length_mm"),
+                    "option_sku": component.get("option_sku"),
+                }
+            else:
+                line["qty"] = line["qty"] + units
+    return [
+        {**line, "qty": str(line["qty"])}
+        for line in sorted(
+            grouped.values(),
+            key=lambda line: (str(line["sku"]), str(line["length_mm"])),
+        )
+    ]
+
+
+def _hardware_machining(engine: dict[str, object]) -> list[dict[str, object]]:
+    """Declared machining operations per leaf — EMITTED only when the
+    catalog carried coordinates; otherwise DECLARED_NOT_EMITTED (P14 data,
+    never invented geometry)."""
+    operations: list[dict[str, object]] = []
+    for item in engine.get("hardware_items") or []:
+        if not isinstance(item, dict):
+            continue
+        for declaration in item.get("machining") or []:
+            if not isinstance(declaration, dict):
+                continue
+            operations.append(
+                {
+                    "bay_id": item.get("bay_id"),
+                    "leaf_id": item.get("leaf_id"),
+                    "kit_sku": item.get("kit_sku"),
+                    **declaration,
+                }
+            )
+    return operations
 
 
 _FROZEN_PROFILE_FIELDS = (
@@ -703,6 +785,15 @@ def _public_order(order: dict[str, object], *, include_payload: bool = False) ->
         # this unit is being rebuilt without opening the source order
         # ({qc_item, note} — the QC failure that triggered it).
         "remake_reason": (payload or {}).get("remake_reason"),
+        # Board-card context (None when the caller never resolved it —
+        # _board_context runs on list/detail reads only).
+        "project_code": order.get("project_code"),
+        "project_name": order.get("project_name"),
+        "client_name": order.get("client_name"),
+        "committed_date": order.get("committed_date"),
+        "steps_blocked": order.get("steps_blocked", 0),
+        "qc_blocked": bool(order.get("qc_blocked")),
+        "plan_state": order.get("plan_state", "none"),
         "created_at": order["created_at"],
     }
     if include_payload:
@@ -755,6 +846,27 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
         for position in bom:
             position["system_id"] = position_systems.get(str(position.get("position_id") or ""))
         centers, inactive_kinds = _ensure_work_centers(org_id)
+        # D07: la producción no se libera con medidas sin confirmar. Snapshots
+        # sealed before the measurement concept existed carry no measurement
+        # block — they keep their legacy sealed authority; a version sealed
+        # with medidas is releasable only when every position confirmed.
+        unconfirmed = sorted(
+            str(pos.get("position_index") or pos.get("id"))
+            for pos in (snapshot.get("positions") or [])
+            if isinstance(pos.get("measurement"), dict)
+            and (
+                pos["measurement"].get("vano") is not None
+                or pos["measurement"].get("mounting_rule") is not None
+                or pos["measurement"].get("fabrication_lock") is not None
+            )
+            and pos["measurement"].get("state") != "CONFIRMED"
+        )
+        if unconfirmed:
+            raise DocumentaryError(
+                "measurement_not_confirmed",
+                detail="La producción no se libera con medidas sin confirmar.",
+                extra={"positions": unconfirmed},
+            )
         # The sealed polishing choices live on the snapshot positions — the
         # work order embeds them so the workshop reads edge processing without
         # joining the documentary snapshot.
@@ -786,14 +898,19 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
             for pos in snapshot.get("positions") or []
             if pos.get("id")
         }
-        # The sealed color is what the cut optimizer's stock variants are
-        # named after — WHITE only when both faces are WHITE, else FOILED.
+        # The sealed finish key is what the cut optimizer's stock variants
+        # are named after — the "EXT/INT" bicolor key or plain finish code
+        # (D05); binary-era positions keep WHITE/FOILED.
         color_by_position = {
             str(pos.get("id")): (
-                "WHITE"
-                if pos.get("color_interior") == "WHITE"
-                and pos.get("color_exterior") == "WHITE"
-                else "FOILED"
+                str(pos.get("finish_key"))
+                if pos.get("finish_key")
+                else (
+                    "WHITE"
+                    if pos.get("color_interior") == "WHITE"
+                    and pos.get("color_exterior") == "WHITE"
+                    else "FOILED"
+                )
             )
             for pos in snapshot.get("positions") or []
             if pos.get("id")
@@ -976,16 +1093,72 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
         }
 
 
+def _board_context(*, org_id: UUID, orders: list[dict[str, object]]) -> None:
+    """Board-card context for a batch of work orders: the project header
+    (the same whitelisted trio ``trace_work_order`` exposes to every floor
+    role) and the real commitment — the earliest still-open scheduled
+    delivery. ``committed_date`` stays ``None`` when no trip is booked:
+    the board renders "sin fecha agendada" instead of inventing capacity."""
+    order_ids = [str(order["id"]) for order in orders]
+    project_ids = sorted(
+        {str(order["project_id"]) for order in orders if order.get("project_id")}
+    )
+    if not order_ids:
+        return
+    projects: dict[str, dict[str, object]] = {}
+    if project_ids:
+        # authenticated holds column-level grants only — code/name are not
+        # among them — so the documentary authority resolves the header and
+        # only these three fields leave this function.
+        with documentary_backend():
+            for row in rows(
+                "SELECT id::text, code, name, client_name FROM public.projects "
+                "WHERE org_id = %s AND id = ANY(%s::uuid[])",
+                [str(org_id), project_ids],
+            ):
+                projects[str(row["id"])] = row
+    committed: dict[str, object] = {}
+    for row in rows(
+        """
+        SELECT order_id::text, MIN(scheduled_date) AS committed_date
+        FROM public.deliveries
+        WHERE org_id = %s AND order_id = ANY(%s::uuid[])
+          AND status::text IN ('SCHEDULED', 'ON_ROUTE')
+        GROUP BY order_id
+        """,
+        [str(org_id), order_ids],
+    ):
+        committed[str(row["order_id"])] = row["committed_date"]
+    for order in orders:
+        project = projects.get(str(order.get("project_id") or ""))
+        order["project_code"] = project.get("code") if project else None
+        order["project_name"] = project.get("name") if project else None
+        order["client_name"] = project.get("client_name") if project else None
+        order["committed_date"] = committed.get(str(order["id"]))
+
+
 def list_production_orders(*, org_id: UUID) -> dict[str, object]:
     orders = rows(
         """
         SELECT o.id, o.order_code, o.order_type::text, o.status::text, o.payload_json,
-               o.project_version_id, o.created_at,
+               o.project_version_id, o.project_id, o.created_at,
                COUNT(s.id) AS steps_total,
                COUNT(s.id) FILTER (WHERE s.status = 'DONE') AS steps_done,
+               COUNT(s.id) FILTER (WHERE s.status = 'BLOCKED') AS steps_blocked,
+               EXISTS(SELECT 1 FROM public.production_steps sq
+                      WHERE sq.order_id = o.id AND sq.status = 'BLOCKED'
+                        AND sq.code = 'QC') AS qc_blocked,
                (SELECT s2.code FROM public.production_steps s2
                 WHERE s2.order_id = o.id AND s2.status <> 'DONE'
                 ORDER BY s2.sequence LIMIT 1) AS next_step_code,
+               CASE
+                 WHEN o.payload_json->'optimization' IS NULL THEN 'none'
+                 WHEN COALESCE(
+                     (o.payload_json->'optimization'->>'invalidated')::boolean,
+                     false
+                 ) THEN 'invalidated'
+                 ELSE 'ok'
+               END AS plan_state,
                EXISTS(SELECT 1 FROM public.dispatch_notes dn
                       WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
                         AND dn.voided_at IS NULL
@@ -998,6 +1171,7 @@ def list_production_orders(*, org_id: UUID) -> dict[str, object]:
         """,
         [str(org_id)],
     )
+    _board_context(org_id=org_id, orders=orders)
     return {"orders": [_public_order(order) for order in orders]}
 
 
@@ -1333,12 +1507,24 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
     order = one(
         """
         SELECT o.id, o.order_code, o.order_type::text, o.status::text, o.payload_json,
-               o.project_version_id, o.created_at,
+               o.project_version_id, o.project_id, o.created_at,
                COUNT(s.id) AS steps_total,
                COUNT(s.id) FILTER (WHERE s.status = 'DONE') AS steps_done,
+               COUNT(s.id) FILTER (WHERE s.status = 'BLOCKED') AS steps_blocked,
+               EXISTS(SELECT 1 FROM public.production_steps sq
+                      WHERE sq.order_id = o.id AND sq.status = 'BLOCKED'
+                        AND sq.code = 'QC') AS qc_blocked,
                (SELECT s2.code FROM public.production_steps s2
                 WHERE s2.order_id = o.id AND s2.status <> 'DONE'
                 ORDER BY s2.sequence LIMIT 1) AS next_step_code,
+               CASE
+                 WHEN o.payload_json->'optimization' IS NULL THEN 'none'
+                 WHEN COALESCE(
+                     (o.payload_json->'optimization'->>'invalidated')::boolean,
+                     false
+                 ) THEN 'invalidated'
+                 ELSE 'ok'
+               END AS plan_state,
                EXISTS(SELECT 1 FROM public.dispatch_notes dn
                       WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
                         AND dn.voided_at IS NULL
@@ -1351,6 +1537,7 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
         [str(order_id), str(org_id)],
         "work_order_not_found",
     )
+    _board_context(org_id=org_id, orders=[order])
     steps = rows(
         """
         SELECT s.id, s.sequence, s.code, s.label, s.status, s.work_center_id,
@@ -2146,15 +2333,36 @@ def transition_step(
                 order_id=str(step["order_id"]),
                 step_code=str(step["code"]),
             )
+        if new_status == "BLOCKED":
+            # P25: aviso interno de OT bloqueada — la nota obligatoria del
+            # bloqueo es el cuerpo del correo.
+            from automations.service import emit
+
+            emit(
+                "mail.step_blocked",
+                org_id=org_id,
+                actor_id=actor_id,
+                idempotency_key=f"mail:step:{step_id}:blocked",
+                order_id=str(step["order_id"]),
+                step_label=str(fresh.get("label") or step["code"]),
+                note=str(note or ""),
+            )
         return {"step": _public_step(fresh), "order_status": order_status}
 
 
 def create_remake(
-    *, org_id: UUID, order_id: UUID, actor_id: UUID, note: str | None = None
+    *,
+    org_id: UUID,
+    order_id: UUID,
+    actor_id: UUID,
+    note: str | None = None,
+    remake_reason: dict | None = None,
 ) -> dict[str, object]:
-    """Remake work order for a unit that failed QC: copies the sealed material
-    projection and routing from a HOLD order into a new ``-RM-`` order. The
-    unique release index excludes remakes (``remake_of`` in payload)."""
+    """Remake work order for a unit that failed QC or came back damaged from
+    obra: copies the sealed material projection and routing from a HOLD
+    order — or a DISPATCHED/INSTALLED one (P23: la incidencia de terreno
+    genera el remake) — into a new ``-RM-`` order. The unique release index
+    excludes remakes (``remake_of`` in payload)."""
     with transaction.atomic(), documentary_backend():
         source = one(
             """
@@ -2167,7 +2375,7 @@ def create_remake(
             [str(order_id), str(org_id)],
             "work_order_not_found",
         )
-        if str(source["status"]) != "HOLD":
+        if str(source["status"]) not in ("HOLD", "DISPATCHED", "INSTALLED"):
             raise DocumentaryError("remake_requires_hold")
         payload = _decoded(source["payload_json"])
         payload.pop("optimization", None)  # stale plan — re-optimize the remake
@@ -2200,6 +2408,10 @@ def create_remake(
             }
             if reason["qc_item"] or reason["note"]:
                 payload["remake_reason"] = reason
+        if remake_reason is not None:
+            # P23 — la incidencia de obra que originó el remake pisa el
+            # motivo: la fábrica rehace por daño/faltante/medida, no por QC.
+            payload["remake_reason"] = remake_reason
         prior = one(
             """
             SELECT COUNT(*) AS n FROM public.orders
@@ -2371,11 +2583,15 @@ def _cnc_bars_csv(
     optimization: dict[str, object],
     *,
     cut_map: dict[tuple[str, ...], str] | None = None,
+    bar_codes: dict[tuple[object, object], str] | None = None,
 ) -> str:
-    """DEKOPEN-CNC-BARS-V1: one row per cut placement, ordered by bar then
+    """DEKOPEN-CNC-BARS-V2: one row per cut placement, ordered by bar then
     position inside the bar — deterministic output for the saw operator.
-    ``piece_label`` carries the printed shop code (M-xx/R-xx) so the saw
-    file reconciles against a labeled stick without a second document."""
+    ``piece_label`` carries the same per-instance code the pack prints
+    (P01-U01-M01): two identical cuts in different bars never share a
+    label, so a labeled stick reconciles without a second document.
+    ``cut_map`` stays as the spec-level fallback when no snapshot assigned
+    per-instance codes. Column spec: docs/formatos/corte-csv.md."""
     rows_out = [
         "bar_index,stock_sku,stock_length_mm,sequence_in_bar,piece_label,piece_id,"
         "cut_length_mm,angle_left_deg,angle_right_deg,"
@@ -2392,12 +2608,15 @@ def _cnc_bars_csv(
                 and (cut.get("angle_left") is None or cut.get("angle_right") is None)
             ):
                 raise DocumentaryError("cnc_incomplete_cut_angles")
+            label = (bar_codes or {}).get(
+                (bar.get("bar_index"), cut.get("sequence"))
+            ) or (cut_map or {}).get(_cut_key(cut), "")
             rows_out.append(",".join(_csv_cell(v) for v in (
                 bar.get("bar_index"),
                 bar.get("commercial_sku"),
                 bar.get("stock_length_mm"),
                 cut.get("sequence"),
-                (cut_map or {}).get(_cut_key(cut), ""),
+                label,
                 cut.get("piece_id"),
                 cut.get("length_mm"),
                 cut.get("angle_left"),
@@ -2410,12 +2629,22 @@ def _cnc_bars_csv(
     return "\n".join(rows_out) + "\n"
 
 
-def _cnc_sheets_csv(optimization: dict[str, object]) -> str:
-    """DEKOPEN-CNC-SHEETS-V1: one row per nested placement, ordered by sheet
-    then Y then X — deterministic input for a panel saw / glass table."""
+def _cnc_sheets_csv(
+    optimization: dict[str, object],
+    *,
+    infill_map: dict[tuple[str, str, str], str] | None = None,
+    sheet_codes: dict[tuple[object, object], str] | None = None,
+) -> str:
+    """DEKOPEN-CNC-SHEETS-V2: one row per nested placement, ordered by sheet
+    then Y then X — deterministic input for a panel saw / glass table.
+    ``piece_label`` carries the same per-instance code the pack prints and
+    the peel-off label carries (P01-U01-I01), so the nesting file
+    reconciles without a second document. ``infill_map`` stays as the
+    spec-level fallback. Column spec: docs/formatos/corte-csv.md."""
     rows_out = [
         "sheet_index,purchasing_sku,sheet_width_mm,sheet_height_mm,"
-        "x_mm,y_mm,width_mm,height_mm,rotated,piece_id,unit_index,bay_id,leaf_id"
+        "x_mm,y_mm,width_mm,height_mm,rotated,piece_id,unit_index,bay_id,leaf_id,"
+        "piece_label"
     ]
     for sheet in sorted(
         optimization.get("sheets") or [], key=lambda s: int(s.get("sheet_index") or 0)
@@ -2426,6 +2655,9 @@ def _cnc_sheets_csv(optimization: dict[str, object]) -> str:
                 Decimal(str(p.get("y_mm") or 0)), Decimal(str(p.get("x_mm") or 0))
             ),
         ):
+            label = (sheet_codes or {}).get(
+                (sheet.get("sheet_index"), placement.get("sequence"))
+            ) or (infill_map or {}).get(_infill_key(placement), "")
             rows_out.append(",".join(_csv_cell(v) for v in (
                 sheet.get("sheet_index"),
                 sheet.get("purchasing_sku"),
@@ -2440,6 +2672,7 @@ def _cnc_sheets_csv(optimization: dict[str, object]) -> str:
                 placement.get("unit_index"),
                 placement.get("bay_id"),
                 placement.get("leaf_id"),
+                label,
             )))
     return "\n".join(rows_out) + "\n"
 
@@ -2506,8 +2739,12 @@ def export_cnc_files(
         if optimization.get("invalidated"):
             raise DocumentaryError("plan_invalidated")
         # Printed piece codes join the saw rows so a labeled stick finds its
-        # program line without a second file.
+        # program line without a second file — per-instance codes when the
+        # snapshot resolves, spec-group codes as fallback.
         cnc_cut_map: dict[tuple[str, ...], str] = {}
+        cnc_infill_map: dict[tuple[str, str, str], str] = {}
+        cnc_bar_codes: dict[tuple[object, object], str] = {}
+        cnc_sheet_codes: dict[tuple[object, object], str] = {}
         if order.get("project_version_id"):
             version_row = one(
                 """
@@ -2521,18 +2758,56 @@ def export_cnc_files(
             try:
                 cnc_labels = _piece_labels(cnc_snapshot)
                 cnc_cut_map = _cut_member_map(cnc_snapshot, cnc_labels)
+                cnc_infill_map = _infill_code_map(cnc_snapshot, cnc_labels)
+                cnc_bars = [
+                    b
+                    for b in (optimization.get("bars") or {}).get(
+                        "workshop_cut_plan"
+                    )
+                    or []
+                    if isinstance(b, dict)
+                ]
+                cnc_bar_codes = {
+                    key: code
+                    for key, (code, _entity) in _bar_assignments(
+                        cnc_snapshot, cnc_labels, cnc_cut_map, cnc_bars
+                    ).items()
+                }
+                cnc_sheet_codes = {
+                    key: code
+                    for key, (code, _entity) in _sheet_assignments(
+                        cnc_snapshot,
+                        cnc_labels,
+                        [
+                            s
+                            for s in optimization.get("sheets") or []
+                            if isinstance(s, dict)
+                        ],
+                    ).items()
+                }
             except DocumentaryError:
                 cnc_cut_map = {}
+                cnc_infill_map = {}
+                cnc_bar_codes = {}
+                cnc_sheet_codes = {}
         fingerprint = _optimization_fingerprint(optimization)
         header = (
             f"# dekopen order={order['order_code']} plan={fingerprint[:12]}"
             f" emitted={datetime.now(timezone.utc).isoformat()}\n"
         )
-        files = {"bars.csv": header + _cnc_bars_csv(optimization, cut_map=cnc_cut_map)}
+        files = {
+            "bars.csv": header + _cnc_bars_csv(
+                optimization, cut_map=cnc_cut_map, bar_codes=cnc_bar_codes
+            )
+        }
         if optimization.get("sheets"):
-            files["sheets.csv"] = header + _cnc_sheets_csv(optimization)
+            files["sheets.csv"] = header + _cnc_sheets_csv(
+                optimization,
+                infill_map=cnc_infill_map,
+                sheet_codes=cnc_sheet_codes,
+            )
         export = {
-            "schema": "work_order_cnc_export_v2",
+            "schema": "work_order_cnc_export_v3",
             "optimization_fingerprint": fingerprint,
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "actor_id": str(actor_id),
@@ -2666,7 +2941,7 @@ def _declared_intent_gaps(
     for position in version_snapshot.get("positions") or []:
         if not isinstance(position, dict):
             continue
-        if position_id and str(position.get("position_id")) != position_id:
+        if position_id and str(position.get("id")) != position_id:
             continue
         for item in position.get("workshop_annotations") or []:
             if isinstance(item, dict):
@@ -3011,25 +3286,49 @@ def export_dxf_files(
         })
         cut_map = _cut_member_map(snapshot, labels)
         infill_map = _infill_code_map(snapshot, labels)
+        dxf_bars = [
+            b
+            for b in (optimization.get("bars") or {}).get("workshop_cut_plan")
+            or []
+            if isinstance(b, dict)
+        ]
+        dxf_sheets = [
+            s for s in optimization.get("sheets") or [] if isinstance(s, dict)
+        ]
+        # Same per-instance codes the pack printed — (bar, seq) / (sheet,
+        # seq) → P01-U01-M01 — so the DXF text is identical to the label.
+        dxf_bar_codes = {
+            key: code
+            for key, (code, _entity) in _bar_assignments(
+                snapshot, labels, cut_map, dxf_bars
+            ).items()
+        }
+        dxf_sheet_codes = {
+            key: code
+            for key, (code, _entity) in _sheet_assignments(
+                snapshot, labels, dxf_sheets
+            ).items()
+        }
         codes: dict[str, str] = {}
-        for bar in (optimization.get("bars") or {}).get("workshop_cut_plan") or []:
-            if not isinstance(bar, dict):
-                continue
+        for bar in dxf_bars:
             for cut in bar.get("cuts") or []:
                 if isinstance(cut, dict) and cut.get("piece_id"):
                     code = cut_map.get(_cut_key(cut))
                     if code:
                         codes[str(cut["piece_id"])] = code
-        for sheet in optimization.get("sheets") or []:
-            if not isinstance(sheet, dict):
-                continue
+        for sheet in dxf_sheets:
             for placement in sheet.get("placements") or []:
                 if isinstance(placement, dict) and placement.get("piece_id"):
                     codes[str(placement["piece_id"])] = infill_map.get(
                         _infill_key(placement),
                         str(placement["piece_id"]),
                     )
-        files = dxf_files(optimization, codes=codes)
+        files = dxf_files(
+            optimization,
+            codes=codes,
+            bar_instance=dxf_bar_codes,
+            sheet_instance=dxf_sheet_codes,
+        )
         if not files:
             raise DocumentaryError("dxf_requires_optimization")
         export = {
@@ -3613,6 +3912,7 @@ def _compute_optimization(
         color=color,
         source_position_id=position_id,
         reinforcement_skus=authorities.reinforcement_skus,
+        reinforcement_colors=steel_color_map(authorities.stocks),
         reinforcement_angles=_reinforcement_angle_map(version_snapshot, position_id),
     )
     # pieces_from_result returns one unit's pieces; unit_index is the
@@ -3771,19 +4071,32 @@ def _compute_optimization(
         if sheet.get("source") == "REMNANT" and sheet.get("remnant_id")
     ]
     # The plan names each physical drop it claims — the operator matches
-    # the printed remnant id to the rack tag without opening the ledger.
+    # the printed RT- folio to the rack tag without opening the ledger.
     consumed_ids = [entry["id"] for entry in consumed_bars + consumed_sheets]
     if consumed_ids:
-        consumed_locations = {
-            str(r["id"]): r["rack_location"]
+        consumed_meta = {
+            str(r["id"]): r
             for r in rows(
-                "SELECT id, rack_location FROM public.inventory_remnants"
+                "SELECT id, rack_location, remnant_code"
+                " FROM public.inventory_remnants"
                 " WHERE org_id = %s AND id = ANY(%s::uuid[])",
                 [str(org_id), consumed_ids],
             )
         }
         for entry in consumed_bars + consumed_sheets:
-            entry["rack_location"] = consumed_locations.get(entry["id"])
+            meta = consumed_meta.get(entry["id"]) or {}
+            entry["rack_location"] = meta.get("rack_location")
+            entry["remnant_code"] = meta.get("remnant_code")
+        # The folio also stamps onto the plan rows — the banner and the
+        # printed pack read 'RT-000045', not a UUID fragment.
+        for bar in bars.get("workshop_cut_plan") or []:
+            meta = consumed_meta.get(str(bar.get("remnant_id") or ""))
+            if meta:
+                bar["remnant_code"] = meta.get("remnant_code")
+        for sheet in sheets:
+            meta = consumed_meta.get(str(sheet.get("remnant_id") or ""))
+            if meta:
+                sheet["remnant_code"] = meta.get("remnant_code")
     produced_bars = [
         {
             "stock_authority_id": bar["stock_authority_id"],
@@ -4364,6 +4677,12 @@ def _public_delivery(
         "contact_name": delivery["contact_name"],
         "contact_phone": delivery["contact_phone"],
         "installer_name": delivery["installer_name"],
+        "installer_user_id": (
+            str(delivery["installer_user_id"]) if delivery.get("installer_user_id") else None
+        ),
+        "crew_id": str(delivery["crew_id"]) if delivery.get("crew_id") else None,
+        "route_order": delivery.get("route_order"),
+        "load_checked": delivery.get("load_checked_at") is not None,
         "notes": delivery["notes"],
         "status": str(delivery["status"]),
         "confirmation": confirmation,
@@ -4467,12 +4786,16 @@ def schedule_delivery(
     installer_name: str | None = None,
     notes: str | None = None,
     unit_indexes: list[int] | None = None,
+    crew_id: UUID | None = None,
+    route_order: int | None = None,
+    installer_user_id: UUID | None = None,
 ) -> dict[str, object]:
     """Create or update the order's delivery trip. An open trip (SCHEDULED)
     is upserted so retries and edits stay idempotent on the same row; once
     it resolves, a new schedule opens the next trip. ``unit_indexes`` scopes
     the trip to manifest units for partial deliveries — already delivered
-    or on-route units cannot be claimed twice."""
+    or on-route units cannot be claimed twice. ``crew_id``/``route_order``
+    feed the dispatch board; ``installer_user_id`` feeds the field agenda."""
     window = (time_window or "AM").strip().upper()
     if window not in _DELIVERY_WINDOWS:
         raise DocumentaryError("delivery_window_invalid")
@@ -4528,6 +4851,21 @@ def schedule_delivery(
             # A truck already moving can't be silently rewound to scheduled —
             # fail it first, then schedule the fresh attempt.
             raise DocumentaryError("delivery_already_on_route")
+        if crew_id is not None:
+            crew = rows(
+                "SELECT id FROM public.field_crews WHERE id=%s AND org_id=%s AND active",
+                [str(crew_id), str(org_id)],
+            )
+            if not crew:
+                raise DocumentaryError("crew_not_found")
+        if installer_user_id is not None:
+            member = rows(
+                "SELECT id FROM public.tenancy_memberships "
+                "WHERE org_id=%s AND user_id=%s AND is_active",
+                [str(org_id), str(installer_user_id)],
+            )
+            if not member:
+                raise DocumentaryError("installer_not_member")
         normalized = {
             "scheduled_date": day,
             "time_window": window,
@@ -4535,6 +4873,9 @@ def schedule_delivery(
             "contact_name": (contact_name or "").strip() or None,
             "contact_phone": (contact_phone or "").strip() or None,
             "installer_name": (installer_name or "").strip() or None,
+            "installer_user_id": str(installer_user_id) if installer_user_id else None,
+            "crew_id": str(crew_id) if crew_id else None,
+            "route_order": route_order,
             "notes": (notes or "").strip() or None,
             "unit_indexes": requested,
         }
@@ -4545,7 +4886,7 @@ def schedule_delivery(
                 else None
             )
             if all(
-                (open_trip[key] if key != "unit_indexes" else stored_units) == value
+                (open_trip.get(key) if key != "unit_indexes" else stored_units) == value
                 for key, value in normalized.items()
             ):
                 # Identical schedule replay — one row, no duplicate audit event.
@@ -4555,6 +4896,7 @@ def schedule_delivery(
                 UPDATE public.deliveries SET
                     scheduled_date=%s, time_window=%s, address=%s,
                     contact_name=%s, contact_phone=%s, installer_name=%s,
+                    installer_user_id=%s, crew_id=%s, route_order=%s,
                     notes=%s, unit_indexes=%s, scheduled_by=%s,
                     status='SCHEDULED', updated_at=%s
                 WHERE id=%s AND org_id=%s RETURNING *
@@ -4566,6 +4908,9 @@ def schedule_delivery(
                     (contact_name or "").strip() or None,
                     (contact_phone or "").strip() or None,
                     (installer_name or "").strip() or None,
+                    str(installer_user_id) if installer_user_id else None,
+                    str(crew_id) if crew_id else None,
+                    route_order,
                     (notes or "").strip() or None,
                     requested,
                     str(actor_id),
@@ -4580,8 +4925,9 @@ def schedule_delivery(
                 INSERT INTO public.deliveries(
                     org_id, order_id, scheduled_date, time_window, address,
                     contact_name, contact_phone, installer_name, notes,
-                    scheduled_by, unit_indexes)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    scheduled_by, unit_indexes,
+                    installer_user_id, crew_id, route_order)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING *
                 """,
                 [
@@ -4596,6 +4942,9 @@ def schedule_delivery(
                     (notes or "").strip() or None,
                     str(actor_id),
                     requested,
+                    str(installer_user_id) if installer_user_id else None,
+                    str(crew_id) if crew_id else None,
+                    route_order,
                 ],
             )
         rows(

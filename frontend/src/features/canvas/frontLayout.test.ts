@@ -129,3 +129,57 @@ describe("frontLayout", () => {
     expect(envelope.height).toBeCloseTo(2500, 5);
   });
 });
+
+describe("frontLayout proyectada (P06)", () => {
+  it("escorza las alas con w·cos(rumbo) acumulado", () => {
+    const product = makeBowProduct({
+      moduleCount: 3,
+      widthMm: 2400,
+      heightMm: 1400,
+      angleDeg: 22.5,
+    });
+    const flat = frontLayout(product);
+    const projected = frontLayout(product, { projected: true });
+    // rumbo_i = Σ ángulos previos: 0°, 22,5°, 45°
+    const cos = (deg: number) => Math.cos((deg * Math.PI) / 180);
+    expect(flat.rects.map((r) => r.w)).toEqual([800, 800, 800]);
+    expect(projected.rects[0]!.w).toBeCloseTo(800 * cos(0), 4);
+    expect(projected.rects[1]!.w).toBeCloseTo(800 * cos(22.5), 4);
+    expect(projected.rects[2]!.w).toBeCloseTo(800 * cos(45), 4);
+    expect(projected.totalW).toBeCloseTo(800 * (cos(0) + cos(22.5) + cos(45)), 4);
+    // la proyección nunca ensancha el frente
+    expect(projected.totalW).toBeLessThan(flat.totalW);
+  });
+
+  it("un acoplado plano no cambia al proyectar", () => {
+    const product = makeBowProduct({
+      moduleCount: 2,
+      widthMm: 1600,
+      heightMm: 1400,
+      angleDeg: 0,
+    });
+    const projected = frontLayout(product, { projected: true });
+    expect(projected.totalW).toBeCloseTo(1600, 5);
+  });
+
+  it("un rumbo > 90° (módulo plegado) proyecta ancho aparente, nunca negativo", () => {
+    // c1 = 90° filo: el ala se pone de canto y casi desaparece de frente;
+    // c2 = 90°: el tercer módulo queda a 180°, replegado — su ancho aparente
+    // vuelve a ser pleno (la planta es la vista autoritativa del sentido).
+    const product = makeBowProduct({
+      moduleCount: 3,
+      widthMm: 2400,
+      heightMm: 1400,
+      angleDeg: 90,
+    });
+    const projected = frontLayout(product, { projected: true });
+    for (const rect of projected.rects) {
+      expect(rect.w).toBeGreaterThanOrEqual(0);
+      expect(Number.isFinite(rect.w)).toBe(true);
+    }
+    expect(projected.rects[1]!.w).toBeLessThan(0.01);
+    expect(projected.rects[2]!.w).toBeCloseTo(800, 5);
+    expect(Number.isFinite(projected.totalW)).toBe(true);
+    expect(projected.totalW).toBeGreaterThan(0);
+  });
+});

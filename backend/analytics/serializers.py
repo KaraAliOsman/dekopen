@@ -21,3 +21,50 @@ class OperationalSummarySerializer(serializers.Serializer):
     projects = serializers.DictField()
     commercial = OperationalSummaryCommercialItemSerializer(many=True)
     recent_events = serializers.ListField()
+
+
+class TodayQueueItemSerializer(serializers.Serializer):
+    kind = serializers.CharField()
+    urgency = serializers.ChoiceField(
+        choices=("overdue", "today", "soon", "when_free")
+    )
+    phrase = serializers.CharField()
+    reason = serializers.CharField(allow_null=True)
+    entity_code = serializers.CharField(allow_null=True)
+    entity_label = serializers.CharField(allow_null=True)
+    to = serializers.CharField()
+    cta = serializers.CharField()
+    count = serializers.IntegerField(allow_null=True)
+
+
+class TodayQueuePanelRowSerializer(serializers.Serializer):
+    label = serializers.CharField()
+    value = serializers.CharField()
+    count = serializers.IntegerField()
+
+
+class TodayQueuePanelSerializer(serializers.Serializer):
+    kind = serializers.CharField()
+    title = serializers.CharField()
+    rows = TodayQueuePanelRowSerializer(many=True)
+
+
+class TodayQueueSerializer(serializers.Serializer):
+    schema = serializers.CharField()
+    role = serializers.CharField()
+    date = serializers.CharField()
+    items = TodayQueueItemSerializer(many=True)
+    panels = TodayQueuePanelSerializer(many=True)
+
+
+class AnalyticsOverviewSerializer(serializers.Serializer):
+    """Las secciones viajan como jsonb directo de ``private.analytics_*`` —
+    el contrato detallado vive en docs/analytics/metricas.md."""
+
+    schema = serializers.CharField()
+    period = serializers.DictField()
+    definitions = serializers.DictField()
+    sales = serializers.DictField()
+    margins = serializers.DictField()
+    production = serializers.DictField()
+    field = serializers.DictField()

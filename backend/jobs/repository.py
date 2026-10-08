@@ -92,6 +92,7 @@ def requeue_terminal(
             attempt = 0,
             max_attempts = %s,
             progress = 0,
+            progress_phase = NULL,
             error = NULL,
             result = NULL,
             locked_by = NULL,
@@ -143,31 +144,78 @@ def list_jobs(
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict[str, object]]:
-    clauses = ["org_id = %s"]
+    clauses = ["jr.org_id = %s"]
     parameters: list[object] = [str(org_id)]
     if job_type:
-        clauses.append("type = %s")
+        clauses.append("jr.type = %s")
         parameters.append(job_type)
     if state:
-        clauses.append("state = %s")
+        clauses.append("jr.state = %s")
         parameters.append(state)
     parameters.extend([limit, offset])
     return [
         _decode(record)
         for record in rows(
             f"""
-            SELECT id, type, state, progress, result, error, attempt,
-                   max_attempts, created_at, started_at, completed_at,
+            SELECT jr.id, jr.type, jr.state, jr.progress, jr.result,
+                   jr.error, jr.attempt,
+                   jr.max_attempts, jr.created_at, jr.started_at,
+                   jr.completed_at,
                    /* The AI run's own job id lets the jobs list deep-link to
                     * the assistant workspace — expose just the id, not the
                     * service-owned payload. */
-                   CASE WHEN type = 'ai.agent.run'
-                        THEN payload->>'ai_job_id'
+                   CASE WHEN jr.type = 'ai.agent.run'
+                        THEN jr.payload->>'ai_job_id'
                         ELSE NULL
-                   END AS ai_job_id
-            FROM public.job_runs
+                   END AS ai_job_id,
+                   /* §P17 — el actor humano del trabajo: el correo del
+                    * miembro que lo encoló (memberships acotan el join al
+                    * tenant). */
+                   actor_user.email::text AS actor,
+                   /* §P17 — el objeto legible: «Pos. 03 Living · P-000012»,
+                    * el código de la OT o el nombre del cliente, resuelto
+                    * desde los refs del payload. */
+                   CASE
+                     WHEN pos.id IS NOT NULL THEN
+                       'Pos. ' || LPAD(pos.position_index::text, 2, '0') ||
+                       COALESCE(' ' || NULLIF(pos.location_tag, ''), '') ||
+                       COALESCE(' · ' || pos_project.code, '')
+                     WHEN proj.id IS NOT NULL THEN proj.code
+                     WHEN ord.id IS NOT NULL THEN ord.order_code
+                     WHEN cli.id IS NOT NULL THEN cli.name
+                     WHEN imp.id IS NOT NULL THEN imp.file_name
+                     ELSE NULL
+                   END AS object_label
+            FROM public.job_runs jr
+            LEFT JOIN public.tenancy_memberships actor_member
+              ON actor_member.org_id = jr.org_id
+             AND actor_member.user_id = jr.created_by
+            LEFT JOIN auth.users actor_user
+              ON actor_user.id = actor_member.user_id
+            LEFT JOIN public.project_positions pos
+              ON pos.org_id = jr.org_id
+             AND pos.id::text = jr.payload->'refs'->>'position_id'
+            LEFT JOIN public.projects pos_project
+              ON pos_project.org_id = jr.org_id
+             AND pos_project.id = pos.project_id
+            LEFT JOIN public.projects proj
+              ON proj.org_id = jr.org_id
+             AND proj.id::text = COALESCE(
+                   jr.payload->'refs'->>'project_id',
+                   jr.payload->>'project_id')
+            LEFT JOIN public.orders ord
+              ON ord.org_id = jr.org_id
+             AND ord.id::text = COALESCE(
+                   jr.payload->'refs'->>'work_order_id',
+                   jr.payload->>'order_id')
+            LEFT JOIN public.clients cli
+              ON cli.org_id = jr.org_id
+             AND cli.id::text = jr.payload->'refs'->>'client_id'
+            LEFT JOIN public.document_imports imp
+              ON imp.org_id = jr.org_id
+             AND imp.id::text = jr.payload->>'import_id'
             WHERE {" AND ".join(clauses)}
-            ORDER BY created_at DESC, id DESC
+            ORDER BY jr.created_at DESC, jr.id DESC
             LIMIT %s OFFSET %s
             """,
             parameters,
@@ -261,6 +309,7 @@ def release_stale(*, now: datetime | None = None) -> int:
             """
             UPDATE public.job_runs
             SET state = CASE WHEN attempt >= max_attempts THEN 'FAILED' ELSE 'QUEUED' END,
+                progress_phase = NULL,
                 locked_by = NULL,
                 locked_at = NULL,
                 completed_at = CASE WHEN attempt >= max_attempts THEN NOW() ELSE completed_at END,
@@ -301,18 +350,28 @@ def release_stale(*, now: datetime | None = None) -> int:
         return released
 
 
-def report_progress(*, job_id: UUID, worker_id: str, progress: float) -> None:
+def report_progress(
+    *,
+    job_id: UUID,
+    worker_id: str,
+    progress: float,
+    phase: str | None = None,
+) -> None:
     """Record progress and renew the lease in one write; raises LockLostError
     when the lease is gone so the handler aborts instead of finishing a job
-    that now belongs to another worker."""
+    that now belongs to another worker. `phase` is the named intermediate
+    state (IA3: "consulting"/"engine"/"proposal") the UI renders next to the
+    numeric percent — NULL keeps the last reported phase."""
     with connection.cursor() as cursor:
         cursor.execute(
             """
             UPDATE public.job_runs
-            SET progress = %s, locked_at = NOW(), updated_at = NOW()
+            SET progress = %s,
+                progress_phase = COALESCE(%s, progress_phase),
+                locked_at = NOW(), updated_at = NOW()
             WHERE id = %s AND locked_by = %s AND state = 'RUNNING'
             """,
-            [progress, str(job_id), worker_id],
+            [progress, phase, str(job_id), worker_id],
         )
         if cursor.rowcount == 0:
             raise LockLostError(job_id)
@@ -343,6 +402,7 @@ def succeed(*, job_id: UUID, worker_id: str, result: dict[str, object]) -> None:
         set_clause="""
             state = 'SUCCEEDED',
             progress = 100.00,
+            progress_phase = NULL,
             result = %s::jsonb,
             error = NULL,
             locked_by = NULL,
@@ -370,6 +430,7 @@ def fail_or_retry(
         worker_id=worker_id,
         set_clause=f"""
             {state_update},
+            progress_phase = NULL,
             error = %s::jsonb,
             locked_by = NULL,
             locked_at = NULL,
@@ -389,6 +450,7 @@ def fail_permanent(*, job_id: UUID, worker_id: str, error: dict[str, object]) ->
         worker_id=worker_id,
         set_clause="""
             state = 'FAILED',
+            progress_phase = NULL,
             error = %s::jsonb,
             locked_by = NULL,
             locked_at = NULL,

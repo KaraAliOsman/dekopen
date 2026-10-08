@@ -7,6 +7,7 @@
  */
 import type { EngineAssemblyCalculateResponseStatusEnum } from "./engineAssemblyCalculateResponseStatusEnum";
 import type { EngineResultPayload } from "./engineResultPayload";
+import type { ExtraSuggestion } from "./extraSuggestion";
 import type { ModuleEvaluation } from "./moduleEvaluation";
 import type { PlanGeometry } from "./planGeometry";
 import type { ProductIssue } from "./productIssue";
@@ -17,6 +18,7 @@ export interface EngineAssemblyCalculateResponse {
   plan: PlanGeometry | null;
   modules: ModuleEvaluation[];
   bom: EngineResultPayload | null;
+  extra_suggestions?: ExtraSuggestion[];
   /** @pattern ^sha256:[0-9a-f]{64}$ */
   calculation_hash: string;
 }

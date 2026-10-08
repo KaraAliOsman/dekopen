@@ -7,22 +7,36 @@
  */
 import type { ArticleResponse } from "./articleResponse";
 import type { BeadResponse } from "./beadResponse";
+import type { CostCoverageRow } from "./costCoverageRow";
+import type { GlassTab } from "./glassTab";
+import type { HardwareTab } from "./hardwareTab";
+import type { HistoryTab } from "./historyTab";
 import type { KitResponse } from "./kitResponse";
 import type { ProcessProfileRow } from "./processProfileRow";
 import type { PurchaseMappingRow } from "./purchaseMappingRow";
 import type { ReinforcementRow } from "./reinforcementRow";
+import type { RulesTab } from "./rulesTab";
 import type { SystemResponse } from "./systemResponse";
+import type { SystemWorkspaceArticleChecks } from "./systemWorkspaceArticleChecks";
 
 /**
  * The §06 system home: identity + readiness + the entities bound to
- * this system across every catalog domain, in one fetch.
+ * this system across every catalog domain, in one fetch. P16 turns the
+ * sections into the tabs the system page shows (perfiles, refuerzos,
+ * vidrios, herrajes, reglas, costos, historial).
  */
 export interface SystemWorkspace {
   system: SystemResponse;
   articles: ArticleResponse[];
+  article_checks: SystemWorkspaceArticleChecks;
   beads: BeadResponse[];
   kits: KitResponse[];
   reinforcements: ReinforcementRow[];
   purchase_mappings: PurchaseMappingRow[];
   process_profile: ProcessProfileRow | null;
+  glass: GlassTab;
+  hardware: HardwareTab;
+  rules: RulesTab;
+  costs: CostCoverageRow[];
+  history: HistoryTab;
 }

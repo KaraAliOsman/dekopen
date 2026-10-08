@@ -48,7 +48,7 @@ def position_source(
     computation = compute_geometry(node, params)
     assert computation.result is not None and computation.manufacturing_trace is not None
     trace = computation.manufacturing_trace
-    opening_types = sorted({leaf.opening_type.value for leaf in trace.leaves})
+    opening_types = sorted({leaf.opening_type for leaf in trace.leaves})
     roles_and_angles = sorted({
         (member.role, str(member.angle_left), str(member.angle_right))
         for member in trace.members if member.reinforcement_required

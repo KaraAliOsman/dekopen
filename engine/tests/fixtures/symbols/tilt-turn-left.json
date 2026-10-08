@@ -1,0 +1,145 @@
+{
+  "id": "tilt-turn-left",
+  "name": "Oscilobatiente izquierda",
+  "box": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 1200
+  },
+  "input": {
+    "kind": "leaves",
+    "unit": "WINDOW",
+    "leaves": [
+      {
+        "movement": "TILT_TURN",
+        "hinge_side": "LEFT",
+        "direction": "INWARD",
+        "leaf_role": "SINGLE",
+        "handle_mm": 1050,
+        "slot": null,
+        "axis_offset_mm": null
+      }
+    ]
+  },
+  "views": {
+    "interior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "tri",
+              "hinge": "LEFT",
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "tri",
+              "hinge": "BOTTOM",
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "handle",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": "right",
+              "at_mm": "1050"
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 160 144 L 640 508.8 L 160 1056",
+              "dash": null
+            },
+            {
+              "d": "M 160 1056 L 352 144 L 640 1056",
+              "dash": null
+            },
+            {
+              "d": "M 765 150 H 783 M 774 141 V 159",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    },
+    "exterior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "tri",
+              "hinge": "LEFT",
+              "apex_at": "0.4",
+              "dash": true,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "tri",
+              "hinge": "BOTTOM",
+              "apex_at": "0.4",
+              "dash": true,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "handle",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": "right",
+              "at_mm": "1050"
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 160 144 L 640 508.8 L 160 1056",
+              "dash": "6 3"
+            },
+            {
+              "d": "M 160 1056 L 352 144 L 640 1056",
+              "dash": "6 3"
+            },
+            {
+              "d": "M 765 150 H 783 M 774 141 V 159",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -4,12 +4,14 @@ import { Link, useParams } from "react-router-dom";
 import { projectsList, projectsRetrieve } from "../../api/generated/dekopen";
 
 import type { PriceResponse, ProjectResponse } from "../../api/generated/models";
-import { formatDateTime } from "../../format";
-import { formatMoney } from "../money";
+import { formatDateTime, formatPercent, formatRevision, shortTechnicalId } from "../../format";
+import { formatMoney } from "../../format";
 import { apiMutator, ApiError } from "../../api/apiMutator";
 import { actionErrorDetail } from "../errors";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { DeniedState, PageHeader, Tabs } from "../../ui";
+import { StatusBadge } from "../../ui/StatusBadge";
+import { StatusChip } from "../../ui/StatusChip";
 import { PositionThumb } from "../projects/PositionThumb";
 import { t } from "../../i18n/es-CL";
 import { useCanvasStore } from "../canvas/canvasStore";
@@ -50,6 +52,7 @@ const optionLabels: Record<string, Parameters<typeof t>[0]> = {
   ARCHITECT: "pricing.architect",
   CONSTRUCTION: "pricing.construction",
   REINFORCEMENT: "pricing.coverageKind.reinforcement",
+  FITTING: "catalog.componentCategory.FITTING",
 };
 function optionLabel(value: string): string {
   const key = optionLabels[value];
@@ -68,6 +71,7 @@ const ERROR_KEYS: Record<string, Parameters<typeof t>[0]> = {
   commercial_revision_required: "pricing.errRevision",
   pricing_configuration_not_found: "pricing.errConfig",
   owner_approval_required: "pricing.errOwner",
+  owner_confirmation_required: "pricing.errOwnerConfirm",
   operation_not_withdrawable: "pricing.errWithdraw",
   pricing_permission_denied: "pricing.errDenied",
   negative_margin: "pricing.errNegative",
@@ -115,12 +119,12 @@ function contextLabel(value: unknown): string {
 }
 
 const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})/;
-/** Rates store as fractions (0.35); people think in percents. Render the
- * percent value with at most two decimals — never float artifacts. */
-function pctDisplay(value: unknown): string {
+/** A <input type=number> only accepts dot decimals — the comma display
+ * would render the field blank on edit. */
+function pctInput(value: unknown): string {
   const pct = Number(value) * 100;
   if (!Number.isFinite(pct)) return "0";
-  return pct.toFixed(2).replace(/\.?0+$/, "");
+  return String(Math.round(pct * 10) / 10);
 }
 /** Stored values are ISO; operators read DD-MM-AAAA everywhere else in the
  * product. Render the business format, keep the raw value for submission. */
@@ -146,7 +150,7 @@ function renderFieldValue(
     const match = ISO_DAY.exec(text);
     if (match) return `${match[3]}-${match[2]}-${match[1]}`;
   }
-  if (field.type === "percent") return `${pctDisplay(text)} %`;
+  if (field.type === "percent") return `${formatPercent(text)}`;
   if (field.name === "unit_cost" || field.name === "catalog_price" || field.name === "price")
     return formatMoney(text, "CLP");
   if (field.name === "created_at") return formatDateTime(text);
@@ -185,6 +189,8 @@ const fields: Record<string, Field[]> = {
   rules: [
     { name: "pricing_mode", label: "pricing.mode", options: modes },
     { name: "default_margin_pct", label: "pricing.margin", type: "percent", initial: "35" },
+    { name: "margin_min_pct", label: "pricing.marginMin", type: "percent", initial: "25" },
+    { name: "margin_max_pct", label: "pricing.marginMax", type: "percent", initial: "60" },
     { name: "tax_rate_pct", label: "pricing.tax", type: "percent", initial: "19" },
     { name: "waste_factor_pct", label: "pricing.waste", type: "percent", initial: "8" },
     { name: "labor_rate_per_m2", label: "pricing.labor", initial: "15000" },
@@ -270,7 +276,7 @@ const sectionLabels = [
 ] as const;
 type Row = Record<string, string | boolean | null>;
 
-function usePricingRequest(orgId: string): RequestFn {
+export function usePricingRequest(orgId: string): RequestFn {
   // Each request gets its own controller, registered in a live set aborted on
   // unmount. A single shared controller cannot work: a child effect (e.g. the
   // mount history load) may fire before this component's own effect assigns
@@ -541,6 +547,7 @@ function PricingWorkspace({ orgId }: { orgId: string }): JSX.Element {
         </div>
         {fields[resource] && resource !== "audits" && (
           <form
+            noValidate
             key={`${resource}-${editing?.id ?? "new"}-${revision}`}
             onSubmit={(event) => void save(event)}
             className="pricing-form"
@@ -597,7 +604,7 @@ function PricingWorkspace({ orgId }: { orgId: string }): JSX.Element {
                         ? editing?.[field.name] !== undefined &&
                           editing?.[field.name] !== null &&
                           editing?.[field.name] !== ""
-                          ? pctDisplay(editing[field.name])
+                          ? pctInput(editing[field.name])
                           : (field.initial ?? "0")
                         : String(editing?.[field.name] ?? field.initial ?? "")
                     }
@@ -658,6 +665,8 @@ const coverageKindLabels: Record<string, Parameters<typeof t>[0]> = {
   GLASS: "pricing.coverageKind.glass",
   HARDWARE: "pricing.coverageKind.hardware",
   REINFORCEMENT: "pricing.coverageKind.reinforcement",
+  PANEL: "pricing.coverageKind.panel",
+  FITTING: "pricing.coverageKind.fitting",
 };
 
 function CoverageList({ items }: { items: Row[] }): JSX.Element {
@@ -692,11 +701,14 @@ function CoverageList({ items }: { items: Row[] }): JSX.Element {
               {t(coverageKindLabels[String(item.kind)] ?? "pricing.coverageKind.other")} ·{" "}
               {String(item.required_unit)}
             </span>
-            <span className="status-chip" data-status={uncovered ? "declined" : "approved"}>
-              {uncovered
-                ? t("pricing.coverageMissing")
-                : `${Number(item.active_cost_items ?? 0)} ${t("pricing.coverageLists")}`}
-            </span>
+            <StatusBadge
+              label={
+                uncovered
+                  ? t("pricing.coverageMissing")
+                  : `${Number(item.active_cost_items ?? 0)} ${t("pricing.coverageLists")}`
+              }
+              tone={uncovered ? "danger" : "success"}
+            />
           </article>
         );
       })}
@@ -723,7 +735,7 @@ function auditRecordLabel(entity: string, record: Record<string, unknown> | null
     if (typeof value === "string" && value !== "") return value;
   }
   const id = record["entity_id"] ?? record["id"];
-  return typeof id === "string" ? `${entity} ${id.slice(0, 8)}` : entity;
+  return typeof id === "string" ? `${entity} ${shortTechnicalId(id)}` : entity;
 }
 
 function auditValue(value: unknown): string {
@@ -763,12 +775,10 @@ function AuditCard({ item }: { item: Row }): JSX.Element {
     <article className="audit-card">
       <header className="audit-card__header">
         <strong>{t(auditEntityLabels[entity] ?? "pricing.auditEntity.other")}</strong>
-        <span
-          className="status-chip"
-          data-status={verb === "INSERT" ? "completed" : verb === "DELETE" ? "revoked" : "pending"}
-        >
-          {t(auditActionLabels[verb] ?? "pricing.auditAction.other")}
-        </span>
+        <StatusBadge
+          label={t(auditActionLabels[verb] ?? "pricing.auditAction.other")}
+          tone={verb === "INSERT" ? "success" : verb === "DELETE" ? "danger" : "warning"}
+        />
         {project !== "" && <span className="audit-card__project">{project}</span>}
       </header>
       {label !== "" && <p className="audit-card__title">{label}</p>}
@@ -882,6 +892,7 @@ function ImportCosts({
     <section className="pricing-import">
       <h2>{t("pricing.import")}</h2>
       <form
+        noValidate
         onChange={() => {
           inputRevision.current += 1;
           pendingAuthority.current = null;
@@ -1018,21 +1029,24 @@ function CostComposition({
   // not cuts, so identical SKUs aggregate into one row.
   const grouped = new Map<
     string,
-    { kind: string; sku: string; unit: string; qty: number; cents: bigint }
+    { kind: string; sku: string; unit: string; qtyScaled: bigint; cents: bigint }
   >();
   for (const component of entry.composition ?? []) {
     const key = `${component.kind}|${component.sku}|${component.unit}`;
     const existing = grouped.get(key);
     const cents = moneyCents(component.cost ?? "0") ?? 0n;
+    // Quantities are Decimals: accumulate on a 6dp integer scale so float
+    // addition never leaks artifacts like 5.6240000000000006 into the UI.
+    const qtyScaled = BigInt(Math.round(Number(component.quantity ?? 0) * 1e6));
     if (existing) {
-      existing.qty += Number(component.quantity);
+      existing.qtyScaled += qtyScaled;
       existing.cents += cents;
     } else {
       grouped.set(key, {
         kind: component.kind ?? "",
         sku: component.sku ?? "",
         unit: component.unit ?? "",
-        qty: Number(component.quantity),
+        qtyScaled,
         cents,
       });
     }
@@ -1052,7 +1066,7 @@ function CostComposition({
               <td>{optionLabel(component.kind)}</td>
               <td>{component.sku}</td>
               <td>
-                {component.qty} {optionLabel(component.unit)}
+                {Number(component.qtyScaled) / 1e6} {optionLabel(component.unit)}
               </td>
               <td>
                 {formatMoney(
@@ -1066,12 +1080,13 @@ function CostComposition({
       </table>
       <p className="cost-composition__math">
         {t("pricing.materials")} {formatMoney(entry.materials_cost ?? "0", currency)} +{" "}
-        {t("pricing.wasteShort")} {pctDisplay(entry.waste_pct)}%
+        {t("pricing.wasteShort")} {formatPercent(entry.waste_pct)}
         {labour !== null &&
           ` + ${t("pricing.laborShort")} ${formatMoney(String(labour), currency)}`}{" "}
         → {t("pricing.unitCost")} {formatMoney(entry.unit_cost ?? "0", currency)}
-        {marginPct !== null && ` · ${t("pricing.marginRealized")} ${marginPct.toFixed(1)}%`}
-        {discount > 0 && ` · ${t("pricing.discount")} ${pctDisplay(discount)}%`} →{" "}
+        {marginPct !== null &&
+          ` · ${t("pricing.marginRealized")} ${formatPercent(marginPct, "points")}`}
+        {discount > 0 && ` · ${t("pricing.discount")} ${formatPercent(discount)}`} →{" "}
         {formatMoney(lineNet, currency)}
       </p>
     </div>
@@ -1097,7 +1112,278 @@ function marginText(net: string, cost: string, currency: string): string {
   const cents = diffCents % 100n;
   const signed = diffCents < 0n ? "-" : "";
   const text = `${signed}${whole < 0n ? -whole : whole}.${`${cents < 0n ? -cents : cents}`.padStart(2, "0")}`;
-  return `${formatMoney(text, currency)} · ${margin.toFixed(1)} %`;
+  return `${formatMoney(text, currency)} · ${formatPercent(margin, "points")}`;
+}
+
+// ——— P07 workspace payloads — server-derived, rendered verbatim ———
+
+type BandPayload = {
+  min?: string;
+  objective?: string;
+  max?: string;
+  state?: string;
+};
+type CascadeRowPayload = { key?: string; amount?: string; kind?: string };
+type CascadePositionPayload = {
+  position_index?: number;
+  groups?: Record<string, string>;
+  materials?: string;
+  waste?: string;
+  labour?: string;
+  rounding?: string;
+  cost?: string;
+  margin?: string;
+  sell?: string;
+  list_price?: string;
+  discount?: string;
+  net?: string;
+};
+type CascadePayload = {
+  rows?: CascadeRowPayload[];
+  positions?: CascadePositionPayload[];
+  margin_realized?: string | null;
+};
+type DeltaDriverPayload = {
+  driver?: string;
+  net_delta?: string;
+  cost_delta?: string;
+  net_after?: string;
+};
+type DeltaPayload = {
+  baseline_revision?: string;
+  baseline_net?: string;
+  proposed_net?: string;
+  net_delta?: string;
+  drivers?: DeltaDriverPayload[];
+};
+
+function cascadeRowLabel(key: string): string {
+  return t(`pricing.cascadeRow.${key}` as never);
+}
+
+/** P07 — the org's declared margin band as a gauge: min→max corridor,
+ * the objective tick, and the realized marker. The state the server
+ * computed drives the chip — the UI never re-judges it. */
+function MarginBand({
+  band,
+  owner,
+  realized,
+}: {
+  band: BandPayload;
+  owner: boolean;
+  realized: string | null;
+}) {
+  const min = Number(band.min);
+  const max = Number(band.max);
+  const objective = Number(band.objective);
+  const value = realized === null || realized === undefined ? null : Number(realized);
+  if (![min, max, objective].every(Number.isFinite)) return null;
+  const span = max * 1.25 || 1;
+  const at = (v: number) => `${Math.min(100, Math.max(0, (v / span) * 100))}%`;
+  const state = band.state ?? "";
+  return (
+    <section className="margin-band" aria-label={t("pricing.marginBand")}>
+      <h3>{t("pricing.marginBand")}</h3>
+      <div className="margin-band__track">
+        <span
+          className="margin-band__corridor"
+          style={{ left: at(min), right: `${100 - (max / span) * 100}%` }}
+        />
+        <span className="margin-band__objective" style={{ left: at(objective) }} />
+        {value !== null && Number.isFinite(value) && (
+          <span className="margin-band__marker" style={{ left: at(value) }} />
+        )}
+      </div>
+      <p className="margin-band__labels">
+        <span>
+          {t("pricing.marginMin")} {formatPercent(band.min)}
+        </span>
+        <span>
+          {t("pricing.bandObjective")} {formatPercent(band.objective)}
+        </span>
+        <span>
+          {t("pricing.marginMax")} {formatPercent(band.max)}
+        </span>
+        {value !== null && (
+          <strong>
+            {t("pricing.bandRealized")} {formatPercent(String(value))}
+          </strong>
+        )}
+        <StatusBadge
+          label={t(`pricing.band.${state}` as never)}
+          tone={state === "IN_BAND" ? "success" : "warning"}
+        />
+        {state !== "IN_BAND" && !owner && (
+          <span className="operation-warning">{t("pricing.bandPendingHint")}</span>
+        )}
+      </p>
+    </section>
+  );
+}
+
+/** P07 — the exact waterfall the engine closed: family groups, then the
+ * landmark rows (materiales → costo → margen → lista → neto → total). A
+ * position panel shows the same chain at line level. */
+function PriceCascade({
+  authorities,
+  cascade,
+  currency,
+}: {
+  authorities?: unknown[];
+  cascade: CascadePayload;
+  currency: string;
+}) {
+  const rows = cascade.rows ?? [];
+  const positions = cascade.positions ?? [];
+  if (!rows.length) return null;
+  return (
+    <section className="price-cascade">
+      <h3>{t("pricing.cascade")}</h3>
+      {(authorities ?? []).length > 0 && (
+        <details className="operation-authorities">
+          <summary>{t("pricing.authorities")}</summary>
+          <ul>
+            {(authorities ?? []).map((authority, index) => (
+              <li key={index}>{flattenAuthority(authority).join(" · ")}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <table className="price-cascade__table">
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              key={row.key}
+              className={`price-cascade__row price-cascade__row--${row.kind ?? "step"}`}
+            >
+              <td>{cascadeRowLabel(String(row.key))}</td>
+              <td className="operation-lines__money">
+                {formatMoney(String(row.amount ?? "0"), currency)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {positions.length > 0 && (
+        <details className="price-cascade__positions">
+          <summary>{t("pricing.cascadePosition")}</summary>
+          {positions.map((position) => (
+            <table
+              className="price-cascade__table price-cascade__table--position"
+              key={position.position_index}
+            >
+              <caption>#{position.position_index}</caption>
+              <tbody>
+                {Object.entries(position.groups ?? {})
+                  .filter(([, amount]) => Number(amount) !== 0)
+                  .map(([group, amount]) => (
+                    <tr key={group} className="price-cascade__row price-cascade__row--group">
+                      <td>{cascadeRowLabel(group)}</td>
+                      <td className="operation-lines__money">{formatMoney(amount, currency)}</td>
+                    </tr>
+                  ))}
+                {(
+                  [
+                    "materials",
+                    "waste",
+                    "labour",
+                    "rounding",
+                    "cost",
+                    "margin",
+                    "sell",
+                    "list_price",
+                    "discount",
+                    "net",
+                  ] as const
+                ).map((key) => (
+                  <tr
+                    key={key}
+                    className={`price-cascade__row ${
+                      ["cost", "list_price", "net"].includes(key)
+                        ? "price-cascade__row--subtotal"
+                        : ""
+                    }`}
+                  >
+                    <td>{cascadeRowLabel(key === "cost" ? "cost_total" : key)}</td>
+                    <td className="operation-lines__money">
+                      {formatMoney(String(position[key] ?? "0"), currency)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ))}
+        </details>
+      )}
+    </section>
+  );
+}
+
+/** P07 — "¿Por qué cambió?": the driver's net contribution in the
+ * canonical order — the amounts sum to the total Δ by construction. */
+function DeltaBreakdown({ delta, currency }: { delta: DeltaPayload; currency: string }) {
+  const drivers = delta.drivers ?? [];
+  if (!drivers.length) return null;
+  const signed = (value: string | undefined) => {
+    const amount = Number(value ?? "0");
+    return (
+      <span data-negative={amount < 0 || undefined}>
+        {amount > 0 ? "+" : ""}
+        {formatMoney(String(value ?? "0"), currency)}
+      </span>
+    );
+  };
+  return (
+    <section className="delta-breakdown">
+      <h3>
+        {t("pricing.delta")}
+        {delta.baseline_revision && (
+          <span className="delta-breakdown__baseline">
+            {" "}
+            · {t("pricing.deltaBaseline")} {delta.baseline_revision}
+          </span>
+        )}
+      </h3>
+      <table className="delta-breakdown__table">
+        <thead>
+          <tr>
+            <th scope="col">{t("pricing.deltaLabel")}</th>
+            <th scope="col" className="operation-lines__money">
+              {t("pricing.deltaNet")}
+            </th>
+            <th scope="col" className="operation-lines__money">
+              {t("pricing.deltaCost")}
+            </th>
+            <th scope="col" className="operation-lines__money">
+              {t("pricing.deltaAfter")}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {drivers.map((driver) => (
+            <tr key={driver.driver}>
+              <td>{t(`pricing.deltaDriver.${driver.driver}` as never)}</td>
+              <td className="operation-lines__money">{signed(driver.net_delta)}</td>
+              <td className="operation-lines__money">{signed(driver.cost_delta)}</td>
+              <td className="operation-lines__money">
+                {formatMoney(String(driver.net_after ?? "0"), currency)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>{t("pricing.deltaLabel")}</td>
+            <td className="operation-lines__money">{signed(delta.net_delta)}</td>
+            <td />
+            <td className="operation-lines__money">
+              {formatMoney(String(delta.proposed_net ?? "0"), currency)}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
+  );
 }
 
 /** §03-D — the pricing decision surface: the estimator and the approver
@@ -1189,7 +1475,11 @@ function OperationDecision({
     diff !== null && Number(baselineGross) > 0 ? (diff / Number(baselineGross)) * 100 : null;
   // Per-position delta: the live price_net of the bound revision vs the
   // proposed line_net — same position index, same currency, never a guess.
-  const canLineDelta = isBoundProject && sameCurrency;
+  // Only a live applied quote (pricing_current) is a real baseline: with no
+  // applied quote the live net is modelled, not quoted, and the delta would
+  // echo the whole amount like a change. The header already explains the
+  // absence with 'sin comparación'.
+  const canLineDelta = isBoundProject && sameCurrency && !!boundProject?.pricing_current;
   // Category rollup: every cost component across all positions aggregated by
   // kind — the 'why' behind the total, in exact cents (no float artifacts).
   const kindTotals = new Map<string, bigint>();
@@ -1216,7 +1506,7 @@ function OperationDecision({
       ? Number(((netCents - costCents) * 10000n) / netCents) / 100
       : null;
   const objective = Number(operation.rules?.default_margin_pct ?? NaN);
-  // Compare at the displayed precision (marginText renders toFixed(1)):
+  // Compare at the displayed precision (marginText renders one decimal):
   // a realized 34.9998% shows as "35.0 %" — flagging it "below objective"
   // next to that readout would contradict the number on screen.
   const marginBelow =
@@ -1226,27 +1516,16 @@ function OperationDecision({
   return (
     <article className="operation-decision">
       <header className="operation-decision__head">
-        <span className="status-chip" data-status={operation.state.toLowerCase()}>
-          {t(
-            operation.state === "PENDING"
-              ? "pricing.pending"
-              : operation.state === "APPLIED"
-                ? "pricing.applied"
-                : operation.state === "REJECTED"
-                  ? "pricing.rejected"
-                  : operation.state === "WITHDRAWN"
-                    ? "pricing.withdrawn"
-                    : "pricing.notApplied",
-          )}
-        </span>
+        <StatusChip enumName="PriceResponseStateEnum" value={operation.state} />
         {projectLabel && (
           <span className="operation-decision__meta">
             {t("pricing.projectId")}: {projectLabel}
           </span>
         )}
         <span className="operation-decision__meta">
-          {operation.revision_code} · {t("pricing.discount")} {pctDisplay(operation.discount_pct)}%
-          · <time dateTime={operation.created_at}>{formatDateTime(operation.created_at)}</time>
+          {formatRevision(operation.revision_code)} · {t("pricing.discount")}{" "}
+          {formatPercent(operation.discount_pct)}·{" "}
+          <time dateTime={operation.created_at}>{formatDateTime(operation.created_at)}</time>
         </span>
         {stale && <p className="operation-decision__stale">{t("pricing.staleHint")}</p>}
       </header>
@@ -1257,7 +1536,7 @@ function OperationDecision({
             <span>
               {t("pricing.currentTotal")}
               {sealedBaseline && !boundProject?.pricing_current
-                ? ` · ${sealedBaseline.revision_code}`
+                ? ` · ${formatRevision(sealedBaseline.revision_code)}`
                 : ""}
             </span>
             <strong>{formatMoney(baselineGross, operation.currency)}</strong>
@@ -1281,7 +1560,7 @@ function OperationDecision({
                 <small>
                   {" "}
                   ({diffPct > 0 ? "+" : ""}
-                  {diffPct.toFixed(1)}%)
+                  {formatPercent(diffPct, "points")})
                 </small>
               )}
             </strong>
@@ -1338,6 +1617,28 @@ function OperationDecision({
         )}
       </div>
 
+      {(operation.band as BandPayload | null) && (
+        <MarginBand
+          band={operation.band as BandPayload}
+          owner={owner}
+          realized={operation.margin_realized ?? null}
+        />
+      )}
+      {(operation.cascade as CascadePayload | null)?.rows?.length ? (
+        <PriceCascade
+          authorities={operation.authorities ?? []}
+          cascade={operation.cascade as CascadePayload}
+          currency={operation.currency}
+        />
+      ) : (
+        <p className="operation-decision__meta">{t("pricing.noCascade")}</p>
+      )}
+      {(operation.delta as DeltaPayload | null)?.drivers?.length ? (
+        <DeltaBreakdown delta={operation.delta as DeltaPayload} currency={operation.currency} />
+      ) : (
+        <p className="operation-decision__meta">{t("pricing.noDelta")}</p>
+      )}
+
       <div className="operation-lines__wrap">
         <table className="operation-lines">
           <caption>{t("pricing.perPosition")}</caption>
@@ -1377,7 +1678,7 @@ function OperationDecision({
                     </td>
                     <td>
                       {lineDiscount !== null && lineDiscount > 0
-                        ? `−${pctDisplay(lineDiscount)} %`
+                        ? `−${formatPercent(lineDiscount)}`
                         : "—"}
                     </td>
                     <td className="operation-lines__money">
@@ -1394,7 +1695,7 @@ function OperationDecision({
                               String(Number(line.line_net) / (1 - discount)),
                               operation.currency,
                             )}{" "}
-                            −{pctDisplay(discount)}%)
+                            −{formatPercent(discount)})
                           </span>
                         </>
                       ) : (
@@ -1481,16 +1782,17 @@ function OperationDecision({
           ` · ${t("pricing.auditDecided")} ${formatDateTime(operation.approved_at)}`}
       </p>
 
-      {(operation.authorities ?? []).length > 0 && (
-        <details className="operation-authorities">
-          <summary>{t("pricing.authorities")}</summary>
-          <ul>
-            {(operation.authorities ?? []).map((authority, index) => (
-              <li key={index}>{flattenAuthority(authority).join(" · ")}</li>
-            ))}
-          </ul>
-        </details>
-      )}
+      {(operation.authorities ?? []).length > 0 &&
+        !(operation.cascade as CascadePayload | null)?.rows?.length && (
+          <details className="operation-authorities">
+            <summary>{t("pricing.authorities")}</summary>
+            <ul>
+              {(operation.authorities ?? []).map((authority, index) => (
+                <li key={index}>{flattenAuthority(authority).join(" · ")}</li>
+              ))}
+            </ul>
+          </details>
+        )}
 
       <div className="operation-decision__actions">
         {["PREVIEW", "PENDING"].includes(operation.state) &&
@@ -1525,7 +1827,7 @@ function OperationDecision({
     </article>
   );
 }
-function CommercialOperations({
+export function CommercialOperations({
   request,
   owner,
   boundProjectId,
@@ -1729,6 +2031,29 @@ function CommercialOperations({
     if (!isOperation(value)) throw new Error("pricing.malformedOperation");
     setStale(false);
     setOperation(value);
+    // The just-created operation belongs in the history immediately —
+    // waiting for a manual Recargar made submissions look lost. Upsert
+    // locally instead of refetching: a reload here would race the next
+    // preview's request generation.
+    setHistory((current) => {
+      if (!Array.isArray(current)) return current;
+      const index = current.findIndex((item) => item.id === value.id);
+      if (index === -1) return [value, ...current];
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
+    // Fuera de banda para un estimador = pedir aprobación: la causa queda
+    // precargada (constitución §8) sin pisar un motivo ya escrito.
+    const band = value.band as BandPayload | null | undefined;
+    const outOfBand = band?.state === "BELOW_MIN" || band?.state === "ABOVE_MAX";
+    setReason((current) =>
+      outOfBand &&
+      !owner &&
+      (current.trim().length === 0 || current === t("pricing.firstQuoteReason"))
+        ? t("pricing.bandReason")
+        : current,
+    );
   }
   function apply(reject = false): Promise<boolean> {
     if (!operation) return Promise.resolve(false);
@@ -1786,6 +2111,7 @@ function CommercialOperations({
         />
       )}
       <form
+        noValidate
         className="commercial-form"
         onChange={(event) => {
           const target = event.target as HTMLInputElement;
@@ -1797,8 +2123,10 @@ function CommercialOperations({
           event.preventDefault();
           const data = Object.fromEntries(new FormData(event.currentTarget));
           if (data.fx_snapshot_id === "") delete data.fx_snapshot_id;
+          // Margen vacío → la regla por defecto; vacío no es 0 %.
+          if (data.margin_pct === "" || data.margin_pct === undefined) delete data.margin_pct;
           // The UI collects percents; the authority stores fractions.
-          for (const key of ["discount_pct", "target_margin"] as const) {
+          for (const key of ["discount_pct", "target_margin", "margin_pct"] as const) {
             if (data[key] !== undefined && data[key] !== "")
               data[key] = String(Number(data[key]) / 100);
           }
@@ -1860,8 +2188,13 @@ function CommercialOperations({
         <label>
           {t("pricing.context")}
           <input
+            key={selectedMode}
             name="context_code"
-            defaultValue="DEFAULT"
+            // El modo costo+margen no usa contexto: el campo queda fuera del
+            // submit (disabled) y muestra el nombre legible, no la clave cruda.
+            defaultValue={
+              selectedMode === "COST_PLUS_MARGIN" ? t("pricing.contextDefault") : "DEFAULT"
+            }
             disabled={selectedMode === "COST_PLUS_MARGIN"}
             required={selectedMode !== "COST_PLUS_MARGIN"}
           />
@@ -1915,6 +2248,13 @@ function CommercialOperations({
             required
           />
         </label>
+        {selectedMode === "COST_PLUS_MARGIN" && (
+          <label>
+            {t("pricing.marginPct")}
+            <input name="margin_pct" type="number" step="0.1" min="0" max="99.9" placeholder="—" />
+            <span className="field-hint">{t("pricing.marginPctHint")}</span>
+          </label>
+        )}
         {selectedMode === "TARGET_GROSS_MARGIN_PROJECT" && (
           <label>
             {t("pricing.margin")}
@@ -2027,9 +2367,20 @@ function CommercialOperations({
             checked={confirmed}
             onChange={(event) => setConfirmed(event.target.checked)}
           />
-          {t("pricing.confirmDiscount")}
+          {(() => {
+            const band = operation?.band as BandPayload | null | undefined;
+            return band?.state === "BELOW_MIN" || band?.state === "ABOVE_MAX"
+              ? t("pricing.confirmBand")
+              : t("pricing.confirmDiscount");
+          })()}
         </label>
-        <button disabled={busy}>{t("pricing.preview")}</button>
+        <button disabled={busy}>
+          {(() => {
+            const band = operation?.band as BandPayload | null | undefined;
+            const outOfBand = band?.state === "BELOW_MIN" || band?.state === "ABOVE_MAX";
+            return outOfBand && !owner ? t("pricing.requestApproval") : t("pricing.preview");
+          })()}
+        </button>
       </form>
       {error && (
         <p role="alert">
@@ -2093,19 +2444,7 @@ function CommercialOperations({
             <article className="operation-history__item" key={item.id}>
               <p>
                 <strong>{formatMoney(item.project_gross, item.currency)}</strong>{" "}
-                <span className="status-chip" data-status={item.state.toLowerCase()}>
-                  {t(
-                    item.state === "PENDING"
-                      ? "pricing.pending"
-                      : item.state === "APPLIED"
-                        ? "pricing.applied"
-                        : item.state === "REJECTED"
-                          ? "pricing.rejected"
-                          : item.state === "WITHDRAWN"
-                            ? "pricing.withdrawn"
-                            : "pricing.notApplied",
-                  )}
-                </span>
+                <StatusChip enumName="PriceResponseStateEnum" value={item.state} />
               </p>
               <p className="operation-history__meta">
                 {[
@@ -2197,6 +2536,7 @@ function CommercialDraft({
         {inputs.nominalWidthMm} × {inputs.nominalHeightMm} mm
       </p>
       <form
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
           const data = Object.fromEntries(new FormData(event.currentTarget));

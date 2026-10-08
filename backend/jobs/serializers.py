@@ -28,6 +28,11 @@ class JobRunSerializer(serializers.Serializer):
     completed_at = serializers.DateTimeField(allow_null=True)
     # Deep-link target for AI runs — NULL for every other job type.
     ai_job_id = serializers.UUIDField(required=False, allow_null=True)
+    # §P17 — la fila legible: etiqueta en español del tipo, correo del actor
+    # que la encoló y el objeto humano («P-000012», «Pos. 03 Living», OT).
+    label = serializers.CharField(required=False, allow_blank=True)
+    actor = serializers.CharField(required=False, allow_null=True)
+    object_label = serializers.CharField(required=False, allow_null=True)
 
 
 class JobEnqueueSerializer(StrictSerializer):

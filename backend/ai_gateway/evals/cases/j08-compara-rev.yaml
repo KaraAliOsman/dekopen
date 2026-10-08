@@ -1,0 +1,23 @@
+id: J08
+view: proyecto
+via: agent
+surface: project
+fixture: proyecto_cotizado
+refs:
+  project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+prompt: "compara la REV-A con la REV-B"
+expected: "Δ precio por posición vía explain_price_delta (autoridad aplicada vs costo actual) o un artefacto de comparación con las diferencias reales."
+expect:
+  any:
+    # IA2 §2 — la comparación se apoya en la herramienta de delta: las
+    # líneas aplicadas de REV-A contra el costo vigente.
+    - behavior:
+        queries_include_tool: explain_price_delta
+        reply_nonempty: true
+    - behavior:
+        artifact:
+          kind: comparison
+    - behavior:
+        sin_dato: true
+    - behavior:
+        asks_clarification: true

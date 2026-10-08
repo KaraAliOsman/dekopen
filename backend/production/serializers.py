@@ -48,6 +48,18 @@ class ProductionOrderSerializer(serializers.Serializer):
     shortage = serializers.IntegerField()
     version_shortage = serializers.IntegerField()
     remake_reason = serializers.DictField(allow_null=True, required=False)
+    # Board context (P12): project header + real commitment + plan/blocked
+    # state so the floor board cards carry obra/compromiso/bloqueos without
+    # a second request per order.
+    project_code = serializers.CharField(allow_null=True, required=False)
+    project_name = serializers.CharField(allow_null=True, required=False)
+    client_name = serializers.CharField(allow_null=True, required=False)
+    committed_date = serializers.DateField(allow_null=True, required=False)
+    steps_blocked = serializers.IntegerField(required=False)
+    qc_blocked = serializers.BooleanField(required=False)
+    plan_state = serializers.ChoiceField(
+        choices=("none", "ok", "invalidated"), required=False
+    )
     created_at = serializers.DateTimeField()
     project_version_id = serializers.UUIDField(allow_null=True, required=False)
     payload = serializers.DictField(required=False)
@@ -380,6 +392,10 @@ class DeliverySerializer(serializers.Serializer):
     contact_name = serializers.CharField(allow_null=True)
     contact_phone = serializers.CharField(allow_null=True)
     installer_name = serializers.CharField(allow_null=True)
+    installer_user_id = serializers.UUIDField(allow_null=True, required=False)
+    crew_id = serializers.UUIDField(allow_null=True, required=False)
+    route_order = serializers.IntegerField(allow_null=True, required=False)
+    load_checked = serializers.BooleanField(required=False)
     notes = serializers.CharField(allow_null=True)
     status = serializers.ChoiceField(
         choices=("SCHEDULED", "ON_ROUTE", "DELIVERED", "FAILED")
@@ -413,6 +429,9 @@ class DeliveryScheduleRequestSerializer(StrictSerializer):
     contact_name = serializers.CharField(required=False, allow_blank=True, max_length=200)
     contact_phone = serializers.CharField(required=False, allow_blank=True, max_length=50)
     installer_name = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    installer_user_id = serializers.UUIDField(required=False, allow_null=True)
+    crew_id = serializers.UUIDField(required=False, allow_null=True)
+    route_order = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
     unit_indexes = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
@@ -442,11 +461,40 @@ class DeliveryConfirmRequestSerializer(StrictSerializer):
     receiver_rut = serializers.CharField(required=False, allow_blank=True, max_length=30)
     signature_png = serializers.CharField()
     payment = DeliveryPaymentRequestSerializer(required=False, allow_null=True)
+    observations = serializers.CharField(
+        required=False, allow_blank=True, max_length=1000
+    )
 
 
 class DeliveryConfirmResponseSerializer(serializers.Serializer):
     confirmation = DeliveryConfirmationSerializer()
     delivery = DeliverySerializer()
+
+
+class DeliveryListItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    order_id = serializers.UUIDField()
+    order_code = serializers.CharField()
+    order_status = serializers.CharField()
+    project_id = serializers.UUIDField()
+    project_code = serializers.CharField()
+    project_name = serializers.CharField()
+    client_name = serializers.CharField()
+    scheduled_date = serializers.CharField()
+    time_window = serializers.CharField()
+    status = serializers.CharField()
+    address = serializers.CharField()
+    contact_name = serializers.CharField(allow_null=True)
+    contact_phone = serializers.CharField(allow_null=True)
+    installer_name = serializers.CharField(allow_null=True)
+    notes = serializers.CharField(allow_null=True)
+    unit_indexes = serializers.ListField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+
+
+class DeliveryListResponseSerializer(serializers.Serializer):
+    items = DeliveryListItemSerializer(many=True)
 
 
 class ProductionOrderTraceSerializer(serializers.Serializer):
@@ -520,6 +568,11 @@ class CncMachineRequestSerializer(StrictSerializer):
     units = serializers.CharField(required=False, max_length=20)
     encoding = serializers.CharField(required=False, max_length=40)
     active = serializers.BooleanField(required=False)
+    machine_type = serializers.CharField(required=False, max_length=30)
+    axes_count = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    travel_x_mm = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    travel_y_mm = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    travel_z_mm = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
 
 class CncMachineSerializer(serializers.Serializer):
@@ -541,6 +594,12 @@ class CncMachineSerializer(serializers.Serializer):
     units = serializers.CharField()
     encoding = serializers.CharField()
     active = serializers.BooleanField()
+    machine_type = serializers.CharField(required=False)
+    axes_count = serializers.IntegerField(required=False, allow_null=True)
+    travel_x_mm = serializers.CharField(required=False, allow_null=True)
+    travel_y_mm = serializers.CharField(required=False, allow_null=True)
+    travel_z_mm = serializers.CharField(required=False, allow_null=True)
+    emitter_implemented = serializers.BooleanField(required=False)
 
 
 class CncMachineListSerializer(serializers.Serializer):
@@ -551,10 +610,22 @@ class CncToolListSerializer(serializers.Serializer):
     tools = CncToolSerializer(many=True)
 
 
+class CncAuditEventSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    entity = serializers.CharField()
+    entity_id = serializers.CharField()
+    entity_code = serializers.CharField()
+    action = serializers.CharField()
+    actor_id = serializers.CharField(allow_null=True)
+    changed = serializers.DictField(required=False)
+    created_at = serializers.CharField()
+
+
 class CncWorkspaceSerializer(serializers.Serializer):
     machines = CncMachineSerializer(many=True)
     tools = CncToolSerializer(many=True)
     orders = serializers.ListField()
+    audit = serializers.ListField(required=False)
 
 
 class CncGenerateRequestSerializer(StrictSerializer):
@@ -565,7 +636,9 @@ class CncGenerateRequestSerializer(StrictSerializer):
 class CncReadinessSerializer(serializers.Serializer):
     order_id = serializers.CharField()
     order_code = serializers.CharField()
+    plan = serializers.DictField(required=False)
     members = serializers.ListField()
+    declared_gaps = serializers.ListField(required=False)
     issues = serializers.ListField(required=False)
     machines = CncMachineSerializer(many=True)
     programs = serializers.ListField()
@@ -585,6 +658,15 @@ class CncProgramSerializer(serializers.Serializer):
 
 class CncProgramListSerializer(serializers.Serializer):
     programs = serializers.ListField()
+
+
+class CncProgramCompareSerializer(serializers.Serializer):
+    base = serializers.DictField()
+    other = serializers.DictField()
+    added = serializers.ListField()
+    removed = serializers.ListField()
+    changed = serializers.ListField()
+    counts = serializers.DictField()
 
 
 class CncToolPatchSerializer(StrictSerializer):
@@ -618,3 +700,8 @@ class CncMachinePatchSerializer(StrictSerializer):
     units = serializers.CharField(required=False, max_length=20)
     encoding = serializers.CharField(required=False, max_length=40)
     active = serializers.BooleanField(required=False)
+    machine_type = serializers.CharField(required=False, max_length=30)
+    axes_count = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    travel_x_mm = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    travel_y_mm = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    travel_z_mm = serializers.CharField(required=False, allow_null=True, allow_blank=True)

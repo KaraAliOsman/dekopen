@@ -12,4 +12,5 @@ export interface CncWorkspace {
   machines: CncMachine[];
   tools: CncTool[];
   orders: unknown[];
+  audit?: unknown[];
 }

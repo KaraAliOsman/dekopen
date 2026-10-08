@@ -1,0 +1,145 @@
+.skip-link {
+  background: var(--interactive-fill);
+  border-radius: 0 0 var(--r-1) 0;
+  color: var(--on-interactive-fill);
+  font-size: 0.85rem;
+  font-weight: 600;
+  left: 0;
+  padding: var(--space-8) var(--space-12);
+  position: fixed;
+  top: 0;
+  transform: translateY(-110%);
+  transition: transform 0.15s ease;
+  z-index: calc(var(--z-palette) + 10);
+}
+
+.skip-link:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+  transform: translateY(0);
+}
+
+.placeholder {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  max-width: 48rem;
+  padding: var(--space-32);
+}
+
+[role="alert"] {
+  color: var(--danger-ink);
+}
+
+/* Standalone denial/error notices (a bare <p role="alert"> returned instead
+   of page content) must read as a designed state, not a stray red line. */
+p[role="alert"]:only-child {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-left: 3px solid var(--theme-danger);
+  border-radius: var(--radius-md);
+  color: var(--theme-text-primary);
+  margin: var(--space-24) 0;
+  max-width: 34rem;
+  padding: var(--space-16) var(--space-16);
+}
+
+p[role="alert"]:only-child::before {
+  content: "⚠ ";
+  color: var(--danger-ink);
+}
+
+.primary-action {
+  background: var(--theme-accent);
+  border-radius: var(--r-1);
+  color: var(--theme-surface-panel);
+  display: inline-block;
+  font-weight: 600;
+  margin-top: var(--space-16);
+  padding: var(--space-8) var(--space-12);
+  text-decoration: none;
+}
+
+a.primary-action:hover,
+button.primary-action:hover {
+  background: var(--theme-accent-strong);
+  /* `a:hover`/`button:hover` tie the plain-class specificity — the element
+   * selector keeps the ink pinned on anchor and button CTAs alike. */
+  color: var(--theme-surface-panel);
+}
+
+/* Task dashboard, not a form column: the attention queue and active work
+   use the wide left lane; operations context rides the right lane. */
+.dashboard {
+  display: grid;
+  gap: var(--space-16);
+  grid-template-columns: minmax(0, 7fr) minmax(19rem, 5fr);
+  /* 96rem left a dead rail at 1920px; the workspace should use the viewport. */
+  max-width: 120rem;
+}
+
+/* Jobs reuses the dashboard grid but has no right rail — everything
+   spans the full width instead of leaving a dead column (hostile M5). */
+.dashboard.jobs-page > * {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1100px) {
+  .dashboard {
+    /* minmax(0,1fr): the single column may shrink below the widest
+       child's min-content — otherwise long rows pin the page wider
+       than the viewport. */
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dashboard-row-code {
+  color: var(--theme-text-muted);
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.dashboard-row-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.production-chip,
+.production-chip-danger {
+  border-radius: var(--r-pill);
+  display: inline-block;
+  font-size: var(--type-micro);
+  font-weight: 600;
+  line-height: 1.5;
+  padding: var(--space-2) var(--space-8);
+}
+
+/* Chips that act (e.g. filter the list) reset button chrome and invite the
+   click they promise. */
+button.production-chip {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button.production-chip:hover {
+  filter: brightness(0.95);
+}
+
+/* Production chips share the pill language; tones come from the same
+   status palette so a status reads identically on every surface. */
+.production-chip.is-warn {
+  background: var(--theme-warning-soft);
+  color: var(--warn-ink);
+}
+.production-chip.delivery-delivered {
+  background: var(--theme-success-soft);
+  color: var(--ok-ink);
+}
+.production-chip-danger {
+  background: var(--theme-danger-soft);
+  color: var(--danger-ink);
+}

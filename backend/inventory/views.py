@@ -31,6 +31,9 @@ from inventory.serializers import (
     RemnantListQuerySerializer,
     RemnantLabelSerializer,
     RemnantListSerializer,
+    RemnantMoveRequestSerializer,
+    RemnantReserveRequestSerializer,
+    RemnantScrapRequestSerializer,
     RemnantSerializer,
 )
 
@@ -161,6 +164,9 @@ class OrderReceiptCreateView(APIView):
                     note=data.get("note"),
                     lines=data["lines"],
                     actor_label=token.email or None,
+                    supplier_delivery_ref=data.get("supplier_delivery_ref"),
+                    supplier_delivery_date=data.get("supplier_delivery_date"),
+                    allow_over_receipt=bool(data.get("allow_over_receipt")),
                 )
         return Response(output, status=201 if created else 200)
 
@@ -196,6 +202,8 @@ class RemnantListView(APIView):
                     org_id=org_id,
                     kind=query.get("kind"),
                     status=query.get("status"),
+                    physical_stock_identity=query.get("physical_stock_identity"),
+                    stock_identity=query.get("stock_identity"),
                 )
         return Response(output)
 
@@ -223,14 +231,34 @@ class _RemnantTransitionView(APIView):
         with public_inventory_errors():
             with documentary_scope(request, _WRITERS) as (token, _, org_id):
                 if self.action == "scrap":
+                    data = validate(RemnantScrapRequestSerializer, request.data)
                     output = remnants_service.scrap_remnant(
                         org_id=org_id, remnant_id=remnant_id,
                         actor_id=token.user_id,
+                        reason=data["reason"],
+                        actor_label=token.email or None,
+                    )
+                elif self.action == "move":
+                    data = validate(RemnantMoveRequestSerializer, request.data)
+                    output = remnants_service.move_remnant(
+                        org_id=org_id, remnant_id=remnant_id,
+                        rack_location=data["rack_location"],
+                        actor_id=token.user_id,
+                        actor_label=token.email or None,
+                    )
+                elif self.action == "reserve":
+                    data = validate(RemnantReserveRequestSerializer, request.data)
+                    output = remnants_service.reserve_remnant_for_order(
+                        org_id=org_id, remnant_id=remnant_id,
+                        order_id=data["order_id"],
+                        actor_id=token.user_id,
+                        actor_label=token.email or None,
                     )
                 else:
                     output = remnants_service.unreserve_remnant(
                         org_id=org_id, remnant_id=remnant_id,
                         actor_id=token.user_id,
+                        actor_label=token.email or None,
                     )
         return Response(output)
 
@@ -241,7 +269,35 @@ class RemnantScrapView(_RemnantTransitionView):
     @extend_schema(
         operation_id="inventory_remnant_scrap",
         parameters=[ACTIVE_ORGANIZATION_HEADER],
-        request=None,
+        request=RemnantScrapRequestSerializer,
+        responses={200: RemnantSerializer, **ERRORS},
+        tags=["inventory"],
+    )
+    def post(self, request, remnant_id: UUID):
+        return super().post(request, remnant_id)
+
+
+class RemnantMoveView(_RemnantTransitionView):
+    action = "move"
+
+    @extend_schema(
+        operation_id="inventory_remnant_move",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=RemnantMoveRequestSerializer,
+        responses={200: RemnantSerializer, **ERRORS},
+        tags=["inventory"],
+    )
+    def post(self, request, remnant_id: UUID):
+        return super().post(request, remnant_id)
+
+
+class RemnantReserveView(_RemnantTransitionView):
+    action = "reserve"
+
+    @extend_schema(
+        operation_id="inventory_remnant_reserve",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=RemnantReserveRequestSerializer,
         responses={200: RemnantSerializer, **ERRORS},
         tags=["inventory"],
     )

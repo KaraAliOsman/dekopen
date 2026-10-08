@@ -1,0 +1,100 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* ---------- tabla de datos ---------- */
+.ui-table {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ui-table__bar {
+  align-items: center;
+  display: flex;
+  gap: var(--space-8);
+  margin-bottom: var(--space-8);
+}
+.ui-table__filter {
+  max-width: 16rem;
+}
+.ui-table__bulk {
+  align-items: center;
+  background: var(--surface-selected);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--r-1);
+  display: flex;
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-12);
+}
+.ui-table__bulk-count {
+  font-family: var(--font-mono);
+}
+.ui-table__scroll {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-1);
+  overflow: auto;
+}
+.ui-table table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.ui-table th {
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-size: var(--type-label);
+  font-weight: 600;
+  letter-spacing: var(--type-label-ls);
+  padding: var(--space-8) var(--space-12);
+  position: sticky;
+  text-align: left;
+  text-transform: uppercase;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+.ui-table td {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-8) var(--space-12);
+  vertical-align: top;
+}
+.ui-table tr:last-child td {
+  border-bottom: 0;
+}
+.ui-table tr.is-selected td {
+  background: var(--surface-selected);
+}
+.ui-table tr:hover td {
+  background: var(--surface-hover);
+}
+.ui-table tr.is-selected:hover td {
+  background: var(--surface-selected);
+}
+.ui-table td[data-align="right"],
+.ui-table th[data-align="right"] {
+  text-align: right;
+}
+.ui-table td[data-align="center"],
+.ui-table th[data-align="center"] {
+  text-align: center;
+}
+.ui-table__sort {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: var(--space-4);
+  letter-spacing: inherit;
+  padding: 0;
+  text-transform: inherit;
+}
+.ui-table__sort-mark {
+  font-family: var(--font-mono);
+  font-size: var(--type-micro);
+}
+.ui-table__check {
+  margin: 0;
+}
+.ui-table__spacer {
+  height: 0;
+}

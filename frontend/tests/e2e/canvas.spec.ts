@@ -162,7 +162,7 @@ test("G1 canvas uses runtime discovery, transactional dimensions, snapping and <
   await expect(page.getByLabel("Alto nominal (mm)")).toHaveValue("1000.00");
   await expect(page.getByText("FIXED", { exact: true })).toBeVisible();
   await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("910 × 910 mm");
-  await expect(page.getByTestId("technical-frame")).toHaveText("1006 mm");
+  await expect(page.getByTestId("technical-frame")).toHaveText("1 006 mm");
   await expect(page.getByTestId("technical-reinforcement")).toHaveText("970 mm");
   await expect(page.getByTestId("technical-glass")).toHaveText("910 × 910 mm");
   await expect(page.getByTestId("technical-bead")).toHaveText("919 mm");
@@ -247,7 +247,7 @@ for (const theme of ["light", "dark"] as const) {
   }) => {
     await authenticate(page, await setupEstimator());
     await page.goto("/projects/demo/positions/g1/edit");
-    await expect(page.getByTestId("technical-frame")).toHaveText("1006 mm");
+    await expect(page.getByTestId("technical-frame")).toHaveText("1 006 mm");
     if (theme === "dark") await page.getByRole("button", { name: "Cambiar tema" }).click();
     const optimization = page.waitForResponse(
       (response) =>
@@ -306,7 +306,7 @@ for (const theme of ["light", "dark"] as const) {
       .locator(".inspector-semaphore")
       .evaluate((el) => getComputedStyle(el).transitionDuration);
     expect(transition.split(", ")).toContain("0.15s");
-    await expect(modal.locator(".is-corrected")).toHaveCSS("animation-duration", "0.3s");
+    await expect(modal.locator(".is-corrected")).toHaveCSS("animation-duration", "0.28s");
     await modal.getByRole("button", { name: "Corte 1D", exact: true }).click();
     await expect(modal.getByRole("heading", { name: "Pedido", exact: true })).toBeVisible();
     await expect(modal.getByText("COMPRA-MARCO", { exact: true })).toBeVisible();

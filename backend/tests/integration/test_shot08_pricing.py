@@ -215,7 +215,7 @@ def seed_unpriced_project(org, owner, system=None):
     system = system or one("SELECT id FROM public.profile_systems WHERE code='DEMO_60'")['id']
     project = one('INSERT INTO public.projects(org_id,code,name,client_name,created_by) '
                   'VALUES(%s,%s,%s,%s,%s) RETURNING id',[org,str(uuid4()),'Commercial gate','Fixture',owner])['id']
-    tree = {'id':'root','type':'BAY','opening_type':'FIXED','glass_spec':'4-12-4 Float Incoloro',
+    tree = {'id':'root','type':'BAY','opening_type':'FIXED','glass_spec':'4-16-4 Float Incoloro',
             'glass_thickness_mm':'24.00','glass_article_sku':'VIDRIO-BASE'}
     one('INSERT INTO public.project_positions(org_id,project_id,position_index,quantity,typology,system_id,'
         'width_mm,height_mm,parametric_tree,bom_snapshot) VALUES(%s,%s,1,1,%s,%s,1000,1000,%s::jsonb,%s::jsonb) RETURNING id',
@@ -228,7 +228,8 @@ def seed_commercial_project(org, owner, system=None):
     with as_user(owner):
         parent = admin_write('cost-lists',org,{'supplier_name':'Gate','currency':'CLP','valid_from':date(2026,9,1)},'Gate setup')
         for sku,unit,cost in [('COMPRA-MARCO','BAR','100'),('COMPRA-JQ-10','BAR','100'),
-                              ('COMPRA-ACERO-MARCO','BAR','100'),('VIDRIO-BASE','M2','100')]:
+                              ('COMPRA-ACERO-MARCO','BAR','100'),('TORNILLO-4X16','EA','1'),
+                              ('VIDRIO-BASE','M2','100')]:
             admin_write('cost-items',org,{'cost_list_id':parent['id'],'sku':sku,'item_type':'FIXTURE',
                         'unit':unit,'unit_cost':Decimal(cost)},'Gate input')
         admin_write('rules',org,{'pricing_mode':'COST_PLUS_MARGIN','default_margin_pct':Decimal('0.35'),
@@ -272,10 +273,11 @@ def test_five_modes_resolve_real_bom_and_apply_atomically(commercial_rows,mode):
             assert output['project_tax']==Decimal('380')
         else:
             # Independent G1 oracle: (4024+3676+3880)/6000*100 + .8281*100
-            # = 275.81 materials; *1.08 + 15+12 = 324.8748; /.65 -> CLP500.
-            assert output['project_net']==Decimal('500')
-            assert output['project_tax']==Decimal('95')
-        applied=apply_operation(org,users['OWNER'],'OWNER',output['id'],'Apply approved gate',False)
+            # = 275.81 materials; + 20 declared TORNILLO-4X16 @1 -> 295.81;
+            # *1.08 + 15+12 = 346.4748; /.65 -> CLP533.
+            assert output['project_net']==Decimal('533')
+            assert output['project_tax']==Decimal('101')
+        applied=apply_operation(org,users['OWNER'],'OWNER',output['id'],'Apply approved gate',True)
         assert applied['state']=='APPLIED'
         persisted=one('SELECT total_price_net FROM public.projects WHERE id=%s',[project])
         assert persisted['total_price_net']==Decimal(str(output['project_net']))
@@ -290,9 +292,9 @@ def test_composite_pricing_requires_exact_typology_configuration(commercial_rows
     tree={
         'id':'S1','type':'SPLIT_V','split_offset_mm':'500.00','mullion_profile_sku':'POSTE-V',
         'children':[
-            {'id':'B1','type':'BAY','opening_type':'FIXED','glass_spec':'4-12-4 Float Incoloro',
+            {'id':'B1','type':'BAY','opening_type':'FIXED','glass_spec':'4-16-4 Float Incoloro',
              'glass_thickness_mm':'24.00','glass_article_sku':'VIDRIO-BASE'},
-            {'id':'B2','type':'BAY','opening_type':'FIXED','glass_spec':'4-12-4 Float Incoloro',
+            {'id':'B2','type':'BAY','opening_type':'FIXED','glass_spec':'4-16-4 Float Incoloro',
              'glass_thickness_mm':'24.00','glass_article_sku':'VIDRIO-BASE'},
         ],
     }
@@ -346,7 +348,7 @@ def test_legacy_draft_rejects_submitted_typology_mismatch(commercial_rows):
         'positions':[{'position_index':1,'quantity':1,'typology':'TURN','system_id':str(system),
             'nominal_width_mm':'1000.00','nominal_height_mm':'1000.00','color':'WHITE',
             'parametric_tree':{'id':'B1','type':'BAY','opening_type':'FIXED',
-                'glass_spec':'4-12-4 Float Incoloro','glass_thickness_mm':'24.00',
+                'glass_spec':'4-16-4 Float Incoloro','glass_thickness_mm':'24.00',
                 'glass_article_sku':'VIDRIO-BASE'}}]},format='json')
     assert response.status_code==400
     assert response.json()['error']['code']=='typology_mismatch'
@@ -366,7 +368,7 @@ def test_estimator_pending_owner_approval_and_stale_input(commercial_rows):
         with pytest.raises(PricingError,match='owner_approval_required'):
             apply_operation(org,users['ESTIMATOR'],'ESTIMATOR',output['id'],'Try unauthorized',False)
     with as_user(users['OWNER']),commercial_backend():
-        assert apply_operation(org,users['OWNER'],'OWNER',output['id'],'Approve exact request',False)['state']=='APPLIED'
+        assert apply_operation(org,users['OWNER'],'OWNER',output['id'],'Approve exact request',True)['state']=='APPLIED'
         next_output=preview(org,tenant(org,'OWNER'),price_request(draft,users['OWNER']))
     with as_user(users['OWNER']):
         assert len(rows('UPDATE public.project_positions SET quantity=2 WHERE project_id=%s RETURNING id',
@@ -474,7 +476,7 @@ def test_authorized_apply_audit_before_and_full_rollback(commercial_rows):
                                'Apply owner fix gate',False)['state']=='APPLIED'
     with connection.cursor() as cursor:
         cursor.execute('RESET ROLE')
-    assert one('SELECT total_price_net FROM public.projects WHERE id=%s',[project])['total_price_net']==Decimal('500')
+    assert one('SELECT total_price_net FROM public.projects WHERE id=%s',[project])['total_price_net']==Decimal('533')
     assert one('SELECT count(*) AS n FROM public.price_audit_logs WHERE org_id=%s',[org])['n']==count+3
 
 
@@ -528,7 +530,8 @@ def required_cost_list(org, valid_from, cost):
     parent = admin_write('cost-lists',org,{'supplier_name':'Snapshot fixture','currency':'CLP',
                          'valid_from':valid_from},'Snapshot list')
     for sku,unit in [('COMPRA-MARCO','BAR'),('COMPRA-JQ-10','BAR'),
-                     ('COMPRA-ACERO-MARCO','BAR'),('VIDRIO-BASE','M2')]:
+                     ('COMPRA-ACERO-MARCO','BAR'),('TORNILLO-4X16','EA'),
+                     ('VIDRIO-BASE','M2')]:
         admin_write('cost-items',org,{'cost_list_id':parent['id'],'sku':sku,
                     'item_type':'FIXTURE','unit':unit,'unit_cost':Decimal(cost)},'Snapshot cost')
     return parent['id']
@@ -611,18 +614,19 @@ def test_pricing_http_valid_preview_remains_successful(committed_commercial_rows
                       'project_code','project_name','client_name','pricing_mode','segment',
                       'positions_breakdown','authorities','rules','requested_by_email',
                       'reason','requested_by','approved_by','approved_at','created_at',
-                      'extras','extras_net'}
+                      'extras','extras_net','service_lines','margin_realized','band','cascade',
+                      'delta','option_indexes','option_net','deal_cost_net'}
     assert body['approved_by'] is None and body['approved_at'] is None
     assert body['state']=='PREVIEW'
     assert body['project_id']==str(project)
     assert body['revision_code']=='REV-A'
     assert body['discount_pct']=='0.0000'
     assert body['currency']=='CLP'
-    assert body['project_net']=='500'
-    assert body['project_tax']=='95'
-    assert body['project_gross']=='595'
-    assert body['lines']==[{'position_index':1,'quantity':1,'unit_price':'499.8074',
-                            'discount_pct':'0.0000','line_net':'500'}]
+    assert body['project_net']=='533'
+    assert body['project_tax']=='101'
+    assert body['project_gross']=='634'
+    assert body['lines']==[{'position_index':1,'quantity':1,'unit_price':'533.0382',
+                            'discount_pct':'0.0000','line_net':'533'}]
 
 
 def privileged_role():
@@ -829,7 +833,7 @@ def test_preview_uses_one_snapshot_for_rules_costs_and_repeated_skus(
     snapshot = pricing_service.decoded(first['input_snapshot'])
     first_costs = [item['cost'] for item in snapshot['authorities'] if 'cost' in item]
     assert len(first_costs)>4
-    assert {Decimal(str(item['unit_cost'])) for item in first_costs}=={Decimal('100')}
+    assert {Decimal(str(item['unit_cost'])) for item in first_costs}=={Decimal('100'),Decimal('1')}
     assert Decimal(str(snapshot['rules']['labor_rate_per_m2']))==Decimal('15')
     second = owner_client(users['OWNER']).post('/api/v1/pricing/preview/',price_payload(project),format='json')
     assert second.status_code==200
@@ -1184,3 +1188,35 @@ def test_position_cost_preserves_original_database_sqlstate(commercial_rows,monk
             pricing_service.position_cost(repo,position,rules)
     assert rejected.value.__cause__.sqlstate=='42P01'
     assert one('SELECT 1 AS value')['value']==1
+
+
+def test_margin_band_gates_preview_apply_and_notifies(commercial_rows):
+    """P07 — margin band: an estimator quoting below the org's declared band
+    lands on the owner's queue, the owner must confirm expressly, and the
+    decided operation emits the requester notification job."""
+    org,_,users=commercial_rows
+    project=seed_commercial_project(org,users['OWNER'])
+    request={**price_request(project,users['ESTIMATOR']),'margin_pct':Decimal('0.10')}
+    with as_user(users['ESTIMATOR']),commercial_backend():
+        output=preview(org,tenant(org,'ESTIMATOR'),request)
+        # Fuera de banda (0.10 < mínimo 0.25): va a aprobación, no a PREVIEW.
+        assert output['state']=='PENDING'
+        assert output['band']['state']=='BELOW_MIN'
+        assert output['band']['min']=='0.2500'
+        assert output['margin_realized'] is not None
+        cascade_rows={row['key']:row['amount'] for row in output['cascade']['rows']}
+        # La cascada cierra: neto + IVA = total, todo Decimal-exacto.
+        assert Decimal(cascade_rows['net'])+Decimal(cascade_rows['tax'])==Decimal(cascade_rows['gross'])
+        with pytest.raises(PricingError,match='owner_approval_required'):
+            apply_operation(org,users['ESTIMATOR'],'ESTIMATOR',output['id'],'Bypass',False)
+    with as_user(users['OWNER']),commercial_backend():
+        # El dueño tampoco aplica fuera de banda sin confirmación expresa.
+        with pytest.raises(PricingError,match='owner_confirmation_required'):
+            apply_operation(org,users['OWNER'],'OWNER',output['id'],'No confirm',False)
+        applied=apply_operation(org,users['OWNER'],'OWNER',output['id'],'Confirm band',True)
+        assert applied['state']=='APPLIED'
+    # Aviso al solicitante emitido en la misma transacción que sella
+    # (job_runs no es legible por el rol authenticated — lectura privilegiada).
+    privileged_role()
+    assert one('SELECT type FROM public.job_runs WHERE org_id=%s AND idempotency_key=%s',
+               [org,f"mail:pricing-decision:{output['id']}:APPLIED"])['type']=='mail.pricing_decision'

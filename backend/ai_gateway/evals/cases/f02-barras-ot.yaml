@@ -1,0 +1,17 @@
+id: F02
+view: produccion
+via: agent
+surface: work_order
+fixture: work_order
+refs:
+  work_order_id: "ece5b290-fc64-513f-adef-cd126e9a278e"
+prompt: "¿cuántas barras de marco usa la OT-0009?"
+expected: "Número igual al del plan de corte, o 'sin dato' con la causa (la proyección no expone barras)."
+expect:
+  context_gap: cut_plan_bars (la proyección work_order no expone el plan de corte)
+  any:
+    - behavior:
+        sin_dato: true
+        reply_nonempty: true
+    - behavior:
+        asks_clarification: true

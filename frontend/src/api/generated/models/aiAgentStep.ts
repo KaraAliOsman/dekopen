@@ -7,6 +7,7 @@
  */
 import type { AiAgentStepItemsItem } from "./aiAgentStepItemsItem";
 import type { AiAgentStepOpsItem } from "./aiAgentStepOpsItem";
+import type { AiAgentStepSimulation } from "./aiAgentStepSimulation";
 
 export interface AiAgentStep {
   kind: string;
@@ -16,4 +17,5 @@ export interface AiAgentStep {
   action?: string;
   ops?: AiAgentStepOpsItem[];
   items?: AiAgentStepItemsItem[];
+  simulation?: AiAgentStepSimulation;
 }

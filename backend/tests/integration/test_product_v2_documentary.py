@@ -23,6 +23,7 @@ from documents.repository import DocumentaryError, documentary_backend
 from documents.renderers import _doc01, _doc03
 from documents.service import revision_snapshot, save_documentary_inputs
 from tests.integration.test_shot09_documentary import (
+    _EMISSION_DOC_TERMS,
     _tenant,
     as_user,
 )
@@ -73,7 +74,7 @@ def _bow_tree(
                 "id": "B1",
                 "type": "BAY",
                 "opening_type": "TURN_LEFT" if operable and index == 2 else "FIXED",
-                "glass_spec": "4-12-4 Float Incoloro",
+                "glass_spec": "4-16-4 Float Incoloro",
                 "glass_thickness_mm": "24.00",
                 "glass_article_sku": "VIDRIO-BASE",
             },
@@ -145,6 +146,7 @@ def _seed_bow_project(
             ("COMPRA-COPLE-60", "BAR"),
             ("COMPRA-HOJA", "BAR"),
             ("COMPRA-ACERO-HOJA", "BAR"),
+            ("TORNILLO-4X16", "EA"),
             ("KIT-TURN", "KIT"),
             ("VIDRIO-BASE", "M2"),
         ):
@@ -203,7 +205,8 @@ def _seed_bow_project(
             project_id=project_id,
             data={
                 "payment_terms": "Contado",
-                "quotation_valid_until": date(2026, 10, 14),
+                "quotation_valid_until": date(2030, 12, 31),
+                "doc_terms": _EMISSION_DOC_TERMS,
                 "positions": [{
                     "position_id": position_id,
                     "calculation_hash": bom_response["calculation_hash"],
@@ -293,8 +296,11 @@ def test_assembly_position_prices_and_freezes_quote_only(documentary_tenant) -> 
     assert len(member_ids) == len(set(member_ids))
 
     # The commercial quote renders; the workshop order stays honestly blocked.
+    # Field mode (DOC-01 v2) names modules as campos, not raw ids — m1..m3
+    # surface through the construction list and the coupling angle stays
+    # legible at the seam top.
     html = _doc01(snapshot)
-    assert "<svg" in html and "m1" in html and "15°" in html
+    assert "<svg" in html and "Campo 1" in html and "15°" in html
     with pytest.raises(DocumentaryError, match="production_document_blocked"):
         _doc03(snapshot)
 

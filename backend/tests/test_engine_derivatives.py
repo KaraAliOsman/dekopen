@@ -54,6 +54,11 @@ def test_r06_preflight_does_not_make_invalid_calculate_successful(monkeypatch: p
                                                                config: InspectorConfig) -> None:
     client = client_with_inspector(monkeypatch, config)
     request = g1_request()
+    # D02: a parseable glass_spec resolves to a structured composition whose
+    # own thickness wins over a drifting declaration (kept as a WARNING). To
+    # keep this case's "25 mm has no bead rule" premise, the spec stays
+    # unparseable so the declared thickness remains the effective infill.
+    request["parametric_tree"]["glass_spec"] = "vidrio sin especificar"
     request["parametric_tree"]["glass_thickness_mm"] = "25.00"
     assert client.post("/api/v1/engine/calculate/", request, format="json").status_code == 400
     response = client.post("/api/v1/engine/inspect/", request, format="json")
@@ -62,7 +67,7 @@ def test_r06_preflight_does_not_make_invalid_calculate_successful(monkeypatch: p
     assert any(f["rule_id"] == "R06" and f["severity"] == "RED" for f in response.data["findings"])
 
 
-@pytest.mark.parametrize("updates,rule", [({"max_leaf_weight_kg": D("23.96")}, "R01"),
+@pytest.mark.parametrize("updates,rule", [({"max_leaf_weight_kg": D("20.00")}, "R01"),
                                          ({"max_leaf_width_mm": D("1")}, "R03")])
 def test_hardware_diagnostic_http_preserves_strict_error(monkeypatch: pytest.MonkeyPatch,
     config: InspectorConfig, updates: dict[str, object], rule: str) -> None:

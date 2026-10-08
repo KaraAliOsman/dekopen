@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError } from "../../api/apiMutator";
 import {
+  projectCollectionReminderPrepare,
+  projectCollectionReminderSend,
   projectCreditNoteAccess,
   projectCreditNoteDteAccess,
   projectCreditNoteDteEmit,
@@ -28,8 +30,9 @@ import type {
   ProjectPayment,
 } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
+import { StatusChip } from "../../ui/StatusChip";
 import { actionErrorDetail } from "../errors";
-import { formatDate, formatMoney, parseMoneyInput } from "../money";
+import { formatDate, formatMoney, parseMoneyInput } from "../../format";
 import { formatRevision } from "../../format";
 import { ProjectPaymentLinksPanel } from "./ProjectPaymentLinksPanel";
 import { useConfirm, usePrompt } from "../../ui";
@@ -46,12 +49,55 @@ const METHOD_LABEL: Record<string, TranslationKey> = {
   CHECK: "projects.paymentMethodCheck",
   OTHER: "projects.paymentMethodOther",
 };
-const STATUS_LABEL: Record<string, TranslationKey> = {
-  NO_DEAL: "projects.paymentStatusNoDeal",
-  PENDING: "projects.paymentStatusPending",
-  PARTIAL: "projects.paymentStatusPartial",
-  PAID: "projects.paymentStatusPaid",
+
+const MOVEMENT_LABEL: Record<string, TranslationKey> = {
+  payment: "projects.movementPayment",
+  payment_void: "projects.movementPaymentVoid",
+  link: "projects.movementLink",
+  invoice: "projects.movementInvoice",
+  credit_note: "projects.movementCreditNote",
+  envio: "projects.movementEnvio",
 };
+
+const QUOTA_STATE_LABEL: Record<string, TranslationKey> = {
+  PAID: "projects.quotaStatePaid",
+  PENDING: "projects.quotaStatePending",
+  OVERDUE: "projects.quotaStateOverdue",
+};
+
+// El veredicto del envío SII jamás se pinta en inglés crudo — «aceptado con
+// reparos» es un estado propio y distinto, no una etiqueta técnica.
+const ENVIO_STATUS_LABEL: Record<string, TranslationKey> = {
+  PENDING: "projects.envioStatusPending",
+  ACCEPTED: "projects.envioStatusAccepted",
+  OBSERVED: "projects.envioStatusObserved",
+  REJECTED: "projects.envioStatusRejected",
+};
+
+// Estados de link y envío en la línea de tiempo — jamás el código crudo.
+const LINK_STATUS_LABEL: Record<string, TranslationKey> = {
+  DISPATCHING: "projects.paymentLinkStatusDispatching",
+  PENDING: "projects.paymentLinkStatusPending",
+  PAID: "projects.paymentLinkStatusPaid",
+  FAILED: "projects.paymentLinkStatusFailed",
+  UNCERTAIN: "projects.paymentLinkStatusUncertain",
+  CANCELLED: "projects.paymentLinkStatusCancelled",
+};
+
+function movementStatusLabel(movement: {
+  type?: string | null;
+  status?: string | null;
+}): string | null {
+  if (!movement.status) return null;
+  const map = movement.type === "envio" ? ENVIO_STATUS_LABEL : LINK_STATUS_LABEL;
+  const key = map[movement.status];
+  return key ? t(key) : null;
+}
+
+function envioStatusLabel(envio: { status?: string | null } | null | undefined): string {
+  const key = envio?.status ? ENVIO_STATUS_LABEL[envio.status] : undefined;
+  return key ? t(key) : "—";
+}
 
 export function ProjectPaymentsPanel({
   projectId,
@@ -86,6 +132,7 @@ export function ProjectPaymentsPanel({
     },
   });
   const summary = paymentsQuery.data ?? null;
+  const summaryStatus = summary?.status ?? null;
   const setSummary = (data: PaymentsSummary) => queryClient.setQueryData(paymentsKey, data);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -98,6 +145,10 @@ export function ProjectPaymentsPanel({
   const [note, setNote] = useState("");
   const [baseline, setBaseline] = useState({ kind, method });
   const [linksDirty, setLinksDirty] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [reminderSubject, setReminderSubject] = useState("");
+  const [reminderBody, setReminderBody] = useState("");
+  const [notice, setNotice] = useState("");
   const generation = useRef(0);
   const requestOptions = { headers: { "X-Organization-ID": orgId } };
   useEffect(
@@ -109,6 +160,7 @@ export function ProjectPaymentsPanel({
 
   const load = useCallback(async () => {
     setMessage("");
+    setNotice("");
     const result = await paymentsQuery.refetch();
     if (result.isError) setMessage(t("projects.paymentsLoadError"));
   }, [paymentsQuery]);
@@ -513,6 +565,60 @@ export function ProjectPaymentsPanel({
     }
   }
 
+  async function prepareReminder(): Promise<void> {
+    // Preparar es barato y reversible — la IA redacta, el humano decide.
+    const current = generation.current;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await projectCollectionReminderPrepare(
+        projectId,
+        { operation_key: crypto.randomUUID() },
+        requestOptions,
+      );
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      if (generation.current !== current) return;
+      setReminderSubject(response.data.subject);
+      setReminderBody(response.data.body);
+      setReminderOpen(true);
+      await load();
+    } catch (error) {
+      if (generation.current === current)
+        setMessage(actionErrorDetail(error, t("projects.reminderError")));
+    } finally {
+      if (generation.current === current) setBusy(false);
+    }
+  }
+
+  async function sendReminder(): Promise<void> {
+    // Enviar es la acción externa — exige un clic explícito y confirmación;
+    // jamás dispara desde la preparación.
+    if (!(await confirm({ title: t("projects.reminderSendConfirm"), danger: true }))) return;
+    const current = generation.current;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await projectCollectionReminderSend(
+        projectId,
+        { subject: reminderSubject.trim(), body: reminderBody.trim() },
+        requestOptions,
+      );
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      if (generation.current !== current) return;
+      setReminderOpen(false);
+      setReminderSubject("");
+      setReminderBody("");
+      setNotice(t("projects.reminderSent").replace("{email}", response.data.to ?? ""));
+      await load();
+    } catch (error) {
+      if (generation.current === current) {
+        setMessage(actionErrorDetail(error, t("projects.reminderSendError")));
+      }
+    } finally {
+      if (generation.current === current) setBusy(false);
+    }
+  }
+
   async function openCreditNote(note: ProjectCreditNote): Promise<void> {
     const tab = window.open("", "_blank");
     if (!tab) {
@@ -541,6 +647,10 @@ export function ProjectPaymentsPanel({
 
   const payments = summary?.payments ?? [];
   const invoiceList = summary?.invoices ?? [];
+  const schedule = summary?.schedule ?? [];
+  const movements = summary?.movements ?? [];
+  const existingReminder = summary?.reminder ?? null;
+  const balanceDue = summary ? Number(summary.balance ?? "0") : 0;
   const percent =
     summary?.quote_total_gross && Number(summary.quote_total_gross) > 0
       ? Math.min(100, (Number(summary.collected) / Number(summary.quote_total_gross)) * 100)
@@ -557,11 +667,10 @@ export function ProjectPaymentsPanel({
         )}
       </div>
       {message && <p className="form-error">{message}</p>}
+      {notice && <p className="settings-hint">{notice}</p>}
       {summary && (
         <div className="payments-summary">
-          <span className={`production-chip delivery-${summary.status.toLowerCase()}`}>
-            {t(STATUS_LABEL[summary.status] ?? "projects.paymentStatusNoDeal")}
-          </span>
+          <StatusChip enumName="PaymentStatusEnum" value={summaryStatus} />
           <dl className="payments-summary-facts">
             <div>
               <dt>{t("projects.paymentCollected")}</dt>
@@ -589,8 +698,130 @@ export function ProjectPaymentsPanel({
           )}
         </div>
       )}
+      {schedule.length > 0 && (
+        <ol className="collection-stepper" aria-label={t("projects.scheduleTitle")}>
+          {schedule.map((quota) => (
+            <li
+              key={quota.key}
+              className={`collection-stepper__step is-${quota.state.toLowerCase()}`}
+            >
+              <span className="collection-stepper__head">
+                <span className="collection-stepper__label">
+                  {t(KIND_LABEL[quota.key] ?? "projects.paymentKindParcial")}
+                </span>
+                <span
+                  className={`production-chip${
+                    quota.state === "OVERDUE"
+                      ? " production-chip-danger"
+                      : quota.state === "PENDING"
+                        ? " is-warn"
+                        : ""
+                  }`}
+                >
+                  {t(QUOTA_STATE_LABEL[quota.state] ?? "projects.quotaStatePending")}
+                </span>
+              </span>
+              <strong className="collection-stepper__amount">
+                {formatMoney(quota.amount, summary?.currency ?? "CLP")}
+              </strong>
+              <span className="collection-stepper__meta">
+                {t("projects.scheduleCovered")}:{" "}
+                {formatMoney(quota.covered, summary?.currency ?? "CLP")}
+              </span>
+              <span className="collection-stepper__meta">
+                {quota.due_at ? formatDate(quota.due_at) : t("projects.scheduleNoDate")}
+                {" · "}
+                {quota.due_basis === "al aprobar"
+                  ? t("projects.scheduleDueApproval")
+                  : t("projects.scheduleDueDelivery")}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {summary?.sii && (
+        <p className="settings-hint" role="note">
+          {summary.sii.certified
+            ? t("projects.siiStateActive")
+            : summary.sii.adapter === "mock"
+              ? t("projects.siiStateMock")
+              : t("projects.siiStateNone")}{" "}
+          {summary.sii.certified
+            ? t("projects.siiHonestyCertified")
+            : t("projects.siiHonestyInternal")}
+        </p>
+      )}
+      {canWrite && summary && balanceDue > 0 && (
+        <div className="projects-reminder">
+          <div className="projects-actions">
+            <h3>{t("projects.reminderTitle")}</h3>
+            {!reminderOpen && (
+              <button type="button" onClick={() => void prepareReminder()} disabled={busy}>
+                {t("projects.reminderPrepare")}
+              </button>
+            )}
+          </div>
+          {existingReminder && !reminderOpen && (
+            <p className="settings-hint">
+              {t("projects.reminderDraftLabel")} — «{existingReminder.subject}»{" "}
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => {
+                  setReminderSubject(existingReminder.subject);
+                  setReminderBody(existingReminder.body);
+                  setReminderOpen(true);
+                }}
+              >
+                {t("projects.invoiceOpen")}
+              </button>
+            </p>
+          )}
+          {reminderOpen && (
+            <form
+              noValidate
+              className="payments-form reminder-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void sendReminder();
+              }}
+            >
+              <p className="settings-hint">{t("projects.reminderAiNote")}</p>
+              <label>
+                {t("projects.reminderSubject")}
+                <input
+                  required
+                  value={reminderSubject}
+                  onChange={(event) => setReminderSubject(event.target.value)}
+                />
+              </label>
+              <label className="payments-form-wide">
+                {t("projects.reminderBody")}
+                <textarea
+                  required
+                  rows={6}
+                  value={reminderBody}
+                  onChange={(event) => setReminderBody(event.target.value)}
+                />
+              </label>
+              <div className="payments-form-actions">
+                <button
+                  type="submit"
+                  className="primary-action"
+                  disabled={busy || !reminderSubject.trim() || !reminderBody.trim()}
+                >
+                  {t("projects.reminderSend")}
+                </button>
+                <button type="button" onClick={() => setReminderOpen(false)} disabled={busy}>
+                  {t("projects.paymentCancel")}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
       {showForm && (
-        <form className="payments-form" onSubmit={record}>
+        <form noValidate className="payments-form" onSubmit={record}>
           <label>
             {t("projects.paymentKind")}
             <select
@@ -607,7 +838,7 @@ export function ProjectPaymentsPanel({
             <input
               required
               inputMode="decimal"
-              pattern="[0-9]{1,3}(\.[0-9]{3})+|[0-9]+"
+              data-pattern="[0-9]{1,3}(\.[0-9]{3})+|[0-9]+"
               title={t("projects.paymentAmountHint")}
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
@@ -646,54 +877,60 @@ export function ProjectPaymentsPanel({
         </form>
       )}
       {payments.length > 0 && (
-        <table className="payments-table">
-          <thead>
-            <tr>
-              <th>{t("projects.paymentDate")}</th>
-              <th>{t("projects.paymentKind")}</th>
-              <th className="num">{t("projects.paymentAmount")}</th>
-              <th>{t("projects.paymentMethod")}</th>
-              <th>{t("projects.paymentReference")}</th>
-              <th>{t("projects.paymentNote")}</th>
-              <th>{t("projects.paymentReceipt")}</th>
-              {canWrite && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {payments.map((payment) => (
-              <tr key={payment.id} className={payment.voided_at ? "payments-voided" : undefined}>
-                <td>{formatDate(payment.recorded_at)}</td>
-                <td>{t(KIND_LABEL[payment.kind] ?? "projects.paymentKindParcial")}</td>
-                <td className="num">{formatMoney(payment.amount, summary?.currency ?? "CLP")}</td>
-                <td>{t(METHOD_LABEL[payment.method] ?? "projects.paymentMethodOther")}</td>
-                <td>{payment.reference ?? "—"}</td>
-                <td>
-                  {payment.voided_at
-                    ? `${t("projects.paymentVoided")}${payment.void_reason ? ` — ${payment.void_reason}` : ""}`
-                    : (payment.note ?? "—")}
-                </td>
-                <td>
-                  {payment.receipt_code ? (
-                    <button type="button" onClick={() => void openReceipt(payment)} disabled={busy}>
-                      {payment.receipt_code}
-                    </button>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                {canWrite && (
+        <div className="payments-table-scroll">
+          <table className="payments-table">
+            <thead>
+              <tr>
+                <th>{t("projects.paymentDate")}</th>
+                <th>{t("projects.paymentKind")}</th>
+                <th className="num">{t("projects.paymentAmount")}</th>
+                <th>{t("projects.paymentMethod")}</th>
+                <th>{t("projects.paymentReference")}</th>
+                <th>{t("projects.paymentNote")}</th>
+                <th>{t("projects.paymentReceipt")}</th>
+                {canWrite && <th />}
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map((payment) => (
+                <tr key={payment.id} className={payment.voided_at ? "payments-voided" : undefined}>
+                  <td>{formatDate(payment.recorded_at)}</td>
+                  <td>{t(KIND_LABEL[payment.kind] ?? "projects.paymentKindParcial")}</td>
+                  <td className="num">{formatMoney(payment.amount, summary?.currency ?? "CLP")}</td>
+                  <td>{t(METHOD_LABEL[payment.method] ?? "projects.paymentMethodOther")}</td>
+                  <td>{payment.reference ?? "—"}</td>
                   <td>
-                    {!payment.voided_at && (
-                      <button type="button" onClick={() => voidPayment(payment)} disabled={busy}>
-                        {t("projects.paymentVoid")}
+                    {payment.voided_at
+                      ? `${t("projects.paymentVoided")}${payment.void_reason ? ` — ${payment.void_reason}` : ""}`
+                      : (payment.note ?? "—")}
+                  </td>
+                  <td>
+                    {payment.receipt_code ? (
+                      <button
+                        type="button"
+                        onClick={() => void openReceipt(payment)}
+                        disabled={busy}
+                      >
+                        {payment.receipt_code}
                       </button>
+                    ) : (
+                      "—"
                     )}
                   </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  {canWrite && (
+                    <td>
+                      {!payment.voided_at && (
+                        <button type="button" onClick={() => voidPayment(payment)} disabled={busy}>
+                          {t("projects.paymentVoid")}
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {summary && payments.length === 0 && !showForm && <p>{t("projects.paymentsEmpty")}</p>}
       {summary && (summary.sealed_revision || invoiceList.length > 0) && (
@@ -707,182 +944,234 @@ export function ProjectPaymentsPanel({
             )}
           </div>
           {invoiceList.length > 0 ? (
-            <table className="payments-table">
-              <thead>
-                <tr>
-                  <th>{t("projects.invoiceDate")}</th>
-                  <th>{t("projects.invoiceCode")}</th>
-                  <th>{t("projects.invoiceRevision")}</th>
-                  <th>{t("projects.invoiceStatus")}</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {invoiceList.map((invoice) => (
-                  <tr key={invoice.id}>
-                    <td>{formatDate(invoice.created_at)}</td>
-                    <td>{invoice.invoice_code}</td>
-                    <td>{formatRevision(invoice.revision_code)}</td>
-                    <td>
-                      {invoice.credit_note ? (
-                        <button
-                          type="button"
-                          className="production-chip delivery-cancelled"
-                          title={invoice.credit_note.credit_code}
-                          onClick={() => {
-                            if (invoice.credit_note) void openCreditNote(invoice.credit_note);
-                          }}
-                          disabled={busy}
-                        >
-                          {`${t(invoice.credit_note.partial ? "projects.invoiceStatusCredited" : "projects.invoiceStatusAnnulled")} · ${invoice.credit_note.credit_code}`}
-                        </button>
-                      ) : (
-                        <span className="production-chip">{t("projects.invoiceStatusIssued")}</span>
-                      )}
-                      {invoice.dte && (
-                        <button
-                          type="button"
-                          className="production-chip"
-                          title={`${t("projects.dteStatus")} · folio ${invoice.dte.folio}`}
-                          onClick={() => void openDte(invoice)}
-                          disabled={busy}
-                        >
-                          {`${t("projects.dteStatus")} · ${invoice.dte.folio}`}
-                        </button>
-                      )}
-                      {invoice.credit_note?.dte && (
-                        <button
-                          type="button"
-                          className="production-chip"
-                          title={`${t("projects.dteCreditStatus")} · folio ${invoice.credit_note.dte.folio}`}
-                          onClick={() => void openCreditNoteDte(invoice)}
-                          disabled={busy}
-                        >
-                          {`${t("projects.dteCreditStatus")} · ${invoice.credit_note.dte.folio}`}
-                        </button>
-                      )}
-                      {invoice.dte?.envio && (
-                        <button
-                          type="button"
-                          className="production-chip"
-                          title={`${t("projects.envioStatus")} · ${invoice.dte.envio.track_id ?? ""}`}
-                          onClick={() => void openEnvio(invoice)}
-                          disabled={busy}
-                        >
-                          {`${t("projects.envioStatus")} · ${invoice.dte.envio.status}`}
-                        </button>
-                      )}
-                      {invoice.credit_note?.dte?.envio && (
-                        <button
-                          type="button"
-                          className="production-chip"
-                          title={`${t("projects.envioStatus")} · ${invoice.credit_note.dte.envio.track_id ?? ""}`}
-                          onClick={() => {
-                            if (invoice.credit_note) void openCreditEnvio(invoice.credit_note);
-                          }}
-                          disabled={busy}
-                        >
-                          {`${t("projects.envioStatus")} · ${invoice.credit_note.dte.envio.status}`}
-                        </button>
-                      )}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() => void openInvoice(invoice)}
-                        disabled={busy}
-                      >
-                        {t("projects.invoiceOpen")}
-                      </button>
-                      {canWrite && !invoice.credit_note && !invoice.dte && (
-                        <button type="button" onClick={() => void emitDte(invoice)} disabled={busy}>
-                          {t("projects.dteEmit")}
-                        </button>
-                      )}
-                      {canWrite && !invoice.credit_note && !invoice.dte && (
-                        <button
-                          type="button"
-                          onClick={() => void annulInvoice(invoice)}
-                          disabled={busy}
-                        >
-                          {t("projects.creditNoteAnnul")}
-                        </button>
-                      )}
-                      {canWrite && invoice.dte && !invoice.credit_note?.dte && (
-                        <button
-                          type="button"
-                          onClick={() => void emitCreditNoteDte(invoice)}
-                          disabled={busy}
-                        >
-                          {t("projects.dteCreditEmit")}
-                        </button>
-                      )}
-                      {canSendEnvio && invoice.dte && !invoice.dte.envio && (
-                        <button
-                          type="button"
-                          onClick={() => void sendEnvio(invoice)}
-                          disabled={busy}
-                        >
-                          {t("projects.envioSend")}
-                        </button>
-                      )}
-                      {canSendEnvio && invoice.dte?.envio?.status === "PENDING" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void sendEnvio(
-                              invoice,
-                              invoice.dte?.envio?.attempted === true && !invoice.dte.envio.track_id,
-                            )
-                          }
-                          disabled={busy}
-                        >
-                          {invoice.dte.envio.attempted === true && !invoice.dte.envio.track_id
-                            ? t("projects.envioResend")
-                            : t("projects.envioRefresh")}
-                        </button>
-                      )}
-                      {canSendEnvio &&
-                        invoice.credit_note?.dte &&
-                        !invoice.credit_note.dte.envio && (
+            <div className="payments-table-scroll">
+              <table className="payments-table">
+                <thead>
+                  <tr>
+                    <th>{t("projects.invoiceDate")}</th>
+                    <th>{t("projects.invoiceCode")}</th>
+                    <th className="num">{t("projects.invoiceNet")}</th>
+                    <th className="num">{t("projects.invoiceTax")}</th>
+                    <th className="num">{t("projects.invoiceTotal")}</th>
+                    <th>{t("projects.invoiceRevision")}</th>
+                    <th>{t("projects.invoiceStatus")}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoiceList.map((invoice) => (
+                    <tr key={invoice.id}>
+                      <td>{formatDate(invoice.created_at)}</td>
+                      <td>{invoice.invoice_code}</td>
+                      <td className="num">
+                        {invoice.total_net
+                          ? formatMoney(invoice.total_net, summary?.currency ?? "CLP")
+                          : "—"}
+                      </td>
+                      <td className="num">
+                        {invoice.total_tax
+                          ? formatMoney(invoice.total_tax, summary?.currency ?? "CLP")
+                          : "—"}
+                      </td>
+                      <td className="num">
+                        {invoice.total_gross
+                          ? formatMoney(invoice.total_gross, summary?.currency ?? "CLP")
+                          : "—"}
+                      </td>
+                      <td>{formatRevision(invoice.revision_code)}</td>
+                      <td>
+                        {invoice.credit_note ? (
                           <button
                             type="button"
+                            className={`production-chip ${invoice.credit_note.partial ? "is-warn" : "production-chip-danger"}`}
+                            title={invoice.credit_note.credit_code}
                             onClick={() => {
-                              if (invoice.credit_note) void sendCreditEnvio(invoice.credit_note);
+                              if (invoice.credit_note) void openCreditNote(invoice.credit_note);
                             }}
+                            disabled={busy}
+                          >
+                            {`${t(invoice.credit_note.partial ? "projects.invoiceStatusCredited" : "projects.invoiceStatusAnnulled")} · ${invoice.credit_note.credit_code}`}
+                          </button>
+                        ) : (
+                          <StatusChip
+                            label={t("projects.invoiceStatusIssued")}
+                            tone="ok"
+                            value={null}
+                          />
+                        )}
+                        {invoice.dte && (
+                          <button
+                            type="button"
+                            className="production-chip"
+                            title={`${t("projects.dteStatus")} · folio ${invoice.dte.folio}`}
+                            onClick={() => void openDte(invoice)}
+                            disabled={busy}
+                          >
+                            {`${t("projects.dteStatus")} · ${invoice.dte.folio}`}
+                          </button>
+                        )}
+                        {invoice.credit_note?.dte && (
+                          <button
+                            type="button"
+                            className="production-chip"
+                            title={`${t("projects.dteCreditStatus")} · folio ${invoice.credit_note.dte.folio}`}
+                            onClick={() => void openCreditNoteDte(invoice)}
+                            disabled={busy}
+                          >
+                            {`${t("projects.dteCreditStatus")} · ${invoice.credit_note.dte.folio}`}
+                          </button>
+                        )}
+                        {invoice.dte?.envio && (
+                          <button
+                            type="button"
+                            className="production-chip"
+                            title={`${t("projects.envioStatus")} · ${invoice.dte.envio.track_id ?? ""}`}
+                            onClick={() => void openEnvio(invoice)}
+                            disabled={busy}
+                          >
+                            {`${t("projects.envioStatus")} · ${envioStatusLabel(invoice.dte.envio)}`}
+                          </button>
+                        )}
+                        {invoice.credit_note?.dte?.envio && (
+                          <button
+                            type="button"
+                            className="production-chip"
+                            title={`${t("projects.envioStatus")} · ${invoice.credit_note.dte.envio.track_id ?? ""}`}
+                            onClick={() => {
+                              if (invoice.credit_note) void openCreditEnvio(invoice.credit_note);
+                            }}
+                            disabled={busy}
+                          >
+                            {`${t("projects.envioStatus")} · ${envioStatusLabel(invoice.credit_note.dte.envio)}`}
+                          </button>
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => void openInvoice(invoice)}
+                          disabled={busy}
+                        >
+                          {t("projects.invoiceOpen")}
+                        </button>
+                        {canWrite && !invoice.credit_note && !invoice.dte && (
+                          <button
+                            type="button"
+                            onClick={() => void emitDte(invoice)}
+                            disabled={busy}
+                          >
+                            {t("projects.dteEmit")}
+                          </button>
+                        )}
+                        {canWrite && !invoice.credit_note && !invoice.dte && (
+                          <button
+                            type="button"
+                            onClick={() => void annulInvoice(invoice)}
+                            disabled={busy}
+                          >
+                            {t("projects.creditNoteAnnul")}
+                          </button>
+                        )}
+                        {canWrite && invoice.dte && !invoice.credit_note?.dte && (
+                          <button
+                            type="button"
+                            onClick={() => void emitCreditNoteDte(invoice)}
+                            disabled={busy}
+                          >
+                            {t("projects.dteCreditEmit")}
+                          </button>
+                        )}
+                        {canSendEnvio && invoice.dte && !invoice.dte.envio && (
+                          <button
+                            type="button"
+                            onClick={() => void sendEnvio(invoice)}
                             disabled={busy}
                           >
                             {t("projects.envioSend")}
                           </button>
                         )}
-                      {canSendEnvio && invoice.credit_note?.dte?.envio?.status === "PENDING" && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (invoice.credit_note) {
-                              void sendCreditEnvio(
-                                invoice.credit_note,
-                                invoice.credit_note.dte?.envio?.attempted === true &&
-                                  !invoice.credit_note.dte.envio.track_id,
-                              );
+                        {canSendEnvio && invoice.dte?.envio?.status === "PENDING" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void sendEnvio(
+                                invoice,
+                                invoice.dte?.envio?.attempted === true &&
+                                  !invoice.dte.envio.track_id,
+                              )
                             }
-                          }}
-                          disabled={busy}
-                        >
-                          {invoice.credit_note.dte.envio.attempted === true &&
-                          !invoice.credit_note.dte.envio.track_id
-                            ? t("projects.envioResend")
-                            : t("projects.envioRefresh")}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                            disabled={busy}
+                          >
+                            {invoice.dte.envio.attempted === true && !invoice.dte.envio.track_id
+                              ? t("projects.envioResend")
+                              : t("projects.envioRefresh")}
+                          </button>
+                        )}
+                        {canSendEnvio &&
+                          invoice.credit_note?.dte &&
+                          !invoice.credit_note.dte.envio && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (invoice.credit_note) void sendCreditEnvio(invoice.credit_note);
+                              }}
+                              disabled={busy}
+                            >
+                              {t("projects.envioSend")}
+                            </button>
+                          )}
+                        {canSendEnvio && invoice.credit_note?.dte?.envio?.status === "PENDING" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (invoice.credit_note) {
+                                void sendCreditEnvio(
+                                  invoice.credit_note,
+                                  invoice.credit_note.dte?.envio?.attempted === true &&
+                                    !invoice.credit_note.dte.envio.track_id,
+                                );
+                              }
+                            }}
+                            disabled={busy}
+                          >
+                            {invoice.credit_note.dte.envio.attempted === true &&
+                            !invoice.credit_note.dte.envio.track_id
+                              ? t("projects.envioResend")
+                              : t("projects.envioRefresh")}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <p>{t("projects.invoicesEmpty")}</p>
           )}
+        </div>
+      )}
+      {movements.length > 0 && (
+        <div className="collection-movements">
+          <h3>{t("projects.movementsTitle")}</h3>
+          <ol className="collection-timeline">
+            {movements.map((movement) => (
+              <li key={`${movement.type}-${movement.id}`} className="collection-timeline__item">
+                <span className="collection-timeline__what">
+                  {t(MOVEMENT_LABEL[movement.type] ?? "projects.movementPayment")}
+                  {movementStatusLabel(movement) ? ` · ${movementStatusLabel(movement)}` : ""}
+                  {movement.code ? ` · ${movement.code}` : ""}
+                  {movement.amount
+                    ? ` — ${formatMoney(movement.amount, summary?.currency ?? "CLP")}`
+                    : ""}
+                </span>
+                <span className="collection-timeline__meta">
+                  {movement.at ? formatDate(movement.at) : "—"}
+                  {movement.actor ? ` · ${t("projects.movementActor")} ${movement.actor}` : ""}
+                </span>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
       <ProjectPaymentLinksPanel

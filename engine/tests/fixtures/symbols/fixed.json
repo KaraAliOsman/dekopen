@@ -1,0 +1,71 @@
+{
+  "id": "fixed",
+  "name": "Fijo",
+  "box": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 1200
+  },
+  "input": {
+    "kind": "leaves",
+    "unit": "WINDOW",
+    "leaves": [
+      {
+        "movement": "FIXED",
+        "hinge_side": "NONE",
+        "direction": null,
+        "leaf_role": "SINGLE",
+        "handle_mm": null,
+        "slot": null,
+        "axis_offset_mm": null
+      }
+    ]
+  },
+  "views": {
+    "interior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "none",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": []
+        }
+      ]
+    },
+    "exterior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "none",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": []
+        }
+      ]
+    }
+  }
+}

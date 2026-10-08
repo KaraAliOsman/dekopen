@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { OrgBrandingDocTerms } from "./orgBrandingDocTerms";
 
 /**
  * Org white-label identity rendered on emitted documents.
@@ -27,4 +28,17 @@ export interface OrgBranding {
   brand_logo_key: string | null;
   /** @nullable */
   brand_logo_sha256: string | null;
+  /** @nullable */
+  brand_color: string | null;
+  doc_dekopen_credit: boolean;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$
+   */
+  vano_spread_tolerance_mm: string | null;
+  doc_paper_size: string;
+  doc_terms: OrgBrandingDocTerms;
+  workshop_label_format: string;
+  remnant_alert_days: number;
+  doc_validity_days: number;
 }

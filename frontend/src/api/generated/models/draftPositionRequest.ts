@@ -17,6 +17,12 @@ export interface DraftPositionRequest {
    * @maxLength 50
    */
   color: string;
+  /**
+   * @minLength 1
+   * @maxLength 50
+   * @nullable
+   */
+  color_exterior?: string | null;
   parametric_tree: unknown;
   /** @minimum 1 */
   position_index: number;

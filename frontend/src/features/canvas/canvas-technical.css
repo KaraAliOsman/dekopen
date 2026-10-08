@@ -1,0 +1,679 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* §04: mullion/transom + coupling selection affordances, technical dims,
+   provenance chips and power-user recents. */
+
+.member-mullion.is-selected,
+.member-coupler.is-selected {
+  stroke: var(--theme-accent);
+  stroke-width: 4;
+}
+
+.divider-grip.is-selected {
+  fill: var(--theme-accent);
+  fill-opacity: 0.22;
+  stroke: var(--theme-accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.joint-hit {
+  cursor: pointer;
+  fill: transparent;
+  pointer-events: all;
+}
+
+.joint-hit:hover {
+  fill: var(--theme-accent);
+  fill-opacity: 0.14;
+  stroke: var(--theme-accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.split-dim,
+.member-dim {
+  fill: var(--theme-text-muted);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+}
+
+.prov-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0 0 var(--space-8);
+  padding: 0;
+}
+
+.prov-chip {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-pill);
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+  padding: 1px var(--space-8) 1px 3px;
+  white-space: nowrap;
+}
+
+.prov-chip__state {
+  border-radius: var(--r-pill);
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-right: var(--space-4);
+  padding: 1px var(--space-6);
+  text-transform: uppercase;
+}
+
+.prov-chip--verified .prov-chip__state {
+  background: color-mix(in srgb, var(--theme-success) 16%, transparent);
+  color: var(--ok-ink);
+}
+
+.prov-chip--declared .prov-chip__state {
+  background: color-mix(in srgb, var(--theme-accent) 14%, transparent);
+  color: var(--theme-accent-ink);
+}
+
+.prov-chip--unknown .prov-chip__state {
+  background: var(--theme-surface-raised);
+  color: var(--theme-text-muted);
+}
+
+.prov-chip--blocked .prov-chip__state {
+  background: color-mix(in srgb, var(--theme-danger) 14%, transparent);
+  color: var(--danger-ink);
+}
+
+.division-children {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+}
+
+.division-children li + li {
+  margin-top: var(--space-2);
+}
+
+.recents {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.recents__label {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+}
+
+.recents__chip {
+  background: var(--theme-surface-raised);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-pill);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: var(--type-micro);
+  max-width: 140px;
+  overflow: hidden;
+  padding: var(--space-2) var(--space-8);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recents__chip:hover {
+  border-color: var(--theme-accent);
+  color: var(--theme-text-primary);
+}
+
+.recents__chip--favorite {
+  border-color: color-mix(in srgb, var(--theme-accent) 40%, transparent);
+  color: var(--theme-accent-strong);
+}
+
+.assembly-field__row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-6);
+}
+
+.assembly-field__row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.star-toggle {
+  background: transparent;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: var(--type-title-m);
+  line-height: 1;
+  padding: var(--space-4) var(--space-6);
+}
+
+.star-toggle:hover:not(:disabled) {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent);
+}
+
+.star-toggle.is-active {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent);
+}
+
+.star-toggle.is-active .ui-icon {
+  fill: currentColor;
+}
+
+.star-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.issue-fix {
+  background: transparent;
+  border: none;
+  color: var(--theme-accent);
+  cursor: pointer;
+  font-size: var(--type-micro);
+  margin-top: var(--space-2);
+  padding: 0 var(--space-4);
+  text-align: left;
+}
+
+.issue-fix:hover {
+  text-decoration: underline;
+}
+
+/* §05-G technical section view — horizontal node cut through a bay. */
+.section-view {
+  display: block;
+  height: auto;
+  margin-top: var(--space-8);
+  width: 100%;
+}
+
+.section-member {
+  fill: var(--member-pvc-fill);
+  stroke: var(--member-pvc-edge);
+  stroke-width: 0.6;
+}
+
+.section-member--aluminium {
+  fill: var(--member-aluminium-fill);
+  stroke: var(--member-aluminium-edge);
+}
+
+.section-member--approx {
+  fill: none;
+  stroke-dasharray: 3 2;
+}
+
+.section-glass {
+  fill: var(--model3d-glass);
+  opacity: 0.75;
+}
+
+.section-gasket {
+  fill: var(--model3d-gasket);
+}
+
+.section-dim {
+  stroke: var(--theme-text-muted);
+  stroke-width: 0.5;
+}
+
+.section-dim__arrow {
+  fill: var(--theme-text-muted);
+}
+
+.section-dim__text {
+  fill: var(--theme-text-muted);
+  font-size: var(--type-micro);
+}
+
+.section-label {
+  fill: var(--theme-text-muted);
+  font-size: var(--type-micro);
+  letter-spacing: 0.12em;
+}
+
+.section-approx {
+  fill: var(--theme-warning);
+  font-size: var(--type-micro);
+}
+
+.section-break {
+  fill: none;
+  stroke: var(--theme-text-muted);
+  stroke-width: 1.2;
+}
+
+/* Frameless (glass-only) modules: no member slab — the pane runs edge to
+ * edge, supports/fittings mark their declared edges (review M4). */
+.module-frameless .module-glass {
+  stroke: var(--theme-border-strong);
+}
+
+.frameless-exposed {
+  fill: var(--theme-bg-canvas);
+  stroke: none;
+  opacity: 0.35;
+}
+
+.frameless-channel {
+  fill: var(--model3d-steel);
+  stroke: var(--theme-text-muted);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.frameless-clamp,
+.frameless-fitting {
+  fill: var(--model3d-steel);
+  stroke: var(--theme-text-primary);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.frameless-fitting--patch_fitting,
+.frameless-fitting--clamp {
+  fill: var(--member-aluminium-edge);
+}
+
+.frameless-fitting--hinge,
+.frameless-fitting--lock {
+  fill: var(--theme-text-secondary);
+}
+
+.frameless-seal {
+  fill: none;
+  stroke: var(--theme-text-muted);
+  stroke-dasharray: 10 6;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Corredera notation: head/sill rails behind the leaves and a slide
+ * direction arrow per moving leaf — the .sliding-arrow path previously
+ * had no stroke and rendered invisible (review M3). */
+.sliding-track {
+  stroke: var(--signature-ink);
+  stroke-width: 1.6;
+  stroke-dasharray: 7 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.sliding-arrow {
+  fill: none;
+  stroke: var(--signature-ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---------- D02 structured glazing picker ---------- */
+
+.glazing-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin-top: var(--space-6);
+}
+
+.glass-cards {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.glass-card {
+  position: relative;
+}
+
+.glass-card__body {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-8);
+  text-align: left;
+  width: 100%;
+  height: 100%;
+}
+
+.glass-card.is-active .glass-card__body {
+  border-color: var(--theme-accent);
+  outline: 1px solid var(--theme-accent);
+}
+
+.glass-card.is-incompatible .glass-card__body {
+  opacity: 0.72;
+}
+
+.glass-card__name {
+  color: var(--theme-text-primary);
+  font-size: var(--type-dense);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.glass-card__sku {
+  color: var(--theme-text-muted);
+  display: block;
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: var(--type-micro);
+  font-weight: 400;
+}
+
+.glass-card__notation {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+}
+
+.glass-card__notation.is-unknown {
+  color: var(--theme-text-muted);
+  font-style: italic;
+}
+
+.glass-card__stats {
+  color: var(--theme-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--type-micro);
+  gap: var(--space-6);
+}
+
+.glass-card__tier {
+  color: var(--theme-accent-strong);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+}
+
+.glass-card__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.glass-card__flag {
+  background: var(--theme-surface-raised);
+  border-radius: var(--r-pill);
+  color: var(--theme-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--type-micro);
+  padding: 1px var(--space-6);
+}
+
+.glass-card__flag.is-warn {
+  color: var(--theme-warning-ink);
+}
+
+.glass-card__star {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+}
+
+.glass-findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.glass-finding {
+  align-items: flex-start;
+  background: var(--theme-surface-raised);
+  border-left: 2px solid var(--theme-warning);
+  color: var(--theme-text-primary);
+  display: flex;
+  font-size: var(--type-dense);
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-8);
+}
+
+.glass-finding--mandatory {
+  border-left-color: var(--theme-danger);
+}
+
+.glass-finding--fix {
+  align-items: center;
+  border-left-color: var(--theme-accent);
+  flex-wrap: wrap;
+}
+
+.glass-finding__source {
+  color: var(--theme-text-muted);
+}
+
+.glass-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.glass-section {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  display: block;
+  width: 100%;
+}
+
+.glass-section__side {
+  fill: var(--theme-text-muted);
+  /* Real font size (not viewBox units) — stays readable at any scale. */
+  font-size: var(--type-micro);
+}
+
+.glass-section__label {
+  fill: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+}
+
+.glass-layer-svg__pane {
+  fill: var(--theme-glass-tint);
+  stroke: var(--theme-text-secondary);
+  stroke-width: 0.6;
+}
+
+.glass-layer-svg__chamber {
+  fill: transparent;
+}
+
+.glass-layer-svg__spacer {
+  fill: var(--theme-text-muted);
+  opacity: 0.35;
+}
+
+.glass-composer__layers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.glass-layer {
+  align-items: center;
+  border-left: 2px solid var(--theme-border-subtle);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding-left: var(--space-6);
+}
+
+.glass-layer--chamber {
+  border-left-color: var(--theme-accent);
+}
+
+.glass-layer__role {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+  min-width: 5.5rem;
+}
+
+.glass-layer__panes,
+.glass-layer__pane {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-4);
+}
+
+.glass-layer select {
+  min-width: 0;
+}
+
+.glass-composer__summary {
+  font-size: var(--type-micro);
+  margin: 0;
+}
+
+.glass-surcharges {
+  border-top: 1px solid var(--theme-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding-top: var(--space-6);
+}
+
+.glass-surcharge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.glass-surcharge__edges,
+.glass-surcharge__grid,
+.glass-surcharge__count {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-4);
+  margin-left: var(--space-24);
+}
+
+.glass-surcharge input[type="number"] {
+  width: 3.5rem;
+}
+
+/* ---------- P05 simbología de apertura ---------- */
+
+/* Rótulo de vista declarada — ancla al borde superior de la lámina. */
+.view-legend {
+  fill: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Umbral de puerta: el prim `sill` corre bajo toda hoja practicable de
+ * puerta — token de marca (el mismo acento del PDF), no tinta de glifo. */
+.opening-glyph path.glyph-sill {
+  stroke: var(--theme-mark);
+}
+
+/* Dirección inferida: una hoja corredera sin `travel` declarado conserva la
+ * convención de presentación, pero la lámina la marca — la asunción nunca
+ * lee como verdad de fabricación. */
+.glyph-inferred {
+  stroke-dasharray: 2 5 !important;
+  opacity: 0.72;
+}
+
+/* Marca de altura de manilla en vista técnica: tick en el canto libre de
+ * la hoja + cota desde el borde inferior del módulo. */
+.handle-datum line {
+  stroke: var(--theme-accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.handle-datum text {
+  fill: var(--theme-accent);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+}
+
+.handle-datum.is-invalid line,
+.handle-datum.is-invalid text {
+  stroke: var(--theme-danger);
+  fill: var(--theme-danger);
+}
+
+/* Cinta de planta bajo el alzado técnico de una corredera. */
+.sliding-plan .plan-wall {
+  fill: none;
+  stroke: var(--theme-text-secondary);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.sliding-plan .plan-rail {
+  stroke: var(--theme-text-muted);
+  stroke-width: 1.4;
+  stroke-dasharray: 8 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.sliding-plan .plan-rail-no,
+.sliding-plan .plan-side {
+  fill: var(--theme-text-muted);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+}
+
+.sliding-plan .plan-side {
+  font-size: 15px;
+  letter-spacing: 0.06em;
+}
+
+.sliding-plan .plan-panel rect {
+  fill: var(--theme-surface-panel);
+  stroke: var(--theme-text-primary);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.sliding-plan .plan-panel--fixed rect {
+  fill: none;
+  stroke-dasharray: 4 3;
+}
+
+.sliding-plan .plan-arrow {
+  fill: none;
+  stroke: var(--theme-text-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}

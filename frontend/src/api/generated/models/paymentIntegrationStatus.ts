@@ -5,9 +5,13 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { PaymentIntegrationStatusProviderMode } from "./paymentIntegrationStatusProviderMode";
 
 export interface PaymentIntegrationStatus {
   configured: boolean;
+  provider_mode?:
+    | (typeof PaymentIntegrationStatusProviderMode)[keyof typeof PaymentIntegrationStatusProviderMode]
+    | null;
   api_url?: string;
   api_key_preview?: string;
   /** @nullable */

@@ -1,3 +1,5 @@
+import { darkenHex, lightenHex, type FinishFace } from "./finishes";
+
 /** Member surface palette: one place that maps a catalog material to how a
  * fenestration member is drawn — restrained, matte, engineering-drawing
  * treatments. Geometry (face widths) always comes from the catalog; only the
@@ -49,6 +51,18 @@ const SURFACES: Record<string, MemberSurface> = {
 
 const DEFAULT_SURFACE = { ...SURFACES.PVC!, detail: "none" as const };
 
-export function memberSurface(material: string | null | undefined): MemberSurface {
-  return SURFACES[material ?? ""] ?? DEFAULT_SURFACE;
+export function memberSurface(
+  material: string | null | undefined,
+  face?: FinishFace | null,
+): MemberSurface {
+  const base = SURFACES[material ?? ""] ?? DEFAULT_SURFACE;
+  // A declared render swatch replaces the token fill; edge/highlight derive
+  // from it so a catalog color draws like the sealed document's swatch.
+  if (!face?.color) return base;
+  return {
+    fill: face.color,
+    edge: darkenHex(face.color),
+    highlight: lightenHex(face.color),
+    detail: base.detail,
+  };
 }

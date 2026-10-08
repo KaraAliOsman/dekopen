@@ -1,4 +1,5 @@
 import type { CanvasDesignInputs } from "../canvas/canvasStore";
+import type { VanoDraft } from "./vano";
 
 /** Unsaved-position draft buffer. A reload used to silently discard the
  * in-flight design — the draft survives in sessionStorage (same-tab scoped,
@@ -11,6 +12,8 @@ export interface PositionDraft {
   inputs: CanvasDesignInputs;
   location: string;
   quantity: string;
+  /** D07 — el registro del vano también se conserva en el borrador. */
+  vano?: VanoDraft;
   savedAt: number;
 }
 

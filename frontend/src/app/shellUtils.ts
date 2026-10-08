@@ -62,6 +62,134 @@ export function useDismiss<T extends HTMLElement>(open: boolean, onClose: () => 
 }
 export type ContextNavItem = { to: string; label: TranslationKey };
 
+export type ShellNavItem = { to: string; label: TranslationKey };
+export type ShellNavGroup = {
+  id: string;
+  title: TranslationKey;
+  items: ShellNavItem[];
+};
+
+/** El menú sigue el flujo real de la fábrica — vender → diseñar → producir
+ * → entregar — no las tablas de la base de datos. Cada entrada existe solo
+ * si el backend tiene datos para ella (nada de secciones vacías). */
+export const SHELL_NAV_GROUPS: ShellNavGroup[] = [
+  {
+    id: "home",
+    title: "nav.groupHome",
+    items: [{ to: "/dashboard", label: "nav.home" }],
+  },
+  {
+    id: "sales",
+    title: "nav.groupSales",
+    items: [
+      { to: "/clients", label: "nav.clients" },
+      { to: "/projects", label: "nav.projects" },
+      { to: "/quotations", label: "nav.quotations" },
+      { to: "/pricing/commercial", label: "nav.pricing" },
+    ],
+  },
+  {
+    id: "engineering",
+    title: "nav.groupEngineering",
+    items: [{ to: "/catalogs/systems", label: "nav.technicalCatalog" }],
+  },
+  {
+    id: "operation",
+    title: "nav.groupOperation",
+    items: [
+      { to: "/purchasing", label: "nav.purchasing" },
+      { to: "/inventory", label: "nav.inventory" },
+      { to: "/production", label: "nav.production" },
+      { to: "/deliveries", label: "nav.deliveries" },
+      { to: "/field/dispatch", label: "nav.dispatchBoard" },
+      { to: "/field/agenda", label: "nav.fieldAgenda" },
+      { to: "/field/incidents", label: "nav.incidents" },
+      { to: "/field/service", label: "nav.service" },
+    ],
+  },
+  {
+    id: "assistant",
+    title: "nav.groupAssistant",
+    items: [
+      { to: "/assistant", label: "nav.assistant" },
+      { to: "/jobs", label: "nav.jobs" },
+    ],
+  },
+  {
+    id: "analytics",
+    title: "nav.groupAnalytics",
+    items: [{ to: "/analitica", label: "nav.analytics" }],
+  },
+  {
+    id: "settings",
+    title: "nav.groupSettings",
+    items: [{ to: "/settings/general", label: "nav.settings" }],
+  },
+];
+
+/** Espejo de `_AGENT_CALLERS`/`_JOB_READERS` del backend: la superficie
+ * Asistente (orb, dock, /assistant, /jobs) sólo sirve a los roles de
+ * oficina — OPERATOR e INSTALLER jamás deben pagar una pared 403. */
+export const AI_SURFACE_ROLES: ReadonlySet<MembershipRoleEnum> = new Set([
+  "OWNER",
+  "ESTIMATOR",
+  "WORKSHOP_MANAGER",
+]);
+
+export function hasAiSurface(role: MembershipRoleEnum | null | undefined): boolean {
+  return role !== undefined && role !== null && AI_SURFACE_ROLES.has(role);
+}
+
+/** Matriz rol → destino. Refleja los role-sets del backend: una entrada
+ * de menú nunca lleva a una pared 403. Exportada para el test de matriz. */
+export function navigationAllowedFor(
+  role: MembershipRoleEnum | null | undefined,
+  to: string,
+): boolean {
+  const base = to.split("?")[0];
+  switch (base) {
+    // «Hoy» le sirve a los cinco roles — es su única superficie común.
+    case "/dashboard":
+    case "/production":
+      return role !== undefined;
+    case "/clients":
+    case "/projects":
+      return role === "OWNER" || role === "ESTIMATOR" || role === "WORKSHOP_MANAGER";
+    case "/quotations":
+    case "/pricing/commercial":
+      return role === "OWNER" || role === "ESTIMATOR";
+    case "/catalogs/systems":
+    case "/purchasing":
+      return role === "OWNER" || role === "WORKSHOP_MANAGER";
+    case "/inventory":
+      return (
+        role === "OWNER" ||
+        role === "ESTIMATOR" ||
+        role === "WORKSHOP_MANAGER" ||
+        role === "OPERATOR"
+      );
+    case "/deliveries":
+    case "/field/agenda":
+      return role === "OWNER" || role === "WORKSHOP_MANAGER" || role === "INSTALLER";
+    case "/field/dispatch":
+      return role === "OWNER" || role === "WORKSHOP_MANAGER";
+    case "/field/incidents":
+    case "/field/service":
+      return role === "OWNER" || role === "WORKSHOP_MANAGER" || role === "ESTIMATOR";
+    case "/assistant":
+    case "/jobs":
+      return hasAiSurface(role);
+    // P24: espejo de READER_ROLES del backend — montos ya vienen recortados
+    // por analytics_financial_roles; la puerta es membership, no dinero.
+    case "/analitica":
+      return role === "OWNER" || role === "WORKSHOP_MANAGER";
+    case "/settings/general":
+      return role === "OWNER" || role === "WORKSHOP_MANAGER";
+    default:
+      return true;
+  }
+}
+
 /** Context items share a path and differ only by query (Cola vs ?shortage=1):
  * a query target activates when all of its params appear in the live query —
  * production filters compose, so `?shortage=1&status=HOLD` is still Faltantes;
