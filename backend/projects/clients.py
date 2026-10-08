@@ -18,7 +18,7 @@ from django.db import IntegrityError, transaction
 
 from authentication.errors import contract_error
 from documents.repository import documentary_backend
-from pricing.repository import rows, write
+from pricing.repository import commercial_backend, rows, write
 from rut import rut_mod11_valid
 
 COLUMNS = (
@@ -563,29 +563,41 @@ def merge_clients(org_id, survivor_id, merged_id, actor_id, actor_label):
                     [org_id, merged_id],
                 )["n"]
             )
+            if table == "projects":
+                continue
             write(
                 f"UPDATE public.{table} SET client_id=%s "
                 "WHERE org_id=%s AND client_id=%s",
                 [survivor_id, org_id, merged_id],
             )
-        # Proyectos heredan la identidad del sobreviviente en sus campos
-        # vivos — los documentos ya emitidos conservan la foto sellada.
-        write(
-            "UPDATE public.projects SET client_name=%s, client_rut=%s, "
-            "client_email=%s, client_phone=%s, client_giro=%s, "
-            "client_comuna=%s, updated_at=clock_timestamp() "
-            "WHERE org_id=%s AND client_id=%s",
-            [
-                survivor["name"],
-                survivor["rut"],
-                survivor["email"],
-                survivor["phone"],
-                survivor["giro"],
-                survivor["comuna"],
-                org_id,
-                survivor_id,
-            ],
-        )
+        # Los writes sobre projects pasan por guard_commercial_write, que
+        # exige el rol de servicio de precios — las tablas de clientes se
+        # quedan en `authenticated`, donde viven sus grants.
+        with commercial_backend():
+            write(
+                "UPDATE public.projects SET client_id=%s "
+                "WHERE org_id=%s AND client_id=%s",
+                [survivor_id, org_id, merged_id],
+            )
+            # Proyectos heredan la identidad del sobreviviente en sus
+            # campos vivos — los documentos ya emitidos conservan la
+            # foto sellada.
+            write(
+                "UPDATE public.projects SET client_name=%s, client_rut=%s, "
+                "client_email=%s, client_phone=%s, client_giro=%s, "
+                "client_comuna=%s, updated_at=clock_timestamp() "
+                "WHERE org_id=%s AND client_id=%s",
+                [
+                    survivor["name"],
+                    survivor["rut"],
+                    survivor["email"],
+                    survivor["phone"],
+                    survivor["giro"],
+                    survivor["comuna"],
+                    org_id,
+                    survivor_id,
+                ],
+            )
         write(
             "UPDATE public.clients SET is_active=FALSE, merged_into=%s, "
             "merged_at=clock_timestamp(), updated_at=clock_timestamp() "

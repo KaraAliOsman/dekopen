@@ -106,6 +106,8 @@ def test_merge_moves_children_and_audits(monkeypatch):
     )
     # The merge returns the refreshed ficha — outside this test's scope.
     monkeypatch.setattr(clients, "client_detail", lambda org, cid: {"id": cid})
+    # projects writes go through the pricing service role; off-DB here.
+    monkeypatch.setattr(clients, "commercial_backend", lambda: nullcontext())
     _no_db(monkeypatch, clients)
     clients.merge_clients(org, survivor_id, merged_id, uuid4(), "dueño")
 
