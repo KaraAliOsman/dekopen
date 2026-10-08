@@ -552,3 +552,15 @@ fases 03–13 o diferidas al backlog declarado.
 | 10-banner | Banner explícito de refabricación en orden original | enlaces existen; banner dedicado pendiente |
 | F12-4 | Inyección adversarial con provider real | MiMo 429; verificación estática hecha |
 | DOC-011/021/024 | SII: capa IT1, campos CAF, RUT bajos | pendiente de ajuste contra spec SII |
+
+---
+
+## P20 — aceptación final (nuevos hallazgos)
+
+| ID | Hallazgo | Estado | Evidencia / razón |
+|----|----------|--------|-------------------|
+| P20-1 | OTs que consumen retazos responden 422 en `production-pack`/`cnc/readiness`/`labels` | Resuelto | `remnant_code` (folio RT-) estampado por la pasada de reclamo rompía la revalidación contra `CutBar`; se descarta la clave antes de validar (`pack.py`, `cnc.py`, `trace.py`). Verificado en vivo: `OT-P-000009-REV-A-01` 422 → 200 en los tres endpoints. |
+| P20-2 | Dev server sin `VITE_SUPABASE_URL/ANON_KEY` deja el login muerto sin error | Resuelto | Variables agregadas a `.run/env.sh` + nota en `GUIA-REVISION.md` §3 y `valores-por-defecto.md` §P20. |
+| P20-3 | `SII_WS_ENVIO_MOCK_VERDICT=OBSERVED` en el env rompe 17 tests de `test_sii_envio.py` | Resuelto | Vars mock confinadas al env de runtime; `make test` corre sin ellas. |
+| P20-4 | ux:capture por magic-link es inestable en local (links >45 s o caen en `/` sin consumir token) | Parcial | Capturas de aceptación por sesión inyectada (`scripts/p20-capture.mjs`); el login real verificado a mano. Mejora de robustez del harness queda como trabajo posterior. |
+| P20-5 | Proveedor MiMo real 429 «quota exhausted» (plan Token) | Pendiente | Causa externa al producto; el pipeline corre con MOCK declarado. Reactivar cuando la cuota se renueve. |
